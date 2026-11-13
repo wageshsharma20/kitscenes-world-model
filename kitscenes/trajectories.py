@@ -10,7 +10,7 @@ import json
 import math
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
 import numpy as np
 
@@ -25,6 +25,56 @@ MAX_YAW_RATE = 0.6
 MAX_ACCELERATION = 2.0
 MAX_SPEED = 55.0
 PRECISION = 3
+
+
+class RedactedReferenceError(ValueError):
+    """Raised when ground-truth future trajectories are redacted with [-100.0, -100.0]."""
+
+    pass
+
+
+def check_reference_trajectory(
+    trajectory: Any,
+    scenario_id: Optional[str] = None,
+    allow_redacted: bool = False,
+) -> bool:
+    """Validate that a reference trajectory contains real ground-truth waypoints.
+
+    In the KITScenes-LongTail test split, all reference trajectories ('expert_like',
+    'wrong_speed', 'neglect_instruction', 'off_road', 'crash') are redacted to
+    [[-100.0, -100.0]] to prevent offline data snooping and ground-truth leakage.
+
+    Raises RedactedReferenceError if allow_redacted is False and sentinels are detected.
+    Returns True if valid real reference waypoints are present, False if redacted.
+    """
+    if trajectory is None:
+        if allow_redacted:
+            return False
+        sc_desc = f" for scenario {scenario_id!r}" if scenario_id else ""
+        raise RedactedReferenceError(
+            f"Missing reference trajectory{sc_desc}. MMS cannot be computed locally "
+            f"on the test set."
+        )
+
+    # Check for sentinel format [[-100.0, -100.0]] or length < 25
+    arr = np.asarray(trajectory, dtype=float)
+    is_sentinel = (
+        arr.size == 0
+        or (arr.ndim == 2 and arr.shape[0] < spec.WAYPOINT_COUNT and np.any(arr <= -90.0))
+        or (arr.ndim == 2 and np.allclose(arr, -100.0))
+    )
+
+    if is_sentinel:
+        if allow_redacted:
+            return False
+        sc_desc = f" in scenario {scenario_id!r}" if scenario_id else ""
+        raise RedactedReferenceError(
+            f"Ground truth future reference{sc_desc} is redacted to [[-100.0, -100.0]]. "
+            f"MMS (Multi-Maneuver Score) is provably uncomputable locally on the test set "
+            f"and is scored privately by the Hugging Face challenge evaluation server."
+        )
+
+    return True
 
 
 @dataclass

@@ -4,6 +4,8 @@
 import json
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 def create_kaggle_notebook(output_path: Path):
     cells = [
@@ -14,7 +16,7 @@ def create_kaggle_notebook(output_path: Path):
                 "# KITScenes-LongTail World Modeling Challenge — End-to-End Kaggle Pipeline\n",
                 "### NeurIPS 2026 Workshop on World Models in Physical AI\n",
                 "\n",
-                "This production-ready notebook generates multi-view surround driving videos for all **400 test scenarios** (`0000000` to `0000399`) and packages them for submission to the official [Hugging Face Challenge Space](https://huggingface.co/spaces/KIT-MRT/KITScenes-LongTail-Challenge).\n",
+                "This production-ready notebook generates multi-view surround driving videos for all **400 test scenarios** (`0000000` to `0000399`) using **Stable Video Diffusion (SVD)** conditioned on observed $t=0$ camera frames and planned trajectories, then packages them for submission to the official [Hugging Face Challenge Space](https://huggingface.co/spaces/KIT-MRT/KITScenes-LongTail-Challenge).\n",
                 "\n",
                 "### Key Challenge Requirements & Scoring:\n",
                 "- **6 Surround Cameras**: `front` (required), `front_left`, `front_right`, `rear`, `rear_left`, `rear_right`.\n",
@@ -23,9 +25,11 @@ def create_kaggle_notebook(output_path: Path):
                 "  - Dimensions: **876x568** resolution (exact KITScenes aspect ratio).\n",
                 "  - Frames: **Exactly 25 frames** @ **5.0 fps** (spanning 0.2 s to 5.0 s into the future).\n",
                 "  - Size: **<= 50 MiB uncompressed per video**, total archive `videos.zip` **<= 3.0 GiB**.\n",
-                "- **Perceptual Quality (PQ)**: Evaluated with Q-Align (OneAlign): `front` is weighted 50%, side cameras 10% each.\n",
-                "- **Ego-Motion Coherence (EMC)**: Optical flow recovers yaw from `front` + `rear` agreement, and speed from the 4 side cameras (`front_left`, `front_right`, `rear_left`, `rear_right`). If any camera is missing, EMC=0!\n",
-                "- **Kaggle Hardware Optimization**: Tuned to run inside Kaggle's free GPU limits (2x Nvidia T4 16GB) with FP16 precision, SDPA/xFormers memory-efficient attention, CPU offloading, and fast multi-threaded encoding.\n"
+                "- **Leaderboard Ranking Metrics**:\n",
+                "  - **Perceptual Quality (PQ)**: Primary ranking metric evaluated via Q-Align (`front` weighted 50%, side cameras 10% each).\n",
+                "  - **Ego-Motion Coherence (EMC)**: Tie-breaker metric computed via optical flow across surround cameras.\n",
+                "  - **Multi-Maneuver Score (MMS)**: Evaluated against reference trajectories on the private evaluation server.\n",
+                "- **Kaggle Hardware Optimization**: Tuned for 2x Nvidia T4 16GB GPUs with FP16 precision, memory-efficient attention, CPU offloading, and fast multi-threaded H.264 encoding.\n"
             ]
         },
         {
@@ -87,14 +91,14 @@ def create_kaggle_notebook(output_path: Path):
             "outputs": [],
             "source": [
                 "# Install required libraries for world modeling & video processing\n",
-                "!pip install -q diffusers accelerate huggingface_hub tqdm\n"
+                "!pip install -q diffusers accelerate huggingface_hub tqdm Pillow pyarrow\n"
             ]
         },
         {
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## Step 2: Hugging Face Authentication & Repository Setup\n",
+                "## Step 2: Hugging Face Authentication & Directory Setup\n",
                 "Authenticate using Kaggle Secrets (`HF_TOKEN`) and set up the directory structure."
             ]
         },
@@ -120,15 +124,22 @@ def create_kaggle_notebook(output_path: Path):
                 "    login(token=hf_token)\n",
                 "    print(\"Authenticated successfully with Hugging Face Hub.\")\n",
                 "else:\n",
-                "    print(\"Running without Hugging Face token (public datasets only).\")\n",
+                "    print(\"Warning: Running without Hugging Face token (gated dataset access requires token).\")\n",
                 "\n",
                 "# Setup working directories\n",
                 "BASE_DIR = Path(\"/kaggle/working\") if Path(\"/kaggle/working\").exists() else Path(\".\").resolve()\n",
+                "DATA_DIR = BASE_DIR / \"data\"\n",
+                "OBSERVED_DIR = DATA_DIR / \"observed_t0\"\n",
                 "RENDERS_DIR = BASE_DIR / \"renders\"\n",
                 "SUBMISSIONS_DIR = BASE_DIR / \"submissions\"\n",
                 "\n",
+                "DATA_DIR.mkdir(parents=True, exist_ok=True)\n",
+                "OBSERVED_DIR.mkdir(parents=True, exist_ok=True)\n",
                 "RENDERS_DIR.mkdir(parents=True, exist_ok=True)\n",
                 "SUBMISSIONS_DIR.mkdir(parents=True, exist_ok=True)\n",
+                "\n",
+                "print(f\"Data directory:        {DATA_DIR}\")\n",
+                "print(f\"Observed t=0 frames:   {OBSERVED_DIR}\")\n",
                 "print(f\"Renders directory:     {RENDERS_DIR}\")\n",
                 "print(f\"Submissions directory: {SUBMISSIONS_DIR}\")\n"
             ]
@@ -137,8 +148,11 @@ def create_kaggle_notebook(output_path: Path):
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## Step 3: Trajectory Planning & Validation\n",
-                "Load or plan future trajectories for all 400 test scenarios. The trajectory file (`trajectories.jsonl`) contains 25 $(x, y)$ waypoints at 5 Hz from 0.2 s to 5.0 s."
+                "## Step 3: Trajectory Verification & MMS Sentinel Guard\n",
+                "Load and validate the trajectory plan (`submissions/trajectories.jsonl`).\n",
+                "\n",
+                "> [!NOTE]\n",
+                "> In the official test split, ground-truth future reference paths (`expert_like`, etc.) are redacted to sentinel values `[[-100.0, -100.0]]` to prevent test leakage. True MMS is scored exclusively on the Hugging Face server."
             ]
         },
         {
@@ -147,37 +161,24 @@ def create_kaggle_notebook(output_path: Path):
             "metadata": {},
             "outputs": [],
             "source": [
-                "import json\n",
                 "from kitscenes import spec, trajectories\n",
                 "\n",
                 "trajectories_file = SUBMISSIONS_DIR / \"trajectories.jsonl\"\n",
                 "\n",
-                "# If trajectories.jsonl is not already present, generate kinematic baseline trajectories\n",
+                "# If trajectories.jsonl is not already present, build using the tactical planner\n",
                 "if not trajectories_file.exists():\n",
-                "    print(f\"Generating baseline trajectories for {spec.SCENARIO_COUNT} scenarios...\")\n",
-                "    with open(trajectories_file, \"w\", encoding=\"utf-8\") as f:\n",
-                "        for sc_id in spec.SCENARIO_IDS:\n",
-                "            # Representative past odometry at t=0\n",
-                "            idx = int(sc_id)\n",
-                "            # Slight variations in initial speed (10 - 15 m/s) and steering\n",
-                "            base_speed = 10.0 + (idx % 10) * 0.5\n",
-                "            history = [\n",
-                "                [0.0, 0.0],\n",
-                "                [base_speed * 0.2, 0.0],\n",
-                "                [base_speed * 0.4, 0.01],\n",
-                "                [base_speed * 0.6, 0.02],\n",
-                "            ]\n",
-                "            planned = trajectories.plan_trajectory(\n",
-                "                history,\n",
-                "                horizon=spec.WAYPOINT_COUNT,\n",
-                "                lookback=3,\n",
-                "                yaw_rate_decay=0.92,\n",
-                "            )\n",
-                "            pts = [[round(float(p[0]), 3), round(float(p[1]), 3)] for p in planned]\n",
-                "            f.write(json.dumps({\"scenario_id\": sc_id, \"future_trajectory\": pts}) + \"\\n\")\n",
-                "    print(f\"Wrote {spec.SCENARIO_COUNT} trajectories to {trajectories_file}\")\n",
+                "    hist_file = DATA_DIR / \"history.jsonl\"\n",
+                "    inst_file = DATA_DIR / \"instructions.jsonl\"\n",
+                "    print(f\"Planning trajectories from {hist_file}...\")\n",
+                "    from kitscenes import vlm_planner\n",
+                "    vlm_planner.plan_vlm_file(\n",
+                "        source=hist_file,\n",
+                "        destination=trajectories_file,\n",
+                "        instructions_path=inst_file,\n",
+                "        heuristic_fallback=True,\n",
+                "    )\n",
                 "\n",
-                "# Validate trajectories before starting video generation\n",
+                "# Validate trajectories against schema\n",
                 "traj_report = trajectories.inspect_trajectories(trajectories_file)\n",
                 "print(f\"Trajectories validated: {traj_report.count}/{spec.SCENARIO_COUNT} records\")\n",
                 "print(f\"Errors: {len(traj_report.errors)}, Warnings: {len(traj_report.warnings)}\")\n",
@@ -188,12 +189,9 @@ def create_kaggle_notebook(output_path: Path):
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## Step 4: Multi-View Video Generation Loop\n",
-                "We use `kitscenes.video_engine` which implements:\n",
-                "1. **Exact 6-camera rig geometry** (876x568, front 0°, front_left +60°, front_right -60°, rear 180°, rear_left +120°, rear_right -120°).\n",
-                "2. **Kinematic motion parameter derivation** converting 25 waypoints into $(v_k, \\omega_k)$ and perspective flow.\n",
-                "3. **Ego-Motion Coherence (EMC) guarantee**: Front and rear cameras agree on yaw rate; the 4 side cameras stream roadside elements with lateral speed $\\propto v \\sin(60^\\circ)$.\n",
-                "4. **Direct H.264 stream encoding** with ffmpeg: 25 frames, 5 fps, 876x568, CRF 24 (~1 MB per video, ensuring 2,400 videos fit well below the 3.0 GiB cap)."
+                "## Step 4: Observed $t=0$ Conditioning Frame Extraction\n",
+                "Generative world models require the real observed $t=0$ image for all 6 cameras to maintain visual coherence with the past driving scene.\n",
+                "On Kaggle (73 GB disk), we download the test split parquet file and extract the 6 downscaled ($876\\times 568$) JPEG frames for all 400 scenarios (only ~190 MB total)."
             ]
         },
         {
@@ -202,31 +200,83 @@ def create_kaggle_notebook(output_path: Path):
             "metadata": {},
             "outputs": [],
             "source": [
+                "from huggingface_hub import hf_hub_download\n",
+                "\n",
+                "parquet_path = DATA_DIR / \"test-00000-of-00001.parquet\"\n",
+                "\n",
+                "# Check how many scenarios have already been extracted\n",
+                "existing_t0 = [\n",
+                "    d.name for d in OBSERVED_DIR.iterdir()\n",
+                "    if d.is_dir() and len(list(d.glob(\"*.jpg\"))) == 6\n",
+                "]\n",
+                "print(f\"Existing t=0 conditioning scenarios: {len(existing_t0)}/{spec.SCENARIO_COUNT}\")\n",
+                "\n",
+                "if len(existing_t0) < spec.SCENARIO_COUNT:\n",
+                "    if not parquet_path.exists():\n",
+                "        print(\"Downloading test parquet (~32 GB) to local Kaggle disk...\")\n",
+                "        hf_hub_download(\n",
+                "            repo_id=\"KIT-MRT/KITScenes-LongTail\",\n",
+                "            repo_type=\"dataset\",\n",
+                "            filename=\"data/test-00000-of-00001.parquet\",\n",
+                "            token=hf_token,\n",
+                "            local_dir=DATA_DIR,\n",
+                "        )\n",
+                "        print(\"Download complete.\")\n",
+                "\n",
+                "    print(\"Extracting t=0 frames for all 400 scenarios (downscaled to 876x568)...\")\n",
+                "    subprocess.run([\n",
+                "        sys.executable, \"scripts/extract_t0_frames.py\",\n",
+                "        \"--parquet\", str(parquet_path),\n",
+                "        \"--output-dir\", str(OBSERVED_DIR),\n",
+                "        \"--resize\",\n",
+                "    ], check=True)\n",
+                "    print(\"Observed t=0 extraction finished.\")\n"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 5: GPU Single-Scenario Benchmark (Throughput & Quota Check)\n",
+                "Run a single-scenario benchmark to verify actual GPU inference latency per video on Kaggle 2x T4 before launching batch generation."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "# Run single-scenario benchmark on GPU\n",
+                "!python scripts/benchmark_backbone.py --backbone svd --device cuda --cameras 1\n"
+            ]
+        },
+        {
+            "cell_type": "markdown",
+            "metadata": {},
+            "source": [
+                "## Step 6: Multi-View World Model Generation Loop\n",
+                "Generate all 2,400 videos (400 scenarios $\\times$ 6 surround cameras):\n",
+                "- **SVD Diffusion World Model (`BACKBONE = 'svd'`)**: Conditioned on the 6 observed $t=0$ camera frames and trajectory forward speed.\n",
+                "- **Geometric Baseline (`BACKBONE = 'geometric'`)**: Fast procedural renderer for quick dry-runs."
+            ]
+        },
+        {
+            "cell_type": "code",
+            "execution_count": None,
+            "metadata": {},
+            "outputs": [],
+            "source": [
+                "import json\n",
                 "import time\n",
-                "import concurrent.futures\n",
                 "from tqdm.auto import tqdm\n",
                 "from kitscenes import video_engine\n",
                 "\n",
-                "# Initialize rig and geometric engine\n",
-                "rig = video_engine.CameraRig()\n",
-                "analyzer = video_engine.TrajectoryMotionAnalyzer(rig)\n",
-                "encoder = video_engine.VideoEncoder(crf=24, preset=\"fast\")\n",
-                "generator = video_engine.GeometricWorldModel(rig)\n",
+                "# Pipeline Configuration\n",
+                "BACKBONE = \"svd\"  # 'svd' for high perceptual quality on GPU; 'geometric' for quick test\n",
+                "DEVICE = \"cuda\" if torch.cuda.is_available() else \"cpu\"\n",
                 "\n",
-                "# Verify rig setup\n",
-                "print(\"Rig Camera Angles & Sensors:\")\n",
-                "for cam_name in spec.CAMERAS:\n",
-                "    pose = rig[cam_name]\n",
-                "    print(f\"  {cam_name:12s} -> Yaw: {pose.yaw_deg:6.1f}°, Position: {pose.position_m}, FOV: {pose.hfov_deg}°\")\n"
-            ]
-        },
-        {
-            "cell_type": "code",
-            "execution_count": None,
-            "metadata": {},
-            "outputs": [],
-            "source": [
-                "# Load all trajectories into memory\n",
+                "# Load planned trajectories\n",
                 "trajectories_dict = {}\n",
                 "with open(trajectories_file, \"r\", encoding=\"utf-8\") as f:\n",
                 "    for line in f:\n",
@@ -234,44 +284,55 @@ def create_kaggle_notebook(output_path: Path):
                 "            rec = json.loads(line)\n",
                 "            trajectories_dict[rec[\"scenario_id\"]] = rec[\"future_trajectory\"]\n",
                 "\n",
-                "print(f\"Loaded {len(trajectories_dict)} scenario trajectories.\")\n",
+                "print(f\"Loaded {len(trajectories_dict)} trajectories.\")\n",
+                "print(f\"Initializing WorldModelPipeline with backbone='{BACKBONE}', device='{DEVICE}'...\")\n",
+                "\n",
+                "encoder = video_engine.VideoEncoder(crf=24, preset=\"fast\")\n",
+                "rig = video_engine.CameraRig()\n",
+                "\n",
+                "if BACKBONE == \"svd\":\n",
+                "    generator = video_engine.StableVideoDiffusionGenerator(device=DEVICE)\n",
+                "else:\n",
+                "    generator = video_engine.GeometricWorldModel(rig)\n",
                 "\n",
                 "def render_and_encode_scenario(sc_id: str) -> str:\n",
-                "    \"\"\"Render 6 cameras for scenario and encode directly to disk.\"\"\"\n",
+                "    \"\"\"Generate 6 camera videos for a scenario and encode directly to disk.\"\"\"\n",
                 "    traj = trajectories_dict[sc_id]\n",
                 "    sc_dir = RENDERS_DIR / sc_id\n",
                 "    sc_dir.mkdir(parents=True, exist_ok=True)\n",
                 "\n",
-                "    # Generate 6 camera frames\n",
-                "    videos = generator.generate_scenario(sc_id, traj)\n",
+                "    cond_images = None\n",
+                "    if BACKBONE == \"svd\":\n",
+                "        cond_images = video_engine.load_conditioning_images(OBSERVED_DIR, sc_id)\n",
+                "\n",
+                "    videos = generator.generate_scenario(\n",
+                "        scenario_id=sc_id,\n",
+                "        trajectory=traj,\n",
+                "        conditioning_images=cond_images,\n",
+                "    )\n",
                 "\n",
                 "    for cam_name, frames in videos.items():\n",
                 "        out_path = sc_dir / f\"{cam_name}.mp4\"\n",
                 "        encoder.encode(frames, out_path, validate=False)\n",
                 "    return sc_id\n",
                 "\n",
-                "# Execute batch video generation\n",
+                "# Run batch generation across all 400 test scenarios\n",
                 "total_scenarios = len(spec.SCENARIO_IDS)\n",
                 "print(f\"Generating 6 cameras x {total_scenarios} scenarios = {total_scenarios * 6} videos...\")\n",
-                "\n",
                 "start_time = time.time()\n",
-                "# Multi-threaded encoding pool\n",
-                "with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:\n",
-                "    results = list(tqdm(\n",
-                "        pool.map(render_and_encode_scenario, spec.SCENARIO_IDS),\n",
-                "        total=total_scenarios,\n",
-                "        desc=\"Rendering Scenarios\",\n",
-                "    ))\n",
+                "\n",
+                "for sc_id in tqdm(spec.SCENARIO_IDS, desc=f\"Rendering ({BACKBONE})\"):\n",
+                "    render_and_encode_scenario(sc_id)\n",
                 "\n",
                 "duration = time.time() - start_time\n",
-                "print(f\"Finished rendering {len(results)} scenarios in {duration:.1f}s ({duration/total_scenarios:.3f}s / scenario).\")\n"
+                "print(f\"Finished rendering {total_scenarios} scenarios in {duration:.1f}s ({duration/total_scenarios:.2f}s / scenario).\")\n"
             ]
         },
         {
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## Step 5: Packaging & Submission Validation\n",
+                "## Step 7: Packaging & Server-Equivalent Validation\n",
                 "Package the rendered videos into `videos.zip` and run `validate_submission.py` to confirm 0 errors against official competition rules."
             ]
         },
@@ -286,7 +347,6 @@ def create_kaggle_notebook(output_path: Path):
                 "zip_output = SUBMISSIONS_DIR / \"videos.zip\"\n",
                 "print(f\"Packaging rendered videos into {zip_output}...\")\n",
                 "\n",
-                "# Archive uses ZIP_STORED since H.264 mp4 is already compressed\n",
                 "pack_report = archive.build_archive(\n",
                 "    directory=RENDERS_DIR,\n",
                 "    output=zip_output,\n",
@@ -326,7 +386,7 @@ def create_kaggle_notebook(output_path: Path):
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## Step 6: Ready for Submission!\n",
+                "## Step 8: Ready for Leaderboard Submission!\n",
                 "\n",
                 "The submission files are located at:\n",
                 "1. **`submissions/videos.zip`** (all 400 scenarios x 6 cameras, H.264, 876x568 @ 5 fps, < 3 GiB).\n",
@@ -379,5 +439,5 @@ def create_kaggle_notebook(output_path: Path):
 
 
 if __name__ == "__main__":
-    out = Path("notebooks/kitscenes_world_model_kaggle.ipynb")
-    create_kaggle_notebook(out)
+    notebook_file = PROJECT_ROOT / "notebooks" / "kitscenes_world_model_kaggle.ipynb"
+    create_kaggle_notebook(notebook_file)

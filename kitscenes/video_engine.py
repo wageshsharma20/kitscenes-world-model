@@ -759,7 +759,13 @@ class StableVideoDiffusionGenerator:
 
         for cam_name in spec.CAMERAS:
             supplied = conditioning_images[cam_name]
-            if isinstance(supplied, np.ndarray):
+            if isinstance(supplied, (str, Path)):
+                cond_img = image_module.open(str(supplied)).convert("RGB")
+            elif isinstance(supplied, bytes):
+                import io
+
+                cond_img = image_module.open(io.BytesIO(supplied)).convert("RGB")
+            elif isinstance(supplied, np.ndarray):
                 cond_img = image_module.fromarray(
                     np.ascontiguousarray(supplied).astype(np.uint8)
                 )
@@ -770,6 +776,28 @@ class StableVideoDiffusionGenerator:
             results[cam_name] = frames
 
         return results
+
+
+def load_conditioning_images(
+    observed_t0_dir: Path | str, scenario_id: str
+) -> Dict[str, Path]:
+    """Load mapping of camera_name -> image path for a scenario's observed t=0 frames."""
+    sc_dir = Path(observed_t0_dir) / str(scenario_id).zfill(7)
+    if not sc_dir.exists():
+        raise FileNotFoundError(
+            f"no observed t=0 directory for scenario {scenario_id!r} in {observed_t0_dir}"
+        )
+    images: Dict[str, Path] = {}
+    for cam in spec.CAMERAS:
+        img_path = sc_dir / f"{cam}.jpg"
+        if not img_path.exists():
+            img_path = sc_dir / f"{cam}.png"
+        if not img_path.exists():
+            raise FileNotFoundError(
+                f"missing {cam} frame for scenario {scenario_id} at {img_path}"
+            )
+        images[cam] = img_path
+    return images
 
 
 class WorldModelPipeline:

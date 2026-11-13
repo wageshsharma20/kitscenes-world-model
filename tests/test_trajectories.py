@@ -162,3 +162,21 @@ def test_rejects_wrong_extension(tmp_path, suffix):
     report = trajectories.inspect_trajectories(path)
 
     assert any("expected a .jsonl" in message for message in report.errors)
+
+
+def test_check_reference_trajectory_guards_redacted_sentinels():
+    # Sentinels as present in the gated test split
+    redacted = [[-100.0, -100.0]]
+    with pytest.raises(trajectories.RedactedReferenceError) as exc_info:
+        trajectories.check_reference_trajectory(redacted, scenario_id="0000000")
+    assert "redacted to [[-100.0, -100.0]]" in str(exc_info.value)
+    assert "MMS (Multi-Maneuver Score) is provably uncomputable locally" in str(exc_info.value)
+
+    # When allow_redacted=True, returns False instead of raising
+    assert trajectories.check_reference_trajectory(redacted, allow_redacted=True) is False
+
+
+def test_check_reference_trajectory_accepts_valid():
+    valid_points = [[float(i), 0.0] for i in range(spec.WAYPOINT_COUNT)]
+    assert trajectories.check_reference_trajectory(valid_points) is True
+

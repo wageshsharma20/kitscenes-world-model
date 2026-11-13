@@ -228,3 +228,22 @@ def test_svd_backbone_names_the_missing_cameras():
         generator.generate_scenario(
             "0000000", waypoints, conditioning_images={"front": object()}
         )
+
+
+def test_load_conditioning_images(tmp_path):
+    sc_dir = tmp_path / "0000042"
+    sc_dir.mkdir(parents=True)
+    for cam in spec.CAMERAS:
+        (sc_dir / f"{cam}.jpg").write_bytes(b"mock_jpeg")
+
+    images = video_engine.load_conditioning_images(tmp_path, "0000042")
+    assert len(images) == 6
+    for cam in spec.CAMERAS:
+        assert cam in images
+        assert images[cam].exists()
+
+    # Missing camera view raises FileNotFoundError
+    (sc_dir / "rear.jpg").unlink()
+    with pytest.raises(FileNotFoundError, match="missing rear frame"):
+        video_engine.load_conditioning_images(tmp_path, "0000042")
+
