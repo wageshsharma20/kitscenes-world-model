@@ -1,0 +1,2 @@
+# Runtime dependencies. Video checks shell out to ffmpeg/ffprobe (not a pip package).
+numpy>=1.24

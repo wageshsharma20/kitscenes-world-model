@@ -1,0 +1,12 @@
+# Style gate for this repository. Run: ruff check .
+line-length = 100
+target-version = "py39"
+
+[lint]
+select = ["E", "F", "W", "B"]
+# E501 is off because the Gemini prompt and the spec tables read better unbroken.
+ignore = ["E501"]
+
+[lint.per-file-ignores]
+# Command-line scripts bootstrap sys.path before importing the package.
+"scripts/*.py" = ["E402"]
