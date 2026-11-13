@@ -19,6 +19,7 @@ import json
 import math
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
@@ -914,18 +915,52 @@ def batch_generate_and_package(
             trajs[rec["scenario_id"]] = rec["future_trajectory"]
 
     target_ids = list(scenario_ids) if scenario_ids is not None else list(spec.SCENARIO_IDS)
+
+    # Resolve conditioning up front. Resolving inside the loop would let a run of several
+    # thousand GPU-seconds die at scenario 381 because one frame folder is absent, and
+    # would hide which scenarios were missing.
+    cond_by_scenario: Dict[str, Dict[str, Any]] = dict(conditioning_images or {})
+    if observed_t0_dir is not None:
+        if backbone != "svd":
+            print(
+                f"warning: observed_t0_dir has no effect with the '{backbone}' backbone, "
+                f"which renders procedurally; only 'svd' consumes the frames",
+                file=sys.stderr,
+            )
+        missing: List[str] = []
+        for sc_id in target_ids:
+            if sc_id in cond_by_scenario:
+                continue
+            try:
+                cond_by_scenario[sc_id] = load_conditioning_images(observed_t0_dir, sc_id)
+            except FileNotFoundError as exc:
+                missing.append(str(exc))
+        if missing:
+            shown = "\n".join(f"  {entry}" for entry in missing[:10])
+            more = f"\n  ... and {len(missing) - 10} more" if len(missing) > 10 else ""
+            raise FileNotFoundError(
+                f"{len(missing)} of {len(target_ids)} scenarios have no observed t=0 "
+                f"frames in {observed_t0_dir}. Extract them before the run rather than "
+                f"losing hours of GPU time partway through:\n"
+                f"  python scripts/extract_t0_frames.py --limit {len(target_ids)}\n"
+                f"{shown}{more}"
+            )
+    elif backbone == "svd":
+        uncovered = [sc_id for sc_id in target_ids if sc_id not in cond_by_scenario]
+        if uncovered:
+            raise ValueError(
+                f"the svd backbone needs the observed t=0 frame for every camera, and "
+                f"{len(uncovered)} of {len(target_ids)} scenarios have none (e.g. "
+                f"{uncovered[0]}); pass observed_t0_dir or conditioning_images"
+            )
+
     pipeline = WorldModelPipeline(backbone=backbone, device=device)
 
     total = len(target_ids)
     for idx, sc_id in enumerate(target_ids):
         if sc_id not in trajs:
             raise KeyError(f"scenario '{sc_id}' not found in {trajectories_file}")
-        cond_dict = conditioning_images.get(sc_id) if conditioning_images else None
-        if cond_dict is None and observed_t0_dir:
-            try:
-                cond_dict = load_conditioning_images(observed_t0_dir, sc_id)
-            except FileNotFoundError:
-                cond_dict = None
+        cond_dict = cond_by_scenario.get(sc_id)
         pipeline.generate_and_save_scenario(
             scenario_id=sc_id,
             trajectory=trajs[sc_id],

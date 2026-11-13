@@ -276,3 +276,50 @@ def test_batch_generate_and_package_with_observed_t0_dir(tmp_path):
     assert report.videos == 6
 
 
+
+
+def test_missing_conditioning_frames_fail_before_any_rendering(tmp_path):
+    """A 400-video GPU run must not discover a missing frame folder at scenario 381."""
+    traj_path = tmp_path / "trajectories.jsonl"
+    pts = [[round(1.5 * (k + 1), 3), 0.0] for k in range(spec.WAYPOINT_COUNT)]
+    with open(traj_path, "w", encoding="utf-8") as f:
+        for sc_id in ("0000000", "0000001"):
+            f.write(json.dumps({"scenario_id": sc_id, "future_trajectory": pts}) + "\n")
+
+    t0_dir = tmp_path / "observed_t0"
+    complete = t0_dir / "0000000"
+    complete.mkdir(parents=True)
+    for cam in spec.CAMERAS:
+        (complete / f"{cam}.jpg").write_bytes(b"dummy")
+    (t0_dir / "0000001").mkdir(parents=True)  # present but empty
+
+    with pytest.raises(FileNotFoundError, match="0000001"):
+        video_engine.batch_generate_and_package(
+            trajectories_file=traj_path,
+            output_dir=tmp_path / "renders",
+            zip_path=tmp_path / "out.zip",
+            scenario_ids=["0000000", "0000001"],
+            allow_partial=True,
+            observed_t0_dir=t0_dir,
+        )
+
+    assert not (tmp_path / "renders").exists()
+
+
+def test_svd_batch_refuses_to_start_without_conditioning(tmp_path):
+    traj_path = tmp_path / "trajectories.jsonl"
+    pts = [[round(1.5 * (k + 1), 3), 0.0] for k in range(spec.WAYPOINT_COUNT)]
+    traj_path.write_text(
+        json.dumps({"scenario_id": "0000000", "future_trajectory": pts}) + "\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="observed t=0 frame"):
+        video_engine.batch_generate_and_package(
+            trajectories_file=traj_path,
+            output_dir=tmp_path / "renders",
+            zip_path=tmp_path / "out.zip",
+            scenario_ids=["0000000"],
+            allow_partial=True,
+            backbone="svd",
+        )
