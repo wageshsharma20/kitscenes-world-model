@@ -96,10 +96,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Limit number of scenarios to extract",
     )
     parser.add_argument(
+        "--resize",
+        action="store_true",
+        dest="resize",
+        help="downscale frames from native 3504x2272 to challenge resolution 876x568 (default)",
+    )
+    parser.add_argument(
         "--no-resize",
         action="store_false",
         dest="resize",
-        default=argparse.SUPPRESS,
         help="keep the native 3504x2272 resolution; without this flag frames are "
         "downscaled to the 876x568 contract size",
     )
