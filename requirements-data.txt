@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Dataset ingest only: metadata streaming and t=0 frame extraction from the gated split.
+huggingface_hub>=0.20
+pyarrow>=14

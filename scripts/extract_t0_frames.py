@@ -96,16 +96,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Limit number of scenarios to extract",
     )
     parser.add_argument(
-        "--resize",
-        action="store_true",
-        default=True,
-        help="Downscale frames from native 3504x2272 to challenge resolution 876x568",
-    )
-    parser.add_argument(
         "--no-resize",
         action="store_false",
         dest="resize",
-        help="Keep raw native resolution (3504x2272)",
+        default=argparse.SUPPRESS,
+        help="keep the native 3504x2272 resolution; without this flag frames are "
+        "downscaled to the 876x568 contract size",
+    )
+    parser.set_defaults(resize=True)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="re-extract scenarios that already have all six images on disk",
     )
     return parser
 
@@ -197,8 +199,14 @@ def process_parquet_file(
     target_scenarios: set[str] | None = None,
     limit: int | None = None,
     resize: bool = True,
+    force: bool = False,
 ) -> dict[str, dict[str, Path]]:
-    """Process a ParquetFile instance (local or remote fsspec stream) and extract t=0 frames."""
+    """Process a ParquetFile instance (local or remote fsspec stream) and extract t=0 frames.
+
+    Reading a column chunk transfers every frame of that row group, not just the last one:
+    parquet cannot seek to a single list element. The saving is on disk (six images per
+    scenario instead of 126) and in repeated runs, which skip completed scenarios.
+    """
     import pyarrow.parquet as pq
 
     if isinstance(parquet_source, (str, Path)):
@@ -211,55 +219,41 @@ def process_parquet_file(
 
     print(f"[*] Processing {total_rgs} row group(s)")
 
+    available = [
+        name for name in CAMERA_FRAME_COLUMNS.values() if name in pf.schema_arrow.names
+    ]
+    if not available:
+        raise RuntimeError(
+            "this parquet file has none of the camera frame columns; check --split"
+        )
+
     for rg_idx in range(total_rgs):
         if limit and len(all_extracted) >= limit:
             break
 
-        # 1. Read scenario IDs in this row group first
-        sid_table = pf.read_row_group(rg_idx, columns=["scenario_id"])
-        sids = [str(r["scenario_id"]).zfill(7) for r in sid_table.to_pylist()]
+        # One pass per row group: all camera columns and the id travel together.
+        table = pf.read_row_group(rg_idx, columns=["scenario_id"] + available)
+        rows = table.to_pylist()
 
-        needed_indices = []
-        for i, sid in enumerate(sids):
+        for row in rows:
+            if limit and len(all_extracted) >= limit:
+                break
+
+            sid = str(row["scenario_id"]).zfill(7)
             if target_scenarios and sid not in target_scenarios:
                 continue
-            if limit and (len(all_extracted) + len(needed_indices)) >= limit:
-                break
-            needed_indices.append(i)
-
-        if not needed_indices:
-            continue
-
-        for i in needed_indices:
-            sid = sids[i]
-            if sid not in all_extracted:
-                all_extracted[sid] = {}
-                (output_dir / sid).mkdir(parents=True, exist_ok=True)
-
-        # 2. Read each camera column sequentially (contiguous byte range)
-        for cam_name, col_name in CAMERA_FRAME_COLUMNS.items():
-            if col_name not in pf.schema_arrow.names:
+            if sid in all_extracted:
                 continue
-            cam_table = pf.read_row_group(rg_idx, columns=[col_name])
-            cam_rows = cam_table.to_pylist()
-            for i in needed_indices:
-                sid = sids[i]
-                frames_list = cam_rows[i].get(col_name)
-                if not frames_list or not isinstance(frames_list, list):
-                    continue
-                t0_entry = frames_list[-1]
-                img_bytes = (
-                    t0_entry.get("bytes")
-                    if isinstance(t0_entry, dict)
-                    else getattr(t0_entry, "bytes", b"")
-                )
-                if not img_bytes:
-                    continue
-                if resize:
-                    img_bytes = resize_image_bytes(img_bytes)
-                out_path = output_dir / sid / f"{cam_name}.jpg"
-                out_path.write_bytes(img_bytes)
-                all_extracted[sid][cam_name] = out_path
+
+            destination = output_dir / sid
+            if not force and all(
+                (destination / f"{camera}.jpg").exists() for camera in spec.CAMERAS
+            ):
+                continue
+
+            saved = extract_scenario_t0(row, output_dir, resize=resize)
+            if saved:
+                all_extracted[sid] = saved
 
         print(
             f"    Progress: [{rg_idx + 1:2d}/{total_rgs:2d}] row groups | "
@@ -297,6 +291,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             target_scenarios=target_scenarios,
             limit=args.limit,
             resize=args.resize,
+            force=args.force,
         )
     else:
         # Mode 2: Remote Streaming
@@ -327,6 +322,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 target_scenarios=target_scenarios,
                 limit=args.limit,
                 resize=args.resize,
+                force=args.force,
             )
 
     elapsed = time.time() - start_time

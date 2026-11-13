@@ -18,6 +18,9 @@ trajectory baseline to build on. The video generator is a separate piece of work
 | `validate_submission.py` | Offline check of `videos.zip` and `trajectories.jsonl` |
 | `build_submission.py` | Packs rendered videos; plans trajectories from odometry |
 | `scripts/generate_videos.py` | CLI to generate surround videos from trajectories & package archive |
+| `scripts/download_dataset.py` | Stream split metadata (odometry, instructions) without the video payload |
+| `scripts/extract_t0_frames.py` | Extract the observed t=0 frame per camera, downscaled to 876×568 |
+| `scripts/benchmark_backbone.py` | Time one scenario and project the run against the GPU budget |
 | `notebooks/kitscenes_world_model_kaggle.ipynb` | Self-contained Kaggle notebook optimized for 2x Nvidia T4 16GB GPUs |
 | `kitscenes/video_engine.py` | Multi-view generation engine (camera rig, motion derivation, SVD/Geometric WM, H.264 encoder) |
 | `kitscenes/spec.py` | Every limit and constant from the official rules, in one place |
@@ -37,7 +40,8 @@ Python 3.9 or newer, plus `ffmpeg` on `PATH` for the encoding checks:
 ```sh
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-brew install ffmpeg          # or: apt-get install ffmpeg
+pip install -r requirements-data.txt   # only for the dataset ingest scripts
+brew install ffmpeg                    # or: apt-get install ffmpeg
 ```
 
 ## Usage
