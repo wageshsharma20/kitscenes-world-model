@@ -67,17 +67,22 @@ class ArchiveReport:
 
 
 def _inspect_media(
-    zf: zipfile.ZipFile, entry: zipfile.ZipInfo
+    archive_path: Path, filename: str
 ) -> Tuple[List[str], List[str]]:
-    """Probe one archived video by streaming it to a temporary file."""
+    """Probe one archived video by streaming it to a temporary file.
+
+    Opening a dedicated ZipFile instance per thread prevents shared file descriptor
+    concurrency issues and Bad CRC-32 errors during parallel extraction.
+    """
     with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as handle:
         temporary = Path(handle.name)
-        with zf.open(entry) as source:
-            shutil.copyfileobj(source, handle)
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            with zf.open(filename) as source:
+                shutil.copyfileobj(source, handle)
     try:
         return media.check_video(media.probe_video(temporary))
     except media.ProbeError as exc:
-        return [f"{entry.filename}: {exc}"], []
+        return [f"{filename}: {exc}"], []
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -226,7 +231,10 @@ def inspect_archive(
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
             results = list(
-                pool.map(lambda entry: _inspect_media(zf, entry), videos.values())
+                pool.map(
+                    lambda name: _inspect_media(path, name),
+                    [entry.filename for entry in videos.values()],
+                )
             )
         report.media_checked = len(results)
 
