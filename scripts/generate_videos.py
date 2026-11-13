@@ -70,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Limit number of scenarios to generate",
     )
     parser.add_argument(
+        "--observed-t0-dir",
+        type=Path,
+        help="Directory containing observed t=0 conditioning frames (e.g. data/observed_t0)",
+    )
+    parser.add_argument(
         "--crf",
         type=int,
         default=24,
@@ -113,6 +118,7 @@ def main(argv=None) -> int:
             allow_partial=args.allow_partial,
             backbone=args.backbone,
             device=args.device,
+            observed_t0_dir=args.observed_t0_dir,
             progress_callback=progress_callback,
         )
     except Exception as exc:

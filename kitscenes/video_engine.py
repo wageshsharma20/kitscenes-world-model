@@ -883,6 +883,7 @@ def batch_generate_and_package(
     backbone: str = "geometric",
     device: str = "cuda",
     conditioning_images: Optional[Dict[str, Dict[str, Any]]] = None,
+    observed_t0_dir: Optional[Union[Path, str]] = None,
     progress_callback: Optional[Any] = None,
 ) -> archive.ArchiveReport:
     """Generate videos for scenarios from trajectories.jsonl and pack into videos.zip.
@@ -896,6 +897,7 @@ def batch_generate_and_package(
         backbone: Generator backbone ('geometric' for fast mock, 'svd' for diffusion).
         device: Device to run generative backbones on ('cuda', 'cpu', 'mps').
         conditioning_images: Optional dict of scenario_id -> {camera_name: image}.
+        observed_t0_dir: Optional directory with observed t=0 images (<id>/<camera>.jpg).
         progress_callback: Optional callable(index, total, scenario_id).
     """
     trajectories_file = Path(trajectories_file)
@@ -919,6 +921,11 @@ def batch_generate_and_package(
         if sc_id not in trajs:
             raise KeyError(f"scenario '{sc_id}' not found in {trajectories_file}")
         cond_dict = conditioning_images.get(sc_id) if conditioning_images else None
+        if cond_dict is None and observed_t0_dir:
+            try:
+                cond_dict = load_conditioning_images(observed_t0_dir, sc_id)
+            except FileNotFoundError:
+                cond_dict = None
         pipeline.generate_and_save_scenario(
             scenario_id=sc_id,
             trajectory=trajs[sc_id],

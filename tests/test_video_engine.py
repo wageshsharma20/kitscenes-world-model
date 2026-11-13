@@ -247,3 +247,32 @@ def test_load_conditioning_images(tmp_path):
     with pytest.raises(FileNotFoundError, match="missing rear frame"):
         video_engine.load_conditioning_images(tmp_path, "0000042")
 
+
+def test_batch_generate_and_package_with_observed_t0_dir(tmp_path):
+    scenarios = ["0000000"]
+    traj_path = tmp_path / "trajectories.jsonl"
+    with open(traj_path, "w", encoding="utf-8") as f:
+        pts = [[round(1.5 * (k + 1), 3), 0.0] for k in range(spec.WAYPOINT_COUNT)]
+        f.write(json.dumps({"scenario_id": "0000000", "future_trajectory": pts}) + "\n")
+
+    t0_dir = tmp_path / "observed_t0"
+    sc_t0 = t0_dir / "0000000"
+    sc_t0.mkdir(parents=True)
+    for cam in spec.CAMERAS:
+        (sc_t0 / f"{cam}.jpg").write_bytes(b"dummy")
+
+    renders_dir = tmp_path / "renders"
+    zip_path = tmp_path / "out.zip"
+
+    report = video_engine.batch_generate_and_package(
+        trajectories_file=traj_path,
+        output_dir=renders_dir,
+        zip_path=zip_path,
+        scenario_ids=scenarios,
+        allow_partial=True,
+        observed_t0_dir=t0_dir,
+    )
+    assert report.ok
+    assert report.videos == 6
+
+
