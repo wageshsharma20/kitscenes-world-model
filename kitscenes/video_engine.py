@@ -8,7 +8,7 @@ This module provides:
    into frame-by-frame forward speed v, yaw rate w, heading, and camera-specific velocities.
 3. Optical flow and ego-motion coherence (EMC) modeling guaranteeing that front + rear
    agree on yaw, and the 4 side cameras reflect vehicle speed.
-4. Open-source world model backbones (Geometric/Warp, SVD, Action-Conditioned WM).
+4. Open-source world model backbones (Geometric/Warp, SVD, Action-Conditioned WM, Epona).
 5. Robust H.264 mp4 video encoding (libx264, 5 fps, exactly 25 frames, 876x568).
 6. High-throughput batch generation and submission archive packaging.
 """
@@ -810,6 +810,7 @@ class WorldModelPipeline:
         rig: Optional[CameraRig] = None,
         encoder_crf: int = 24,
         device: str = "cuda",
+        donor_index: Optional[Any] = None,
     ):
         self.backbone_name = backbone
         self.rig = rig or CameraRig()
@@ -821,8 +822,18 @@ class WorldModelPipeline:
             self.generator = GeometricWorldModel(self.rig)
         elif backbone == "svd":
             self.generator = StableVideoDiffusionGenerator(device=device)
+        elif backbone == "epona":
+            from .epona_engine import EponaWorldModel
+
+            self.generator = EponaWorldModel(rig=self.rig, device=device)
+        elif backbone in ("retrieval", "hybrid"):
+            from .retrieval_engine import RetrievalWorldModel
+
+            self.generator = RetrievalWorldModel(donor_index=donor_index)
         else:
-            raise ValueError(f"unknown backbone '{backbone}'; expected 'geometric' or 'svd'")
+            raise ValueError(
+                f"unknown backbone '{backbone}'; expected 'geometric', 'svd', 'epona', or 'retrieval'"
+            )
 
     def generate_and_save_scenario(
         self,
@@ -885,6 +896,7 @@ def batch_generate_and_package(
     device: str = "cuda",
     conditioning_images: Optional[Dict[str, Dict[str, Any]]] = None,
     observed_t0_dir: Optional[Union[Path, str]] = None,
+    donor_index: Optional[Any] = None,
     progress_callback: Optional[Any] = None,
 ) -> archive.ArchiveReport:
     """Generate videos for scenarios from trajectories.jsonl and pack into videos.zip.
@@ -895,10 +907,11 @@ def batch_generate_and_package(
         zip_path: Output archive path (default: <output_dir>/../videos.zip).
         scenario_ids: Subset of scenarios to generate (default: all 400).
         allow_partial: If True, allows packing a subset of scenarios for local testing.
-        backbone: Generator backbone ('geometric' for fast mock, 'svd' for diffusion).
+        backbone: Generator backbone ('geometric' for fast mock, 'svd' for diffusion, 'epona' for Epona, 'retrieval' for retrieval-assisted).
         device: Device to run generative backbones on ('cuda', 'cpu', 'mps').
         conditioning_images: Optional dict of scenario_id -> {camera_name: image}.
         observed_t0_dir: Optional directory with observed t=0 images (<id>/<camera>.jpg).
+        donor_index: Optional pre-built DonorIndex for retrieval backbone.
         progress_callback: Optional callable(index, total, scenario_id).
     """
     trajectories_file = Path(trajectories_file)
@@ -921,10 +934,10 @@ def batch_generate_and_package(
     # would hide which scenarios were missing.
     cond_by_scenario: Dict[str, Dict[str, Any]] = dict(conditioning_images or {})
     if observed_t0_dir is not None:
-        if backbone != "svd":
+        if backbone not in ("svd", "epona", "retrieval", "hybrid"):
             print(
                 f"warning: observed_t0_dir has no effect with the '{backbone}' backbone, "
-                f"which renders procedurally; only 'svd' consumes the frames",
+                f"which renders procedurally; only 'svd', 'epona', and 'retrieval' consume the frames",
                 file=sys.stderr,
             )
         missing: List[str] = []
@@ -945,16 +958,16 @@ def batch_generate_and_package(
                 f"  python scripts/extract_t0_frames.py --limit {len(target_ids)}\n"
                 f"{shown}{more}"
             )
-    elif backbone == "svd":
+    elif backbone in ("svd", "epona"):
         uncovered = [sc_id for sc_id in target_ids if sc_id not in cond_by_scenario]
         if uncovered:
             raise ValueError(
-                f"the svd backbone needs the observed t=0 frame for every camera, and "
+                f"the {backbone} backbone needs the observed t=0 frame for every camera, and "
                 f"{len(uncovered)} of {len(target_ids)} scenarios have none (e.g. "
                 f"{uncovered[0]}); pass observed_t0_dir or conditioning_images"
             )
 
-    pipeline = WorldModelPipeline(backbone=backbone, device=device)
+    pipeline = WorldModelPipeline(backbone=backbone, device=device, donor_index=donor_index)
 
     total = len(target_ids)
     for idx, sc_id in enumerate(target_ids):
