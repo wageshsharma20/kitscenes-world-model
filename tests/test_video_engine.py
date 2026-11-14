@@ -323,3 +323,28 @@ def test_svd_batch_refuses_to_start_without_conditioning(tmp_path):
             allow_partial=True,
             backbone="svd",
         )
+
+
+def test_svd_sampling_dials_are_configurable():
+    """The quota dial: 448x288 at 8 steps is the only SVD setting that fits Kaggle."""
+    generator = video_engine.StableVideoDiffusionGenerator(
+        height=288, width=448, num_inference_steps=8
+    )
+
+    assert (generator.width, generator.height) == (448, 288)
+    assert generator.num_inference_steps == 8
+
+
+def test_svd_rejects_sampling_sizes_that_are_not_multiples_of_eight():
+    with pytest.raises(ValueError, match="multiples of 8"):
+        video_engine.StableVideoDiffusionGenerator(height=300, width=448)
+
+
+def test_pipeline_threads_svd_dials_to_the_generator():
+    pipeline = video_engine.WorldModelPipeline(
+        backbone="svd", svd_height=288, svd_width=448, svd_steps=8
+    )
+
+    assert pipeline.generator.height == 288
+    assert pipeline.generator.width == 448
+    assert pipeline.generator.num_inference_steps == 8

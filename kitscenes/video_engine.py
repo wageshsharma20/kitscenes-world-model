@@ -662,11 +662,27 @@ class StableVideoDiffusionGenerator:
         torch_dtype: Optional[Any] = None,
         num_frames: int = spec.FRAME_COUNT,
         fps: int = int(spec.FPS),
+        height: int = 576,
+        width: int = 1024,
+        num_inference_steps: int = 15,
     ):
+        if height % 8 or width % 8 or height < 64 or width < 64:
+            raise ValueError(
+                f"SVD sampling size must be multiples of 8 and at least 64: {width}x{height}"
+            )
+        if num_inference_steps < 1:
+            raise ValueError(f"num_inference_steps must be >= 1, got {num_inference_steps}")
+
         self.model_id = model_id
         self.device = device
         self.num_frames = num_frames
         self.fps = fps
+        # Sampling resolution is a quota dial, not a quality preference: denoising cost
+        # scales with pixels x steps, and 2400 videos at 1024x576/15 steps is roughly
+        # 163 GPU-hours on a T4, about five times one week of free Kaggle quota.
+        self.height = int(height)
+        self.width = int(width)
+        self.num_inference_steps = int(num_inference_steps)
         self.pipeline = None
 
         try:
@@ -695,7 +711,7 @@ class StableVideoDiffusionGenerator:
         self,
         conditioning_image: Any,
         speed: float,
-        num_inference_steps: int = 15,
+        num_inference_steps: Optional[int] = None,
         decode_chunk_size: int = 4,
     ) -> np.ndarray:
         """Run SVD inference conditioned on image and trajectory motion bucket."""
@@ -704,6 +720,7 @@ class StableVideoDiffusionGenerator:
                 f"SVD pipeline not loaded: {getattr(self, '_init_error', 'diffusers missing')}"
             )
 
+        steps = self.num_inference_steps if num_inference_steps is None else num_inference_steps
         # Scale motion bucket from vehicle forward speed (1..255)
         motion_bucket = int(np.clip(speed * 12.0 + 10.0, 1.0, 255.0))
 
@@ -711,16 +728,31 @@ class StableVideoDiffusionGenerator:
             conditioning_image,
             num_frames=self.num_frames,
             fps=self.fps,
+            height=self.height,
+            width=self.width,
             motion_bucket_id=motion_bucket,
-            num_inference_steps=num_inference_steps,
+            num_inference_steps=steps,
             decode_chunk_size=decode_chunk_size,
         )
         pil_frames = output.frames[0]
-        # Resize to exact 876x568 resolution
+        # Upscale to the exact contract resolution with a smooth kernel: at reduced
+        # sampling sizes this step carries most of the detail the encoder keeps.
         resized = [
-            np.array(f.resize((spec.WIDTH, spec.HEIGHT))) for f in pil_frames
+            np.array(f.resize((spec.WIDTH, spec.HEIGHT), resample=self._resample()))
+            for f in pil_frames
         ]
         return np.stack(resized, axis=0).astype(np.uint8)
+
+    @staticmethod
+    def _resample():
+        """Lanczos when Pillow provides it, otherwise the PIL default."""
+        try:
+            from PIL import Image
+
+            return Image.Resampling.LANCZOS
+        except (ImportError, AttributeError):
+            return None
+
 
     def generate_scenario(
         self,
@@ -811,6 +843,9 @@ class WorldModelPipeline:
         encoder_crf: int = 24,
         device: str = "cuda",
         donor_index: Optional[Any] = None,
+        svd_height: int = 576,
+        svd_width: int = 1024,
+        svd_steps: int = 15,
     ):
         self.backbone_name = backbone
         self.rig = rig or CameraRig()
@@ -821,7 +856,12 @@ class WorldModelPipeline:
         if backbone in ("geometric", "warp"):
             self.generator = GeometricWorldModel(self.rig)
         elif backbone == "svd":
-            self.generator = StableVideoDiffusionGenerator(device=device)
+            self.generator = StableVideoDiffusionGenerator(
+                device=device,
+                height=svd_height,
+                width=svd_width,
+                num_inference_steps=svd_steps,
+            )
         elif backbone == "epona":
             from .epona_engine import EponaWorldModel
 
@@ -897,6 +937,9 @@ def batch_generate_and_package(
     conditioning_images: Optional[Dict[str, Dict[str, Any]]] = None,
     observed_t0_dir: Optional[Union[Path, str]] = None,
     donor_index: Optional[Any] = None,
+    svd_height: int = 576,
+    svd_width: int = 1024,
+    svd_steps: int = 15,
     progress_callback: Optional[Any] = None,
 ) -> archive.ArchiveReport:
     """Generate videos for scenarios from trajectories.jsonl and pack into videos.zip.
@@ -967,7 +1010,14 @@ def batch_generate_and_package(
                 f"{uncovered[0]}); pass observed_t0_dir or conditioning_images"
             )
 
-    pipeline = WorldModelPipeline(backbone=backbone, device=device, donor_index=donor_index)
+    pipeline = WorldModelPipeline(
+        backbone=backbone,
+        device=device,
+        donor_index=donor_index,
+        svd_height=svd_height,
+        svd_width=svd_width,
+        svd_steps=svd_steps,
+    )
 
     total = len(target_ids)
     for idx, sc_id in enumerate(target_ids):

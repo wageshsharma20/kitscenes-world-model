@@ -81,6 +81,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="H.264 CRF quality (18-28)",
     )
     parser.add_argument(
+        "--svd-width",
+        type=int,
+        default=1024,
+        help="SVD sampling width (multiple of 8); lower it to fit the Kaggle GPU quota",
+    )
+    parser.add_argument(
+        "--svd-height",
+        type=int,
+        default=576,
+        help="SVD sampling height (multiple of 8); lower it to fit the Kaggle GPU quota",
+    )
+    parser.add_argument(
+        "--svd-steps",
+        type=int,
+        default=15,
+        help="SVD denoising steps; 8 roughly halves runtime at some quality cost",
+    )
+    parser.add_argument(
         "--allow-partial",
         action="store_true",
         help="Allow packing fewer than 400 scenarios for local testing",
@@ -119,6 +137,9 @@ def main(argv=None) -> int:
             backbone=args.backbone,
             device=args.device,
             observed_t0_dir=args.observed_t0_dir,
+            svd_width=args.svd_width,
+            svd_height=args.svd_height,
+            svd_steps=args.svd_steps,
             progress_callback=progress_callback,
         )
     except Exception as exc:

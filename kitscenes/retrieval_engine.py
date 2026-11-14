@@ -22,6 +22,7 @@ strictly enforcing:
 from __future__ import annotations
 
 import io
+import hashlib
 import json
 import math
 import re
@@ -614,7 +615,9 @@ class InstructionTextExtractor:
             if w in self.keyword_map:
                 vec[self.keyword_map[w]] += 2.0
             else:
-                idx = len(self.DRIVING_KEYWORDS) + (hash(w) % (self.embed_dim - len(self.DRIVING_KEYWORDS)))
+                # Use deterministic SHA-256 hash instead of built-in hash() which is process-randomized
+                bucket = int(hashlib.sha256(w.encode("utf-8")).hexdigest(), 16)
+                idx = len(self.DRIVING_KEYWORDS) + (bucket % (self.embed_dim - len(self.DRIVING_KEYWORDS)))
                 vec[idx] += 1.0
 
         norm = float(np.linalg.norm(vec))
