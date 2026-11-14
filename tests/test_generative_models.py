@@ -90,3 +90,49 @@ def test_wan22_hardware_validation_on_cpu():
                 generative_models.GenuineWan22VideoPipeline()
     except ImportError:
         pass
+
+
+def test_svd_aspect_ratio_adaptation():
+    from PIL import Image
+
+    from scripts.run_kaggle_svd_single_camera import adapt_aspect_ratio_to_svd, unpad_and_resize_frames
+
+    # Synthetic KITScenes conditioning image
+    img = Image.new("RGB", (spec.WIDTH, spec.HEIGHT), color=(100, 150, 200))
+    padded, crop_box = adapt_aspect_ratio_to_svd(img, target_width=1024, target_height=576)
+
+    assert padded.size == (1024, 576)
+    assert crop_box == (68, 0, 956, 576)  # 68 px padding on left and right (888 px width)
+
+    # Simulated 25-frame diffusion output
+    frames = [padded] * spec.FRAME_COUNT
+    restored = unpad_and_resize_frames(frames, crop_box=crop_box, target_width=spec.WIDTH, target_height=spec.HEIGHT)
+
+    assert restored.shape == (25, spec.HEIGHT, spec.WIDTH, 3)
+    assert restored.dtype == np.uint8
+
+
+def test_svd_runner_argument_parser():
+    from pathlib import Path
+
+    from scripts.run_kaggle_svd_single_camera import build_parser
+
+    parser = build_parser()
+    args = parser.parse_args([
+        "--scenario-id", "0000000",
+        "--camera", "front",
+        "--observed-t0-dir", "data/observed_t0",
+        "--history-file", "data/history.jsonl",
+        "--donor-file", "data/train_trajectories.jsonl",
+        "--model-revision", "main",
+        "--steps", "15",
+    ])
+
+    assert args.scenario_id == "0000000"
+    assert args.camera == "front"
+    assert args.observed_t0_dir == Path("data/observed_t0")
+    assert args.history_file == Path("data/history.jsonl")
+    assert args.donor_file == Path("data/train_trajectories.jsonl")
+    assert args.model_revision == "main"
+    assert args.steps == 15
+
