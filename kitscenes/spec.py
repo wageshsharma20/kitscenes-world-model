@@ -15,26 +15,45 @@ Keeping both in one module means the validator, the packager and the tests canno
 drift apart. Change a value here, not in a script.
 """
 
-SCENARIO_COUNT = 400
+TEST_SCENARIO_COUNT = 400
+SCENARIO_COUNT = TEST_SCENARIO_COUNT
 SCENARIO_IDS = tuple(f"{index:07d}" for index in range(SCENARIO_COUNT))
 SCENARIO_ID_SET = frozenset(SCENARIO_IDS)
 
-# Canonical 10-scenario validation subset covering all core driving maneuvers:
-# 0000000: cruise straight, 0000007: turn right, 0000012: turn left,
-# 0000029: use left lane, 0000005: use right lane, 0000038: use middle lane,
-# 0000001: overtake truck right, 0000067: overtake car right, 0000037: u-turn,
-# 0000022: overtake truck front.
+# Dataset split definitions from official Parquet splits:
+# Train: 500 scenarios (0000400 - 0000899)
+# Val: 100 scenarios (0000900 - 0000999)
+# Test: 400 scenarios (0000000 - 0000399)
+TRAIN_SCENARIO_COUNT = 500
+TRAIN_SCENARIO_IDS = tuple(f"{index:07d}" for index in range(400, 900))
+TRAIN_SCENARIO_ID_SET = frozenset(TRAIN_SCENARIO_IDS)
+
+VAL_SCENARIO_COUNT = 100
+VAL_SCENARIO_IDS = tuple(f"{index:07d}" for index in range(900, 1000))
+VAL_SCENARIO_ID_SET = frozenset(VAL_SCENARIO_IDS)
+
+# Canonical 10-scenario validation subset covering all 7 scenario types & core maneuvers:
+# 0000900: snow & wintry mix, drive straight on
+# 0000901: overtake or lane change, use right lane
+# 0000902: intersection, turn right
+# 0000903: heavy rain, drive straight on
+# 0000904: construction zone, drive straight on
+# 0000905: specifically selected, turn right
+# 0000906: nighttime, use left lane
+# 0000911: specifically selected, turn left
+# 0000919: overtake or lane change, overtake truck driving on the right
+# 0000984: intersection, u-turn
 VALIDATION_10_IDS = (
-    "0000000",
-    "0000007",
-    "0000012",
-    "0000029",
-    "0000005",
-    "0000038",
-    "0000001",
-    "0000067",
-    "0000037",
-    "0000022",
+    "0000900",
+    "0000901",
+    "0000902",
+    "0000903",
+    "0000904",
+    "0000905",
+    "0000906",
+    "0000911",
+    "0000919",
+    "0000984",
 )
 
 CAMERAS = (
@@ -65,6 +84,7 @@ WAYPOINT_COUNT = 25
 WAYPOINT_STEP_S = 1.0 / FPS
 FIRST_WAYPOINT_S = WAYPOINT_STEP_S
 LAST_WAYPOINT_S = WAYPOINT_COUNT * WAYPOINT_STEP_S
+TRAJECTORY_PRECISION = 3
 
 # Upload limits. The Space caps the upload at "3gb" (Gradio) and rejects any
 # single video whose uncompressed size exceeds 50 MiB.

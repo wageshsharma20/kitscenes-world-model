@@ -19,6 +19,14 @@ def test_scenario_identifiers_are_seven_digit_and_zero_padded():
     assert spec.SCENARIO_IDS[0] == "0000000"
     assert spec.SCENARIO_IDS[-1] == "0000399"
 
+    assert len(spec.TRAIN_SCENARIO_IDS) == 500
+    assert spec.TRAIN_SCENARIO_IDS[0] == "0000400"
+    assert spec.TRAIN_SCENARIO_IDS[-1] == "0000899"
+
+    assert len(spec.VAL_SCENARIO_IDS) == 100
+    assert spec.VAL_SCENARIO_IDS[0] == "0000900"
+    assert spec.VAL_SCENARIO_IDS[-1] == "0000999"
+
 
 def test_upload_limits():
     assert spec.MAX_ARCHIVE_BYTES == 3 * 1024**3
@@ -33,4 +41,4 @@ def test_validation_10_scenario_subset():
     assert len(spec.VALIDATION_10_IDS) == 10
     assert len(set(spec.VALIDATION_10_IDS)) == 10
     for sid in spec.VALIDATION_10_IDS:
-        assert sid in spec.SCENARIO_ID_SET
+        assert sid in spec.VAL_SCENARIO_ID_SET
