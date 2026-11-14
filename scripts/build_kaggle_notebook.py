@@ -254,8 +254,9 @@ def create_kaggle_notebook(output_path: Path):
             "cell_type": "markdown",
             "metadata": {},
             "source": [
-                "## Step 5: GPU Single-Scenario Benchmark (Throughput & Quota Check)\n",
-                "Run a single-scenario benchmark to verify actual GPU inference latency per video on Kaggle 2x T4 before launching batch generation."
+                "## Step 5: GPU Single-Scenario Verification (Scenario 0000902, Front Camera)\n",
+                "Execute genuine pretrained SVD inference on 1 T4 GPU for Scenario 0000902 (front camera, 25 frames).\n",
+                "Records real hardware metrics: peak allocated/reserved VRAM, initialization latency, inference duration per frame, and frame divergence vs t=0."
             ]
         },
         {
@@ -264,8 +265,8 @@ def create_kaggle_notebook(output_path: Path):
             "metadata": {},
             "outputs": [],
             "source": [
-                "# Run single-scenario benchmark on GPU\n",
-                "!python scripts/benchmark_backbone.py --backbone svd --device cuda --cameras 1\n"
+                "# Run genuine pretrained SVD single-camera inference on 1 T4 GPU\n",
+                "!python scripts/run_kaggle_svd_single_camera.py --device cuda --steps 15\n"
             ]
         },
         {

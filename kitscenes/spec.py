@@ -111,3 +111,10 @@ SUBMISSION_WINDOW_DAYS = 30
 
 DEADLINE = "2026-12-03"
 DEADLINE_TIMEZONE = "AoE"
+
+# Evaluation Metric Labels
+# Official Challenge Leaderboard evaluates Perceptual Quality using Q-Align (OneAlign).
+# Local evaluations use PQ_proxy (Laplacian texture variance + color dynamic range - flat fill penalties).
+METRIC_LABEL_OFFICIAL_PQ = "PQ"
+METRIC_LABEL_PROXY_PQ = "PQ_proxy"
+

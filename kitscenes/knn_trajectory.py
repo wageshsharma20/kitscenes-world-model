@@ -177,6 +177,7 @@ class DonorRecord:
     yaw_rate0: float
     norm_past: np.ndarray
     future_trajectory: np.ndarray  # (25, 2) expert_like in donor local frame
+    accel0: float = 0.0
 
 
 class KNNTrajectoryPlanner:
@@ -232,6 +233,7 @@ class KNNTrajectoryPlanner:
                         yaw_rate0=kin["yaw_rate0"],
                         norm_past=kin["norm_past"],
                         future_trajectory=future,
+                        accel0=kin["accel0"],
                     )
                 )
                 loaded += 1
@@ -243,6 +245,7 @@ class KNNTrajectoryPlanner:
         scenario_id: str,
         past_trajectory: Sequence[Sequence[float]],
         driving_instruction: str,
+        scenario_type: str = "",
         k: int = 5,
         cv_blend_weight: float = 0.25,
     ) -> np.ndarray:
@@ -273,7 +276,7 @@ class KNNTrajectoryPlanner:
         maneuver_matches = [d for d in candidates if d.maneuver == query_maneuver]
         pool = maneuver_matches if len(maneuver_matches) >= k else candidates
 
-        # Distance scoring function using only observable past features
+        # Distance scoring function using observable past kinematics and context
         scored: List[Tuple[float, DonorRecord]] = []
         for donor in pool:
             # 1. Maneuver mismatch penalty
@@ -285,13 +288,24 @@ class KNNTrajectoryPlanner:
             # 3. Yaw rate difference
             yaw_diff = abs(query_kin["yaw_rate0"] - donor.yaw_rate0)
 
-            # 4. Normalized past shape distance (last 5 points)
+            # 4. Acceleration difference
+            accel_diff = abs(query_kin["accel0"] - donor.accel0) / max(abs(query_kin["accel0"]) + 1.0, 1.0)
+
+            # 5. Normalized past shape distance (last 5 points)
             q_norm = query_kin["norm_past"]
             d_norm = donor.norm_past
             min_pts = min(len(q_norm), len(d_norm), 5)
             shape_diff = float(np.mean(np.linalg.norm(q_norm[-min_pts:] - d_norm[-min_pts:], axis=1)))
 
-            cost = m_cost + 3.0 * speed_diff + 2.0 * yaw_diff + 1.0 * shape_diff
+            # 6. Scenario type context agreement
+            type_bonus = 0.0
+            if scenario_type and donor.scenario_type:
+                q_words = set(scenario_type.lower().split())
+                d_words = set(donor.scenario_type.lower().split())
+                if q_words & d_words:
+                    type_bonus = -1.5
+
+            cost = m_cost + 3.0 * speed_diff + 2.0 * yaw_diff + 1.5 * accel_diff + 1.0 * shape_diff + type_bonus
             scored.append((cost, donor))
 
         scored.sort(key=lambda x: x[0])

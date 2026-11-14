@@ -92,14 +92,14 @@ def main():
     emc_warp = emc_eval.compute_video_optical_flow_emc(warp_cam_paths, trajectory)
     emc_hold = emc_eval.compute_video_optical_flow_emc(hold_cam_paths, trajectory)
 
-    print(f"\n--- PhotographicWarpModel (0000900) ---")
+    print("\n--- PhotographicWarpModel (0000900) ---")
     print(f"Overall EMC Score:        {emc_warp['emc']:.3f} (matches: {emc_warp['matches']}/4)")
     print(f"Segment 1 Speed Ratio:    {emc_warp['seg1_speed_ratio']:.3f} (accel match: {emc_warp['seg1_accel_match']})")
     print(f"Segment 2 Speed Ratio:    {emc_warp['seg2_speed_ratio']:.3f} (accel match: {emc_warp['seg2_accel_match']})")
     print(f"Segment 1 Steering Match: {emc_warp['seg1_steering_match']}")
     print(f"Segment 2 Steering Match: {emc_warp['seg2_steering_match']}")
 
-    print(f"\n--- Static Hold Baseline (0000900) ---")
+    print("\n--- Static Hold Baseline (0000900) ---")
     print(f"Overall EMC Score:        {emc_hold['emc']:.3f} (matches: {emc_hold['matches']}/4)")
     print(f"Segment 1 Speed Ratio:    {emc_hold['seg1_speed_ratio']:.3f}")
     print(f"Segment 2 Speed Ratio:    {emc_hold['seg2_speed_ratio']:.3f}")

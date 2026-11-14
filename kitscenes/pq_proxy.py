@@ -150,12 +150,14 @@ def score_scenario_videos(camera_videos: Dict[str, Union[Path, np.ndarray]]) -> 
 
         scores[cam] = heuristic_perceptual_score(frames)
 
-    # Weighted PQ
+    # Weighted PQ proxy (local heuristic proxy; NOT official Q-Align)
     pq_front = scores.get("front", 0.0)
     pq_sides = sum(scores.get(c, 0.0) for c in spec.SIDE_CAMERAS + ("rear",))
     scenario_pq = (spec.PQ_FRONT_WEIGHT * pq_front) + (spec.PQ_SIDE_WEIGHT * pq_sides)
 
-    scores["scenario_pq"] = round(scenario_pq, 2)
+    scores["scenario_pq_proxy"] = round(scenario_pq, 2)
+    scores["scenario_pq"] = round(scenario_pq, 2)  # backward compatibility alias
+    scores["pq_proxy"] = round(scenario_pq, 2)
     return scores
 
 
@@ -203,7 +205,8 @@ def estimate_archive_pq(
 
     avg_pq = float(np.mean(list(scenario_scores.values()))) if scenario_scores else 0.0
     return {
-        "mean_pq": round(avg_pq, 2),
+        "mean_pq_proxy": round(avg_pq, 2),
+        "mean_pq": round(avg_pq, 2),  # backward compatibility alias
         "scenarios_evaluated": len(scenario_scores),
         "scenario_scores": scenario_scores,
     }

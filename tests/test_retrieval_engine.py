@@ -261,9 +261,18 @@ def test_strict_single_donor_policy_enforcement():
     synthesizer = AlignedVideoSynthesizer()
     traj = _make_straight_trajectory(10.0)
 
+    dummy_videos = {
+        cam: np.full((spec.FRAME_COUNT, spec.HEIGHT, spec.WIDTH, 3), 100, dtype=np.uint8)
+        for cam in spec.CAMERAS
+    }
     target = TargetScenario(scenario_id="0000000", future_trajectory=traj)
-    donor1 = DonorScenario(scenario_id="donor_111", future_trajectory=traj)
-    donor2 = DonorScenario(scenario_id="donor_222", future_trajectory=traj)
+    donor1 = DonorScenario(scenario_id="donor_111", future_trajectory=traj, future_videos=dummy_videos)
+    donor2 = DonorScenario(scenario_id="donor_222", future_trajectory=traj, future_videos=dummy_videos)
+
+    # Missing future_videos MUST raise FileNotFoundError (no silent geometric fallback)
+    donor_empty = DonorScenario(scenario_id="donor_empty", future_trajectory=traj)
+    with pytest.raises(FileNotFoundError, match="Missing authentic future video"):
+        synthesizer.synthesize(target, donor_empty)
 
     # Consistent donor across all 6 cameras succeeds
     consistent_cams = {cam: donor1 for cam in spec.CAMERAS}

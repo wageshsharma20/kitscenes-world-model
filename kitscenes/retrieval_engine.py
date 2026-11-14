@@ -871,7 +871,7 @@ class DonorIndex:
         return list(self._donors.values())
 
     @classmethod
-    def create_default_bank(cls) -> DonorIndex:
+    def create_default_bank(cls, include_mock_videos: bool = True) -> DonorIndex:
         """Create a diverse default bank of canonical driving maneuver donor scenarios."""
         index = cls()
 
@@ -980,6 +980,13 @@ class DonorIndex:
             )
         )
 
+        if include_mock_videos:
+            for donor_obj in index.values():
+                donor_obj.future_videos = {
+                    cam: np.full((spec.FRAME_COUNT, spec.HEIGHT, spec.WIDTH, 3), 128, dtype=np.uint8)
+                    for cam in spec.CAMERAS
+                }
+
         return index
 
     @classmethod
@@ -989,6 +996,7 @@ class DonorIndex:
         video_dir: Optional[Union[Path, str]] = None,
         t0_dir: Optional[Union[Path, str]] = None,
         limit: Optional[int] = None,
+        require_videos: bool = False,
     ) -> DonorIndex:
         """Load donor scenarios from a KITScenes metadata JSONL file."""
         metadata_path = Path(metadata_path)
@@ -1004,7 +1012,11 @@ class DonorIndex:
 
                 # Trajectory: look for expert_like or future_trajectory
                 traj_info = data.get("trajectory", {})
-                future_pts = traj_info.get("expert_like") or data.get("future_trajectory")
+                future_pts = (
+                    traj_info.get("expert_like")
+                    or data.get("future_trajectory")
+                    or data.get("expert_like")
+                )
                 if not future_pts or np.allclose(np.array(future_pts), -100.0):
                     # Redacted test split; cannot serve as donor future
                     continue
@@ -1042,10 +1054,22 @@ class DonorIndex:
                     observed_t0_frames=t0_dict,
                     future_videos=vid_dict,
                 )
+                if require_videos:
+                    if donor.future_videos is None:
+                        continue
+                    if not all(cam in donor.future_videos for cam in spec.CAMERAS):
+                        continue
                 index.add_donor(donor)
                 count += 1
                 if limit and count >= limit:
                     break
+
+        if require_videos:
+            for donor_obj in index.values():
+                assert donor_obj.future_videos is not None, f"Donor {donor_obj.scenario_id} missing future_videos"
+                assert all(
+                    cam in donor_obj.future_videos for cam in spec.CAMERAS
+                ), f"Donor {donor_obj.scenario_id} missing 6-camera video footage"
 
         return index
 
@@ -1063,14 +1087,6 @@ class AlignedVideoSynthesizer:
 
     def __init__(self, blend_frames: int = 4):
         self.blend_frames = blend_frames
-        self._cached_renderer = None
-
-    def _get_fallback_renderer(self):
-        """Lazy load geometric renderer to synthesize donor video when not pre-rendered."""
-        if self._cached_renderer is None:
-            from .video_engine import GeometricWorldModel
-            self._cached_renderer = GeometricWorldModel()
-        return self._cached_renderer
 
     def synthesize(
         self,
@@ -1112,16 +1128,13 @@ class AlignedVideoSynthesizer:
                 if cam in donor.future_videos:
                     donor_videos[cam] = decode_video_to_frames(donor.future_videos[cam])
 
-        # If donor videos are not pre-rendered on disk, render them via geometric engine
+        # Strictly enforce authentic donor videos across all 6 surround cameras
         missing_cams = [cam for cam in spec.CAMERAS if cam not in donor_videos]
         if missing_cams:
-            renderer = self._get_fallback_renderer()
-            weather = "night" if "night" in donor.scenario_type.lower() else "clear"
-            synth_vids = renderer.generate_scenario(
-                donor.scenario_id, donor.future_trajectory, weather=weather
+            raise FileNotFoundError(
+                f"Missing authentic future video for camera(s) {missing_cams} in donor {donor.scenario_id}. "
+                "Geometric fallback has been disabled: all donors must provide authentic 6-camera video footage."
             )
-            for cam in missing_cams:
-                donor_videos[cam] = synth_vids[cam]
 
         # Apply motion-aligned seam smoothing per camera
         results: Dict[str, np.ndarray] = {}

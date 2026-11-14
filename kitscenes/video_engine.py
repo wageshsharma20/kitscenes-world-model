@@ -912,6 +912,7 @@ class StableVideoDiffusionGenerator:
         height: int = 576,
         width: int = 1024,
         num_inference_steps: int = 15,
+        load_weights: bool = False,
     ):
         if height % 8 or width % 8 or height < 64 or width < 64:
             raise ValueError(
@@ -924,6 +925,7 @@ class StableVideoDiffusionGenerator:
         self.device = device
         self.num_frames = num_frames
         self.fps = fps
+        self.torch_dtype = torch_dtype
         # Sampling resolution is a quota dial, not a quality preference: denoising cost
         # scales with pixels x steps, and 2400 videos at 1024x576/15 steps is roughly
         # 163 GPU-hours on a T4, about five times one week of free Kaggle quota.
@@ -931,19 +933,24 @@ class StableVideoDiffusionGenerator:
         self.width = int(width)
         self.num_inference_steps = int(num_inference_steps)
         self.pipeline = None
+        self._init_error = None
 
+        if load_weights:
+            self._load_pipeline()
+
+    def _load_pipeline(self) -> None:
         try:
             import torch
             from diffusers import StableVideoDiffusionPipeline
 
-            dtype = torch_dtype or torch.float16
+            dtype = self.torch_dtype or torch.float16
             self.pipeline = StableVideoDiffusionPipeline.from_pretrained(
-                model_id,
+                self.model_id,
                 torch_dtype=dtype,
                 variant="fp16",
             )
             # Memory optimizations for 16GB T4 GPUs
-            if device.startswith("cuda"):
+            if self.device.startswith("cuda"):
                 self.pipeline.enable_model_cpu_offload()
                 if hasattr(self.pipeline, "enable_xformers_memory_efficient_attention"):
                     try:
@@ -951,7 +958,6 @@ class StableVideoDiffusionGenerator:
                     except Exception:
                         pass
         except (ImportError, Exception) as exc:
-            # Fallback handled in generate if torch/diffusers not available locally
             self._init_error = str(exc)
 
     def generate_camera_video(
@@ -962,6 +968,8 @@ class StableVideoDiffusionGenerator:
         decode_chunk_size: int = 4,
     ) -> np.ndarray:
         """Run SVD inference conditioned on image and trajectory motion bucket."""
+        if self.pipeline is None:
+            self._load_pipeline()
         if self.pipeline is None:
             raise RuntimeError(
                 f"SVD pipeline not loaded: {getattr(self, '_init_error', 'diffusers missing')}"
