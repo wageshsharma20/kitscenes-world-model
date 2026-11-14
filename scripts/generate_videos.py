@@ -49,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--backbone",
-        choices=["geometric", "svd"],
+        choices=["geometric", "svd", "photo_warp"],
         default="geometric",
         help="Video generation backbone",
     )

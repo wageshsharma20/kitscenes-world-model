@@ -640,6 +640,215 @@ class GeometricWorldModel:
         return result
 
 
+def _decode_frame(source: Union[str, Path, bytes]) -> np.ndarray:
+    """Decode one image to HxWx3 uint8 at the contract size using ffmpeg alone."""
+    if isinstance(source, bytes):
+        args = ["ffmpeg", "-v", "error", "-f", "image2pipe", "-i", "-"]
+        stdin: Optional[bytes] = source
+    else:
+        args = ["ffmpeg", "-v", "error", "-i", str(source)]
+        stdin = None
+    args += [
+        "-vf",
+        f"scale={spec.WIDTH}:{spec.HEIGHT}",
+        "-frames:v",
+        "1",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "-",
+    ]
+    proc = subprocess.run(args, input=stdin, capture_output=True, check=False)
+    expected = spec.WIDTH * spec.HEIGHT * 3
+    if proc.returncode != 0 or len(proc.stdout) < expected:
+        detail = proc.stderr.decode("utf-8", "replace")[:200]
+        raise RuntimeError(f"could not decode image {source!r}: {detail}")
+    return np.frombuffer(proc.stdout[:expected], dtype=np.uint8).reshape(
+        spec.HEIGHT, spec.WIDTH, 3
+    )
+
+
+class PhotographicWarpModel:
+    """Animate the real observed t=0 frames with a ground-plane homography.
+
+    PQ dominates the leaderboard, and photographic pixels beat any renderer available
+    offline by a wide margin, so the cheapest high-quality submission is the real sensor
+    frame moved by the planned ego-motion rather than a synthetic scene.
+
+    Each camera gets two homographies per frame, blended at the horizon:
+      * the ground plane (normal down, distance = camera height) for the road and near
+        scene, which produces the radial expansion that forward speed must show;
+      * rotation only for the sky and distant scene, whose depth is far enough that a
+        translation would be invisible.
+
+    The result has true photographic texture and flow that agrees with the trajectory,
+    which is what EMC measures. It has no parallax between objects: anything standing
+    above the road plane is warped as if it lay on it.
+    """
+
+    def __init__(
+        self,
+        rig: Optional[CameraRig] = None,
+        camera_height_m: float = 1.55,
+        horizon_blend_px: int = 28,
+    ):
+        self.rig = rig or CameraRig()
+        self.camera_height_m = float(camera_height_m)
+        self.horizon_blend_px = int(horizon_blend_px)
+        self._intrinsic_cache: Dict[str, Tuple[np.ndarray, np.ndarray]] = {}
+
+    # -- geometry ---------------------------------------------------------
+    def _intrinsics(self, camera: str) -> Tuple[np.ndarray, np.ndarray]:
+        """Return (K, K^-1) for a camera at the contract resolution."""
+        if camera not in self._intrinsic_cache:
+            pose = self.rig[camera]
+            focal = (pose.width / 2.0) / math.tan(math.radians(pose.hfov_deg) / 2.0)
+            k = np.array(
+                [
+                    [focal, 0.0, pose.width / 2.0],
+                    [0.0, focal, pose.height / 2.0],
+                    [0.0, 0.0, 1.0],
+                ]
+            )
+            self._intrinsic_cache[camera] = (k, np.linalg.inv(k))
+        return self._intrinsic_cache[camera]
+
+    def _camera_axes(self, camera: str) -> np.ndarray:
+        """Camera-to-ego rotation; camera x right, y down, z forward."""
+        psi = self.rig[camera].yaw_rad
+        return np.array(
+            [
+                [math.sin(psi), 0.0, math.cos(psi)],
+                [-math.cos(psi), 0.0, math.sin(psi)],
+                [0.0, -1.0, 0.0],
+            ]
+        )
+
+    def _homographies(
+        self, camera: str, distance_m: float, yaw_rad: float
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Return (ground-plane homography, sky homography) for image0 -> image_t."""
+        r_ce = self._camera_axes(camera)
+        cos_d, sin_d = math.cos(yaw_rad), math.sin(yaw_rad)
+        r_ego = np.array([[cos_d, -sin_d, 0.0], [sin_d, cos_d, 0.0], [0.0, 0.0, 1.0]])
+        r_cam = r_ce.T @ r_ego @ r_ce
+
+        # Camera translation expressed in its own frame, negated: a point fixed in the
+        # world appears to move backwards when the ego travels forwards.
+        psi = self.rig[camera].yaw_rad
+        t_cam = -np.array(
+            [distance_m * math.sin(psi), 0.0, distance_m * math.cos(psi)]
+        )
+        normal = np.array([0.0, 1.0, 0.0])  # ground below the camera; +y is down
+        ground = r_cam + np.outer(t_cam, normal) / self.camera_height_m
+
+        k, k_inv = self._intrinsics(camera)
+        return k @ ground @ k_inv, k @ r_cam @ k_inv
+
+    # -- rendering --------------------------------------------------------
+    @staticmethod
+    def _warp(image: np.ndarray, inverse_h: np.ndarray) -> np.ndarray:
+        """Backward-map every output pixel through a homography with bilinear sampling."""
+        height, width = image.shape[:2]
+        ys, xs = np.mgrid[0:height, 0:width].astype(np.float32)
+        ones = np.ones_like(xs)
+        projected = inverse_h @ np.stack([xs.ravel(), ys.ravel(), ones.ravel()])
+        w = np.where(np.abs(projected[2]) < 1e-6, 1e-6, projected[2])
+        sx = np.clip((projected[0] / w).reshape(height, width), 0.0, width - 1.001)
+        sy = np.clip((projected[1] / w).reshape(height, width), 0.0, height - 1.001)
+        x0 = sx.astype(np.int32)
+        y0 = sy.astype(np.int32)
+        fx = (sx - x0)[..., None]
+        fy = (sy - y0)[..., None]
+        return (
+            image[y0, x0] * (1.0 - fx) * (1.0 - fy)
+            + image[y0, x0 + 1] * fx * (1.0 - fy)
+            + image[y0 + 1, x0] * (1.0 - fx) * fy
+            + image[y0 + 1, x0 + 1] * fx * fy
+        ).astype(np.uint8)
+
+    def render_camera(
+        self, camera: str, frame0: np.ndarray, distances: np.ndarray, yaws: np.ndarray
+    ) -> np.ndarray:
+        """Warp one camera's observed frame into 25 frames following the plan."""
+        height, width = frame0.shape[:2]
+        horizon = height / 2.0
+        blend = self.horizon_blend_px
+        rows = np.arange(height, dtype=np.float32)[:, None]
+        ground_weight = np.clip((rows - (horizon - blend)) / (2.0 * blend), 0.0, 1.0)
+
+        frames = np.empty((spec.FRAME_COUNT, height, width, 3), dtype=np.uint8)
+        frames[0] = frame0
+        for index in range(1, spec.FRAME_COUNT):
+            ground_h, sky_h = self._homographies(
+                camera, float(distances[index]), float(yaws[index])
+            )
+            ground = self._warp(frame0, np.linalg.inv(ground_h)).astype(np.float32)
+            sky = self._warp(frame0, np.linalg.inv(sky_h)).astype(np.float32)
+            blended = ground * ground_weight[..., None] + sky * (1.0 - ground_weight[..., None])
+            frames[index] = np.clip(blended, 0, 255).astype(np.uint8)
+        return frames
+
+    @staticmethod
+    def plan_profile(trajectory: Sequence[Sequence[float]]) -> Tuple[np.ndarray, np.ndarray]:
+        """Per-frame distance travelled and accumulated yaw, from the planned waypoints."""
+        points = np.asarray(trajectory, dtype=float)[:, :2]
+        distances = np.zeros(spec.FRAME_COUNT)
+        yaws = np.zeros(spec.FRAME_COUNT)
+
+        previous = np.zeros(2)
+        headings = []
+        for k in range(min(len(points), spec.WAYPOINT_COUNT)):
+            delta = points[k] - previous
+            headings.append(math.atan2(delta[1], delta[0]) if np.linalg.norm(delta) > 1e-9 else 0.0)
+            previous = points[k]
+        if not headings:
+            return distances, yaws
+
+        reference = headings[0]
+        for index in range(1, spec.FRAME_COUNT):
+            waypoint = min(index - 1, len(points) - 1)
+            distances[index] = float(np.linalg.norm(points[waypoint]))
+            yaws[index] = wrap_angle(headings[waypoint] - reference)
+        return distances, yaws
+
+    def generate_scenario(
+        self,
+        scenario_id: str,
+        trajectory: Sequence[Sequence[float]],
+        weather: str = "clear",
+        conditioning_images: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, np.ndarray]:
+        if not conditioning_images:
+            raise ValueError(
+                "the photo_warp backbone animates the observed t=0 frame, so it needs one "
+                "image per camera; none were passed"
+            )
+        missing = [name for name in spec.CAMERAS if name not in conditioning_images]
+        if missing:
+            raise ValueError(
+                "the photo_warp backbone needs the observed t=0 frame for every camera; "
+                f"missing: {', '.join(missing)}"
+            )
+
+        distances, yaws = self.plan_profile(trajectory)
+        result: Dict[str, np.ndarray] = {}
+        for camera in spec.CAMERAS:
+            supplied = conditioning_images[camera]
+            if isinstance(supplied, (str, Path, bytes)):
+                frame0 = _decode_frame(supplied)
+            else:
+                frame0 = np.asarray(supplied)
+            if frame0.shape[:2] != (spec.HEIGHT, spec.WIDTH):
+                raise ValueError(
+                    f"{camera} conditioning frame is {frame0.shape[1]}x{frame0.shape[0]}, "
+                    f"expected {spec.WIDTH}x{spec.HEIGHT}"
+                )
+            result[camera] = self.render_camera(camera, frame0[..., :3], distances, yaws)
+        return result
+
+
 def require_pillow():
     """Import PIL lazily, so a missing dependency reports what the backend needs."""
     try:
@@ -866,6 +1075,8 @@ class WorldModelPipeline:
             from .epona_engine import EponaWorldModel
 
             self.generator = EponaWorldModel(rig=self.rig, device=device)
+        elif backbone == "photo_warp":
+            self.generator = PhotographicWarpModel(self.rig)
         elif backbone in ("retrieval", "hybrid"):
             from .retrieval_engine import RetrievalWorldModel
 
@@ -977,10 +1188,11 @@ def batch_generate_and_package(
     # would hide which scenarios were missing.
     cond_by_scenario: Dict[str, Dict[str, Any]] = dict(conditioning_images or {})
     if observed_t0_dir is not None:
-        if backbone not in ("svd", "epona", "retrieval", "hybrid"):
+        if backbone not in ("svd", "epona", "retrieval", "hybrid", "photo_warp"):
             print(
                 f"warning: observed_t0_dir has no effect with the '{backbone}' backbone, "
-                f"which renders procedurally; only 'svd', 'epona', and 'retrieval' consume the frames",
+                f"which renders procedurally; only 'svd', 'epona', 'retrieval' and "
+                f"'photo_warp' consume the frames",
                 file=sys.stderr,
             )
         missing: List[str] = []
@@ -1001,7 +1213,7 @@ def batch_generate_and_package(
                 f"  python scripts/extract_t0_frames.py --limit {len(target_ids)}\n"
                 f"{shown}{more}"
             )
-    elif backbone in ("svd", "epona"):
+    elif backbone in ("svd", "epona", "photo_warp"):
         uncovered = [sc_id for sc_id in target_ids if sc_id not in cond_by_scenario]
         if uncovered:
             raise ValueError(

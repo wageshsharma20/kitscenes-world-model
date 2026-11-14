@@ -185,32 +185,36 @@ def compute_video_optical_flow_emc(
     rear_yaw_rates: List[float] = []
 
     for t in range(spec.FRAME_COUNT - 1):
-        # A. Side camera flow magnitude -> recovered speed
+        # A. Side camera road flow magnitude -> recovered forward speed
         side_mags = []
         for cam in spec.SIDE_CAMERAS:
             f0 = frames[cam][t]
             f1 = frames[cam][t + 1]
             if HAS_OPENCV:
                 flow = cv2.calcOpticalFlowFarneback(f0, f1, None, 0.5, 2, 9, 2, 5, 1.1, 0)
-                # Mean horizontal flow magnitude (side cameras see horizontal ground motion)
-                side_mags.append(float(np.mean(np.abs(flow[..., 0]))))
+                # Lower half of frame (road plane) carries the cleanest horizontal translation flow
+                h_half = flow.shape[0] // 2
+                road_flow = flow[h_half:, ...]
+                side_mags.append(float(np.mean(np.abs(road_flow[..., 0]))))
             else:
-                # Fast fallback: absolute frame difference
+                # Absolute difference fallback
                 side_mags.append(float(np.mean(np.abs(f1.astype(float) - f0.astype(float)))))
 
         mean_side_mag = float(np.mean(side_mags))
-        # Calibration constant: ~2.5 pixels of flow at 1/4 res corresponds to ~10 m/s
-        flow_speed = mean_side_mag * 4.0
+        # Empirically calibrated scale against geometric ground truth: ~0.9 px flow at 1/4 res = 10 m/s
+        flow_speed = mean_side_mag * 11.0
         side_flow_speeds.append(flow_speed)
 
         # B. Front and Rear horizontal flow -> recovered yaw
         if HAS_OPENCV:
             flow_front = cv2.calcOpticalFlowFarneback(frames["front"][t], frames["front"][t + 1], None, 0.5, 2, 9, 2, 5, 1.1, 0)
             flow_rear = cv2.calcOpticalFlowFarneback(frames["rear"][t], frames["rear"][t + 1], None, 0.5, 2, 9, 2, 5, 1.1, 0)
-            # Front: camera turning left -> scene moves right (+u)
-            front_yaw = float(np.mean(flow_front[..., 0])) * 0.02
-            # Rear: camera turning left -> scene moves left (-u)
-            rear_yaw = -float(np.mean(flow_rear[..., 0])) * 0.02
+            h_half = flow_front.shape[0] // 2
+            # Upper half / horizon region: yaw shifts horizon horizontally
+            # Front: vehicle turning left (yaw > 0) -> scene shifts right (+u)
+            front_yaw = float(np.mean(flow_front[:h_half, ..., 0])) * 5.0 * DT
+            # Rear: vehicle turning left (yaw > 0) -> rear scene shifts left (-u)
+            rear_yaw = -float(np.mean(flow_rear[:h_half, ..., 0])) * 5.0 * DT
         else:
             front_yaw = 0.0
             rear_yaw = 0.0
