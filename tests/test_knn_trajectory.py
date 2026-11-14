@@ -134,11 +134,19 @@ def test_compute_mms_score():
     score_wrong_dir = compute_mms_score(wrong_dir, ref)
     assert score_wrong_dir == 0.0
 
-    # Unmatched but smooth parallel cruise gives base score 3.5 without comfort penalties
-    unmatched = np.zeros((25, 2))
+    # Unmatched straight trajectory when reference turns left gets 3.5 floor
+    ref_turn = np.zeros((25, 2))
+    heading = 0.0
+    x, y = 0.0, 0.0
     for i in range(25):
-        # Smoothly diverges by 0.5m lateral offset per step until 12m away
-        lat = min(12.0, (i + 1) * 0.5)
-        unmatched[i] = [(i + 1) * 2.0, lat]
-    score_unmatched = compute_mms_score(unmatched, ref)
-    assert score_unmatched >= 3.0
+        heading += 0.08  # turning left
+        x += 2.0 * math.cos(heading)
+        y += 2.0 * math.sin(heading)
+        ref_turn[i] = [x, y]
+
+    pred_straight = np.zeros((25, 2))
+    for i in range(25):
+        pred_straight[i] = [(i + 1) * 2.0, 0.0]
+
+    score_unmatched = compute_mms_score(pred_straight, ref_turn)
+    assert score_unmatched == 3.5

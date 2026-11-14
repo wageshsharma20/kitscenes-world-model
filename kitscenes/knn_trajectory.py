@@ -395,6 +395,25 @@ def compute_l2_metrics(
     }
 
 
+def _trajectory_tortuosity(points: np.ndarray) -> float:
+    """Path length over start-to-end distance, as the MMS comfort penalty defines it."""
+    if len(points) < 2:
+        return 1.0
+    diffs = np.diff(points, axis=0)
+    path_len = float(np.sum(np.linalg.norm(diffs, axis=1)))
+    chord = float(np.linalg.norm(points[-1] - points[0]))
+    return path_len / chord if chord > 1e-3 else 10.0
+
+
+def _trajectory_jerk(points: np.ndarray, dt: float = HISTORY_STEP_S) -> float:
+    """Mean magnitude of third finite differences divided by dt^3."""
+    if len(points) < 4:
+        return 0.0
+    diff3 = np.diff(points, n=3, axis=0)
+    mag3 = np.linalg.norm(diff3, axis=1)
+    return float(np.mean(mag3)) / (dt**3)
+
+
 def _prepare_reference(ref: Optional[Sequence[Sequence[float]]]) -> Optional[np.ndarray]:
     """Clean and align a reference trajectory to (25, 2) in local BEV coordinates."""
     if ref is None:
@@ -418,6 +437,77 @@ def _prepare_reference(ref: Optional[Sequence[Sequence[float]]]) -> Optional[np.
     return None
 
 
+def _evaluate_single_reference(
+    pred: np.ndarray,
+    ref: np.ndarray,
+    base_score: float,
+    dt: float = HISTORY_STEP_S,
+) -> Tuple[float, float, float]:
+    """Compute (score, similarity, comfort_penalties) against a single reference trajectory.
+
+    Implements official velocity-scaled lateral/longitudinal matching:
+    - Low speed (< 11 m/s): 1.8 m lateral, 3.6 m longitudinal thresholds.
+    - High speed (>= 11 m/s): 3.6 m lateral, 7.2 m longitudinal thresholds.
+    - Similarity = min(sim_lat, sim_long)
+    - Comfort penalties: 1 each for jerk > 44% above reference and tortuosity > 6% above reference.
+    """
+    N = min(len(pred), len(ref))
+    pred_pts = pred[:N]
+    ref_pts = ref[:N]
+
+    ref_diffs = np.diff(ref_pts, axis=0)
+    ref_speeds = np.linalg.norm(ref_diffs, axis=1) / dt
+    mean_speed = float(np.mean(ref_speeds)) if len(ref_speeds) > 0 else 0.0
+
+    if mean_speed >= 11.0:
+        lat_thresh = 3.6
+        long_thresh = 7.2
+    else:
+        lat_thresh = 1.8
+        long_thresh = 3.6
+
+    # Reference tangent unit vectors
+    tangents = np.zeros_like(ref_pts)
+    if N >= 2:
+        tangents[:-1] = np.diff(ref_pts, axis=0)
+        tangents[-1] = tangents[-2]
+    else:
+        tangents[0] = np.array([1.0, 0.0])
+    norms = np.linalg.norm(tangents, axis=1, keepdims=True)
+    norms[norms < 1e-4] = 1.0
+    tangents = tangents / norms
+
+    # Normal unit vectors (perpendicular: [-t_y, t_x])
+    normals = np.stack([-tangents[:, 1], tangents[:, 0]], axis=1)
+
+    # Waypoint displacements
+    deltas = pred_pts - ref_pts
+
+    # Project displacements onto tangent (longitudinal) and normal (lateral)
+    e_long = np.abs(np.sum(deltas * tangents, axis=1))
+    e_lat = np.abs(np.sum(deltas * normals, axis=1))
+
+    mean_long = float(np.mean(e_long))
+    mean_lat = float(np.mean(e_lat))
+
+    sim_long = max(0.0, 1.0 - mean_long / long_thresh)
+    sim_lat = max(0.0, 1.0 - mean_lat / lat_thresh)
+    similarity = min(sim_long, sim_lat)
+
+    # Comfort penalties relative to reference trajectory
+    jerk_pred = _trajectory_jerk(pred, dt)
+    jerk_ref = _trajectory_jerk(ref, dt)
+    jerk_pen = 1.0 if (jerk_pred > 1.44 * max(jerk_ref, 0.1)) else 0.0
+
+    tort_pred = _trajectory_tortuosity(pred)
+    tort_ref = _trajectory_tortuosity(ref)
+    tort_pen = 1.0 if (tort_pred > 1.06 * max(tort_ref, 1.0)) else 0.0
+
+    comfort_penalties = jerk_pen + tort_pen
+    raw_score = similarity * (base_score - comfort_penalties)
+    return float(raw_score), float(similarity), float(comfort_penalties)
+
+
 def compute_mms_score(
     pred: np.ndarray,
     expert_like: np.ndarray,
@@ -426,57 +516,80 @@ def compute_mms_score(
     off_road: Optional[np.ndarray] = None,
     crash: Optional[np.ndarray] = None,
 ) -> float:
-    """Compute local MMS (Multi-Maneuver Score) against reference trajectories.
+    """Compute official MMS (Multi-Maneuver Score) according to challenge specification.
 
-    MMS Logic:
-    - Base score 10.0 if closest to expert_like with initial heading alignment.
-    - Base score 7.0 if closest to wrong_speed.
-    - Base score 3.5 if unmatched.
-    - Base score 0.0 if direction mismatch on step 0 or closer to crash/off_road.
-    - Comfort penalties:
-      - Jerk penalty (up to 44% penalty for erratic 3rd differences).
-      - Tortuosity penalty (up to 6% penalty for tortuosity > 1.06).
+    Official Reference Base Scores:
+    - Expert-like: 10
+    - Wrong speed: 7
+    - Neglect instruction: 4
+    - Off road without crashing: 1
+    - Crash: 0
+    - Unmatched: 3.5
+
+    Initial Direction Check:
+    - dot(ref[0], pred[0]) < 0.5 * |ref[0]| * |pred[0]| -> 0.0
+
+    Velocity-Scaled Matching:
+    - Similarity = min(sim_lateral, sim_longitudinal)
+    - Score = similarity * (base - comfort_penalties), floored at 3.5 - comfort_penalties
+    - Comfort penalties: -1 each for jerk > 44% above reference, tortuosity > 6% above reference
     """
     pred_arr = np.asarray(pred, dtype=float)
     expert_arr = _prepare_reference(expert_like)
     if expert_arr is None:
         return 3.5
 
-    # 1. Heading check at waypoint 0: dot(ref[0], pred[0]) >= 0.5 * |ref[0]|
+    # 1. Heading direction check at waypoint 0 against expert reference:
+    # dot(ref[0], pred[0]) < 0.5 * |ref[0]| (scaled by |pred[0]| for normalized cosine)
     ref_d0 = expert_arr[0]
     pred_d0 = pred_arr[0]
     norm_ref = np.linalg.norm(ref_d0)
     norm_pred = np.linalg.norm(pred_d0)
 
-    if norm_ref > 0.1 and norm_pred > 0.1:
+    if norm_ref > 0.05 and norm_pred > 0.05:
         cos_sim = float(np.dot(ref_d0, pred_d0) / (norm_ref * norm_pred))
         if cos_sim < 0.5:
             return 0.0
 
-    # 2. Check distances to all reference classes
-    d_expert = float(np.mean(np.linalg.norm(pred_arr - expert_arr, axis=1)))
+    # 2. Candidate reference trajectories and their official base scores
+    candidates = [
+        ("expert_like", expert_arr, spec.MMS_BASE_EXPERT),  # 10.0
+        ("wrong_speed", _prepare_reference(wrong_speed), spec.MMS_BASE_WRONG_SPEED),  # 7.0
+        ("neglect_instruction", _prepare_reference(neglect_instruction), 4.0),  # 4.0
+        ("off_road", _prepare_reference(off_road), 1.0),  # 1.0
+        ("crash", _prepare_reference(crash), 0.0),  # 0.0
+    ]
 
-    ref_wrong = _prepare_reference(wrong_speed)
-    d_wrong = float(np.mean(np.linalg.norm(pred_arr - ref_wrong, axis=1))) if ref_wrong is not None else float("inf")
+    best_match: Optional[Tuple[str, float, float, float]] = None
+    highest_similarity = 0.0
 
-    ref_neglect = _prepare_reference(neglect_instruction)
-    d_neglect = float(np.mean(np.linalg.norm(pred_arr - ref_neglect, axis=1))) if ref_neglect is not None else float("inf")
+    for name, ref_traj, base_score in candidates:
+        if ref_traj is None:
+            continue
+        score, sim, pens = _evaluate_single_reference(pred_arr, ref_traj, base_score)
+        if sim > highest_similarity:
+            highest_similarity = sim
+            best_match = (name, score, sim, pens)
 
-    ref_offroad = _prepare_reference(off_road)
-    d_offroad = float(np.mean(np.linalg.norm(pred_arr - ref_offroad, axis=1))) if ref_offroad is not None else float("inf")
-
-    ref_crash = _prepare_reference(crash)
-    d_crash = float(np.mean(np.linalg.norm(pred_arr - ref_crash, axis=1))) if ref_crash is not None else float("inf")
-
-    # Determine base score
-    if d_expert <= 8.0 and d_expert <= min(d_wrong, d_neglect, d_offroad, d_crash):
-        base_score = spec.MMS_BASE_EXPERT  # 10.0
-    elif d_wrong <= 8.0 and d_wrong < d_expert:
-        base_score = spec.MMS_BASE_WRONG_SPEED  # 7.0
-    elif d_crash <= 5.0 or d_offroad <= 5.0:
-        base_score = 0.0
+    # 3. Compute final score with unmatched floor
+    if best_match is not None and highest_similarity > 0.0:
+        _name, score, _sim, pens = best_match
+        floor_score = max(0.0, spec.MMS_BASE_UNMATCHED - pens)
+        final_score = max(floor_score, score)
     else:
-        base_score = spec.MMS_BASE_UNMATCHED  # 3.5
+        # Unmatched trajectory: compute comfort penalties relative to expert reference
+        jerk_pred = _trajectory_jerk(pred_arr)
+        jerk_ref = _trajectory_jerk(expert_arr)
+        jerk_pen = 1.0 if (jerk_pred > 1.44 * max(jerk_ref, 0.1)) else 0.0
+
+        tort_pred = _trajectory_tortuosity(pred_arr)
+        tort_ref = _trajectory_tortuosity(expert_arr)
+        tort_pen = 1.0 if (tort_pred > 1.06 * max(tort_ref, 1.0)) else 0.0
+
+        pens = jerk_pen + tort_pen
+        final_score = max(0.0, spec.MMS_BASE_UNMATCHED - pens)
+
+    return float(round(final_score, 2))
 
     # 3. Comfort penalties (jerk & tortuosity)
     diff3 = np.linalg.norm(np.diff(pred_arr, n=3, axis=0), axis=1)

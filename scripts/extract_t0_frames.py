@@ -236,6 +236,18 @@ def process_parquet_file(
         if limit and len(all_extracted) >= limit:
             break
 
+        # Fast pre-filtering: read only scenario_id column to check if target scenarios exist
+        if target_scenarios:
+            rg_meta = pf.read_row_group(rg_idx, columns=["scenario_id"])
+            rg_sids = {str(s).zfill(7) for s in rg_meta["scenario_id"].to_pylist()}
+            matching_sids = rg_sids.intersection(target_scenarios)
+            # If no targets in this row group, or all already extracted, skip entire row group
+            if not matching_sids or all(
+                all((output_dir / sid / f"{cam}.jpg").exists() for cam in spec.CAMERAS)
+                for sid in matching_sids
+            ):
+                continue
+
         # One pass per row group: all camera columns and the id travel together.
         table = pf.read_row_group(rg_idx, columns=["scenario_id"] + available)
         rows = table.to_pylist()
