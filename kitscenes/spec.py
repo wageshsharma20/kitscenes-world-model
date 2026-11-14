@@ -19,6 +19,24 @@ SCENARIO_COUNT = 400
 SCENARIO_IDS = tuple(f"{index:07d}" for index in range(SCENARIO_COUNT))
 SCENARIO_ID_SET = frozenset(SCENARIO_IDS)
 
+# Canonical 10-scenario validation subset covering all core driving maneuvers:
+# 0000000: cruise straight, 0000007: turn right, 0000012: turn left,
+# 0000029: use left lane, 0000005: use right lane, 0000038: use middle lane,
+# 0000001: overtake truck right, 0000067: overtake car right, 0000037: u-turn,
+# 0000022: overtake truck front.
+VALIDATION_10_IDS = (
+    "0000000",
+    "0000007",
+    "0000012",
+    "0000029",
+    "0000005",
+    "0000038",
+    "0000001",
+    "0000067",
+    "0000037",
+    "0000022",
+)
+
 CAMERAS = (
     "front",
     "front_left",

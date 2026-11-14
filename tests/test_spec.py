@@ -27,3 +27,10 @@ def test_upload_limits():
 
 def test_pq_weights_leave_a_front_only_submission_at_half():
     assert spec.PQ_FRONT_WEIGHT + spec.PQ_SIDE_WEIGHT * 5 == 1.0
+
+
+def test_validation_10_scenario_subset():
+    assert len(spec.VALIDATION_10_IDS) == 10
+    assert len(set(spec.VALIDATION_10_IDS)) == 10
+    for sid in spec.VALIDATION_10_IDS:
+        assert sid in spec.SCENARIO_ID_SET
