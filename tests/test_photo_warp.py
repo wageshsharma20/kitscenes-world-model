@@ -26,9 +26,16 @@ def forward_waypoints(speed_mps: float = 10.0):
 
 
 def test_plan_profile_is_monotone_and_starts_at_rest():
-    distances, yaws = video_engine.PhotographicWarpModel.plan_profile(forward_waypoints())
+    still = [[0.0, 0.0] for _ in range(spec.WAYPOINT_COUNT)]
+    still_dist, still_yaws = video_engine.PhotographicWarpModel.plan_profile(still)
+    assert np.allclose(still_dist, 0.0)
+    assert np.allclose(still_yaws, 0.0)
 
-    assert distances[0] == 0.0
+    fwd_waypoints = forward_waypoints(10.0)
+    distances, yaws = video_engine.PhotographicWarpModel.plan_profile(fwd_waypoints)
+
+    assert distances[0] == pytest.approx(2.0)
+    assert distances[-1] == pytest.approx(50.0)
     assert np.all(np.diff(distances) > 0)
     assert np.allclose(yaws, 0.0)
 
@@ -59,7 +66,7 @@ def test_forward_motion_moves_the_ground_plane(frames):
 def test_ground_plane_expands_towards_the_bottom(frames):
     """Driving forward makes road markings stream out of the horizon and down the frame."""
     model = video_engine.PhotographicWarpModel()
-    distances = np.array([0.0] + [1.0] * (spec.FRAME_COUNT - 1))
+    distances = np.linspace(0.2, 3.0, spec.FRAME_COUNT)
     frame = np.zeros((spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8)
     frame[420:460, :, :] = 255  # a band on the road about 7 m ahead of the camera
 

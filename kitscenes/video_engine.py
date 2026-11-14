@@ -726,25 +726,43 @@ class PhotographicWarpModel:
         )
 
     def _homographies(
-        self, camera: str, distance_m: float, yaw_rad: float
+        self,
+        camera: str,
+        ego_pos: Union[Tuple[float, float], Sequence[float], np.ndarray],
+        yaw_rad: float,
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Return (ground-plane homography, sky homography) for image0 -> image_t."""
+        """Return (ground-plane homography, sky homography) for image0 -> image_t.
+
+        Incorporates:
+        - Camera mounting position (x_c, y_c, z_c) lever-arm offset during yaw rotation
+        - Vehicle translation along trajectory (x_ego, y_ego)
+        - Vehicle yaw rotation relative to t=0
+        - Camera intrinsic matrix K
+        """
+        pose = self.rig[camera]
         r_ce = self._camera_axes(camera)
         cos_d, sin_d = math.cos(yaw_rad), math.sin(yaw_rad)
         r_ego = np.array([[cos_d, -sin_d, 0.0], [sin_d, cos_d, 0.0], [0.0, 0.0, 1.0]])
         r_cam = r_ce.T @ r_ego @ r_ce
 
-        # Camera translation expressed in its own frame, negated: a point fixed in the
-        # world appears to move backwards when the ego travels forwards.
-        psi = self.rig[camera].yaw_rad
-        t_cam = -np.array(
-            [distance_m * math.sin(psi), 0.0, distance_m * math.cos(psi)]
-        )
-        normal = np.array([0.0, 1.0, 0.0])  # ground below the camera; +y is down
-        ground = r_cam + np.outer(t_cam, normal) / self.camera_height_m
+        # Camera mounting offset in vehicle coordinate frame (x: forward, y: left, z: up)
+        p_c = np.array(pose.position_m, dtype=float)
+        # Vehicle origin translation at time t
+        t_ego = np.array([float(ego_pos[0]), float(ego_pos[1]), 0.0], dtype=float)
+        # Camera center displacement in world frame: C_t - C_0 = t_ego + (R_ego - I) @ p_c
+        delta_c_world = t_ego + (r_ego - np.eye(3)) @ p_c
+
+        # Camera translation expressed in its own coordinate frame at t=0
+        t_cam = r_ce.T @ delta_c_world
+        cam_height = p_c[2] if p_c[2] > 0.1 else self.camera_height_m
+
+        # Ground plane normal in camera frame (pointing down, +y is down)
+        normal = np.array([0.0, 1.0, 0.0])
+        ground_m = r_cam.T @ (np.eye(3) - np.outer(t_cam, normal) / cam_height)
+        sky_m = r_cam.T
 
         k, k_inv = self._intrinsics(camera)
-        return k @ ground @ k_inv, k @ r_cam @ k_inv
+        return k @ ground_m @ k_inv, k @ sky_m @ k_inv
 
     # -- rendering --------------------------------------------------------
     @staticmethod
@@ -769,21 +787,41 @@ class PhotographicWarpModel:
         ).astype(np.uint8)
 
     def render_camera(
-        self, camera: str, frame0: np.ndarray, distances: np.ndarray, yaws: np.ndarray
+        self,
+        camera: str,
+        frame0: np.ndarray,
+        positions: Union[np.ndarray, Sequence[Sequence[float]]],
+        headings: Sequence[float],
     ) -> np.ndarray:
-        """Warp one camera's observed frame into 25 frames following the plan."""
+        """Warp one camera's observed frame into exactly 25 future frames (0.2s - 5.0s).
+
+        Args:
+            camera: Camera name (e.g. 'front', 'front_left').
+            frame0: Observed conditioning frame at t=0 (568, 876, 3).
+            positions: 25 [x, y] coordinates (or 1D distances) for the future waypoints.
+            headings: 25 yaw headings relative to t=0 heading.
+        """
         height, width = frame0.shape[:2]
         horizon = height / 2.0
         blend = self.horizon_blend_px
         rows = np.arange(height, dtype=np.float32)[:, None]
         ground_weight = np.clip((rows - (horizon - blend)) / (2.0 * blend), 0.0, 1.0)
 
+        pos_arr = np.asarray(positions, dtype=float)
+        if pos_arr.ndim == 1:
+            pts_2d = np.column_stack([pos_arr, np.zeros_like(pos_arr)])
+        else:
+            pts_2d = pos_arr
+
         frames = np.empty((spec.FRAME_COUNT, height, width, 3), dtype=np.uint8)
-        frames[0] = frame0
-        for index in range(1, spec.FRAME_COUNT):
-            ground_h, sky_h = self._homographies(
-                camera, float(distances[index]), float(yaws[index])
-            )
+        # All 25 frames are generated from future waypoints 0 through 24
+        for index in range(spec.FRAME_COUNT):
+            ego_pos = pts_2d[index, :2]
+            yaw = float(headings[index])
+            if np.linalg.norm(ego_pos) < 1e-6 and abs(yaw) < 1e-6:
+                frames[index] = frame0.copy()
+                continue
+            ground_h, sky_h = self._homographies(camera, ego_pos, yaw)
             ground = self._warp(frame0, np.linalg.inv(ground_h)).astype(np.float32)
             sky = self._warp(frame0, np.linalg.inv(sky_h)).astype(np.float32)
             blended = ground * ground_weight[..., None] + sky * (1.0 - ground_weight[..., None])
@@ -792,26 +830,24 @@ class PhotographicWarpModel:
 
     @staticmethod
     def plan_profile(trajectory: Sequence[Sequence[float]]) -> Tuple[np.ndarray, np.ndarray]:
-        """Per-frame distance travelled and accumulated yaw, from the planned waypoints."""
+        """Compute per-frame cumulative distance travelled and accumulated yaw for 25 future waypoints.
+
+        Uses cumulative arc-length distance (not Euclidean displacement from origin) so turns,
+        curves, and complex maneuvers accumulate accurate travel distance.
+        """
         points = np.asarray(trajectory, dtype=float)[:, :2]
-        distances = np.zeros(spec.FRAME_COUNT)
-        yaws = np.zeros(spec.FRAME_COUNT)
+        pts_with_origin = np.vstack([np.zeros((1, 2)), points])
+        segment_lengths = np.linalg.norm(np.diff(pts_with_origin, axis=0), axis=1)
+        distances = np.cumsum(segment_lengths)
 
-        previous = np.zeros(2)
-        headings = []
-        for k in range(min(len(points), spec.WAYPOINT_COUNT)):
-            delta = points[k] - previous
-            headings.append(math.atan2(delta[1], delta[0]) if np.linalg.norm(delta) > 1e-9 else 0.0)
-            previous = points[k]
-        if not headings:
-            return distances, yaws
-
-        reference = headings[0]
-        for index in range(1, spec.FRAME_COUNT):
-            waypoint = min(index - 1, len(points) - 1)
-            distances[index] = float(np.linalg.norm(points[waypoint]))
-            yaws[index] = wrap_angle(headings[waypoint] - reference)
-        return distances, yaws
+        headings = np.zeros(spec.WAYPOINT_COUNT, dtype=float)
+        deltas = np.diff(pts_with_origin, axis=0)
+        current_heading = 0.0
+        for i in range(len(deltas)):
+            if segment_lengths[i] > 1e-4:
+                current_heading = math.atan2(deltas[i, 1], deltas[i, 0])
+            headings[i] = current_heading
+        return distances, headings
 
     def generate_scenario(
         self,
@@ -832,7 +868,9 @@ class PhotographicWarpModel:
                 f"missing: {', '.join(missing)}"
             )
 
-        distances, yaws = self.plan_profile(trajectory)
+        pts = np.asarray(trajectory, dtype=float)[:, :2]
+        _, headings = self.plan_profile(pts)
+
         result: Dict[str, np.ndarray] = {}
         for camera in spec.CAMERAS:
             supplied = conditioning_images[camera]
@@ -845,7 +883,7 @@ class PhotographicWarpModel:
                     f"{camera} conditioning frame is {frame0.shape[1]}x{frame0.shape[0]}, "
                     f"expected {spec.WIDTH}x{spec.HEIGHT}"
                 )
-            result[camera] = self.render_camera(camera, frame0[..., :3], distances, yaws)
+            result[camera] = self.render_camera(camera, frame0[..., :3], pts, headings)
         return result
 
 
