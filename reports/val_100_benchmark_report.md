@@ -17,11 +17,13 @@ Across all 100 validation scenarios, kNN trajectory retrieval achieves a **17.85
 | **Median $L_2$ Error** | 3.994 m | **3.243 m** | $-0.751\text{ m}$ | **$-18.80\%$** | $[13.20\%,\; 24.15\%]$ |
 | **Endpoint $L_2$ Error ($t=5.0\text{s}$)** | 11.963 m | **9.896 m** | $-2.067\text{ m}$ | **$-17.28\%$** | $[11.13\%,\; 23.34\%]$ |
 
-### Hypothesis Testing & Statistical Significance:
-* **Paired Student's $t$-test (Mean $L_2$):** $t = 5.979$, $p = 2.24 \times 10^{-9}$ (degrees of freedom $= 99$)
-* **Paired Student's $t$-test (Endpoint $L_2$):** $t = 4.838$, $p = 1.31 \times 10^{-6}$
-* **Wilcoxon Signed-Rank Test (Non-parametric, Mean $L_2$):** $W^+ = 3688$, $W^- = 777$, $z = -5.489$, $p = 4.05 \times 10^{-8}$
-* **Wilcoxon Signed-Rank Test (Non-parametric, Endpoint $L_2$):** $W^+ = 3426$, $W^- = 1039$, $z = -4.501$, $p = 6.78 \times 10^{-6}$
+### Hypothesis Testing & Statistical Significance (scipy.stats verified):
+* **Paired Student's $t$-test (Mean $L_2$, $\text{df} = 99$):** $t = 5.979$, $p = 3.56 \times 10^{-8}$ (`scipy.stats.ttest_rel`)
+* **Paired Student's $t$-test (Endpoint $L_2$, $\text{df} = 99$):** $t = 4.838$, $p = 4.82 \times 10^{-6}$ (`scipy.stats.ttest_rel`)
+* **Wilcoxon Signed-Rank Test (Mean $L_2$, tie-averaged, continuity-corrected):** $W = 777.0$, $p = 4.09 \times 10^{-8}$ (`scipy.stats.wilcoxon`)
+* **Wilcoxon Signed-Rank Test (Endpoint $L_2$, tie-averaged, continuity-corrected):** $W = 1039.0$, $p = 6.84 \times 10^{-6}$ (`scipy.stats.wilcoxon`)
+
+*Full-precision 64-bit float paired values for all 100 scenarios are published in `reports/validation_paired_100_scenarios_full_precision.json` to ensure exact reproduction without CSV decimal rounding.*
 
 Both parametric and non-parametric tests reject the null hypothesis ($H_0$: no difference between CV and kNN) with $p < 10^{-5}$. The 95% bootstrap confidence interval demonstrates that the expected Mean $L_2$ error reduction across resampled splits is bounded between **$12.75\%$ and $23.13\%$**.
 

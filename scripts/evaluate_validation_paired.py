@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import numpy as np
+from scipy import stats
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -139,29 +140,40 @@ def run_paired_evaluation(
     ci_end_diff = np.percentile(boot_end_diff, [2.5, 97.5])
     ci_end_rel = np.percentile(boot_end_rel, [2.5, 97.5])
 
-    # Paired t-test
-    t_stat_m = float(np.mean(diff_mean_arr) / (np.std(diff_mean_arr, ddof=1) / math.sqrt(n)))
-    p_t_m = 2.0 * (1.0 - 0.5 * (1.0 + math.erf(abs(t_stat_m) / math.sqrt(2.0))))
+    # Paired Student's t-test (df = n - 1 = 99) via scipy.stats
+    t_res_m = stats.ttest_rel(cv_means, knn_means)
+    t_stat_m, p_t_m = float(t_res_m.statistic), float(t_res_m.pvalue)
 
-    t_stat_e = float(np.mean(diff_end_arr) / (np.std(diff_end_arr, ddof=1) / math.sqrt(n)))
-    p_t_e = 2.0 * (1.0 - 0.5 * (1.0 + math.erf(abs(t_stat_e) / math.sqrt(2.0))))
+    t_res_e = stats.ttest_rel(cv_ends, knn_ends)
+    t_stat_e, p_t_e = float(t_res_e.statistic), float(t_res_e.pvalue)
 
-    # Wilcoxon signed-rank test
-    def _wilcoxon(d: np.ndarray):
-        nz = d[d != 0]
-        nn = len(nz)
-        ranks = np.argsort(np.argsort(np.abs(nz))) + 1.0
-        w_pos = np.sum(ranks[nz > 0])
-        w_neg = np.sum(ranks[nz < 0])
-        w = min(w_pos, w_neg)
-        mean_w = nn * (nn + 1) / 4.0
-        sd_w = math.sqrt(nn * (nn + 1) * (2 * nn + 1) / 24.0)
-        z = (w - mean_w) / sd_w
-        pval = 2.0 * 0.5 * (1.0 + math.erf(z / math.sqrt(2.0)))
-        return w_pos, w_neg, z, pval
+    # Wilcoxon signed-rank test (two-sided, exact tie averaging, continuity correction) via scipy.stats
+    w_res_m = stats.wilcoxon(cv_means, knn_means, zero_method="wilcox", correction=True)
+    w_stat_m, p_w_m = float(w_res_m.statistic), float(w_res_m.pvalue)
 
-    w_pos_m, w_neg_m, z_m, p_w_m = _wilcoxon(diff_mean_arr)
-    w_pos_e, w_neg_e, z_e, p_w_e = _wilcoxon(diff_end_arr)
+    w_res_e = stats.wilcoxon(cv_ends, knn_ends, zero_method="wilcox", correction=True)
+    w_stat_e, p_w_e = float(w_res_e.statistic), float(w_res_e.pvalue)
+
+    # Export full-precision paired dictionary for exact reproducibility
+    full_precision_path = REPORTS_DIR / "validation_paired_100_scenarios_full_precision.json"
+    full_precision_data = {
+        rec["scenario_id"]: {
+            "driving_instruction": rec["driving_instruction"],
+            "scenario_type": rec["scenario_type"],
+            "gt_distance_m": float(np.linalg.norm(np.asarray(rec["expert_like"])[-1])),
+            "cv_mean_l2_m": float(cv_means[i]),
+            "knn_mean_l2_m": float(knn_means[i]),
+            "diff_mean_l2_m": float(diff_mean_arr[i]),
+            "cv_endpoint_l2_m": float(cv_ends[i]),
+            "knn_endpoint_l2_m": float(knn_ends[i]),
+            "diff_endpoint_l2_m": float(diff_end_arr[i]),
+            "cv_median_l2_m": float(cv_meds[i]),
+            "knn_median_l2_m": float(knn_meds[i]),
+        }
+        for i, rec in enumerate(val_records)
+    }
+    with open(full_precision_path, "w", encoding="utf-8") as f:
+        json.dump(full_precision_data, f, indent=2)
 
     return {
         "n": n,

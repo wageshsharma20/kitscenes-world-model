@@ -108,7 +108,7 @@ class CameraPose:
         # Optical axis = yawed X; camera right = - yawed Y; camera down = - Z
         return np.array(
             [
-                [-sin_th, cos_th, 0.0],
+                [sin_th, -cos_th, 0.0],
                 [0.0, 0.0, -1.0],
                 [cos_th, sin_th, 0.0],
             ],
