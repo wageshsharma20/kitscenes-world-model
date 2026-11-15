@@ -257,7 +257,7 @@ def process_parquet_file(
         "matching_row_groups": [],
         "scenarios_in_matching_groups": [],
         "compressed_bytes_by_column": {col: 0 for col in ["scenario_id"] + selected_cols},
-        "total_compressed_bytes_read": 0,
+        "estimated_compressed_column_chunk_bytes": 0,
     }
 
     print(f"[*] Processing parquet with {total_rgs} row group(s)")
@@ -268,11 +268,23 @@ def process_parquet_file(
             break
 
         transfer_stats["row_groups_scanned"] += 1
+        rg_meta = pf.metadata.row_group(rg_idx)
 
         # Fast pre-filtering: read only scenario_id column to check if target scenarios exist
         if target_scenarios:
+            # Account for the scenario_id column chunk read to inspect this row group
+            scen_chunk_bytes = sum(
+                rg_meta.column(i).total_compressed_size
+                for i in range(rg_meta.num_columns)
+                if rg_meta.column(i).path_in_schema == "scenario_id"
+                or rg_meta.column(i).path_in_schema.startswith("scenario_id.")
+            )
+            transfer_stats["compressed_bytes_by_column"]["scenario_id"] += scen_chunk_bytes
+            transfer_stats["estimated_compressed_column_chunk_bytes"] += scen_chunk_bytes
+
             rg_meta_table = pf.read_row_group(rg_idx, columns=["scenario_id"])
-            rg_sids = {str(s).zfill(7) for s in rg_meta_table["scenario_id"].to_pylist()}
+            rg_sids_list = [str(s).zfill(7) for s in rg_meta_table["scenario_id"].to_pylist()]
+            rg_sids = set(rg_sids_list)
             matching_sids = rg_sids.intersection(target_scenarios)
 
             # If no targets in this row group, or all already extracted, skip entire row group
@@ -285,24 +297,44 @@ def process_parquet_file(
             ):
                 continue
 
-        # Found matching row group: record transfer statistics from chunk metadata
-        transfer_stats["matching_row_groups"].append(rg_idx)
-        rg_meta = pf.metadata.row_group(rg_idx)
-        transfer_stats["scenarios_in_matching_groups"].append(rg_meta.num_rows)
+            # Found matching row group: record transfer statistics for the camera columns read
+            transfer_stats["matching_row_groups"].append(rg_idx)
+            transfer_stats["scenarios_in_matching_groups"].append(rg_meta.num_rows)
 
-        read_cols = ["scenario_id"] + selected_cols
-        for col_name in read_cols:
-            col_chunk_bytes = sum(
-                rg_meta.column(i).total_compressed_size
-                for i in range(rg_meta.num_columns)
-                if rg_meta.column(i).path_in_schema.startswith(col_name)
-            )
-            transfer_stats["compressed_bytes_by_column"][col_name] += col_chunk_bytes
-            transfer_stats["total_compressed_bytes_read"] += col_chunk_bytes
+            # Read only the selected camera columns without re-reading scenario_id
+            for col_name in selected_cols:
+                col_chunk_bytes = sum(
+                    rg_meta.column(i).total_compressed_size
+                    for i in range(rg_meta.num_columns)
+                    if rg_meta.column(i).path_in_schema == col_name
+                    or rg_meta.column(i).path_in_schema.startswith(f"{col_name}.")
+                )
+                transfer_stats["compressed_bytes_by_column"][col_name] += col_chunk_bytes
+                transfer_stats["estimated_compressed_column_chunk_bytes"] += col_chunk_bytes
 
-        # Read only the selected camera columns and scenario_id for this row group
-        table = pf.read_row_group(rg_idx, columns=read_cols)
-        rows = table.to_pylist()
+            cam_table = pf.read_row_group(rg_idx, columns=selected_cols)
+            rows = cam_table.to_pylist()
+            # Attach scenario_id from the previously read rg_meta_table
+            for i, row in enumerate(rows):
+                row["scenario_id"] = rg_sids_list[i]
+        else:
+            # No scenario filter: read scenario_id and all selected camera columns
+            transfer_stats["matching_row_groups"].append(rg_idx)
+            transfer_stats["scenarios_in_matching_groups"].append(rg_meta.num_rows)
+
+            read_cols = ["scenario_id"] + selected_cols
+            for col_name in read_cols:
+                col_chunk_bytes = sum(
+                    rg_meta.column(i).total_compressed_size
+                    for i in range(rg_meta.num_columns)
+                    if rg_meta.column(i).path_in_schema == col_name
+                    or rg_meta.column(i).path_in_schema.startswith(f"{col_name}.")
+                )
+                transfer_stats["compressed_bytes_by_column"][col_name] += col_chunk_bytes
+                transfer_stats["estimated_compressed_column_chunk_bytes"] += col_chunk_bytes
+
+            table = pf.read_row_group(rg_idx, columns=read_cols)
+            rows = table.to_pylist()
 
         for row in rows:
             if limit and len(all_extracted) >= limit:
@@ -430,12 +462,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Matching Row Groups Read:       {stats['matching_row_groups']}")
     print(f"Scenarios in Matching Groups:   {stats['scenarios_in_matching_groups']} (total: {sum(stats['scenarios_in_matching_groups'])})")
     print(f"Target Cameras Requested:       {sorted(target_cameras) if target_cameras else list(CAMERA_FRAME_COLUMNS.keys())}")
-    print("Compressed Column Chunk Bytes:")
+    print("Estimated Compressed Column Chunk Bytes (by Column):")
     for col, nbytes in stats["compressed_bytes_by_column"].items():
         mb = nbytes / (1024 * 1024)
-        print(f"  - {col:30s}: {mb:8.2f} MB ({nbytes} bytes)")
-    total_mb = stats["total_compressed_bytes_read"] / (1024 * 1024)
-    print(f"Total Compressed Data Read:     {total_mb:8.2f} MB ({stats['total_compressed_bytes_read']} bytes)")
+        print(f"  - {col:30s}: {mb:8.2f} MB ({nbytes:,} bytes)")
+    total_mb = stats["estimated_compressed_column_chunk_bytes"] / (1024 * 1024)
+    print(f"Estimated Column Chunk Total:   {total_mb:8.2f} MB ({stats['estimated_compressed_column_chunk_bytes']:,} bytes)")
+    print("Note: Represents selected Parquet column-chunk payload sizes read,")
+    print("      not measured HTTP network traffic (headers, TLS, range buffering).")
     print("=" * 65)
 
     # Check for missing scenarios

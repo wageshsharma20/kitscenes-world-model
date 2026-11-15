@@ -93,7 +93,10 @@ def test_front_camera_only_extraction_and_early_stopping(synthetic_parquet_path:
     assert stats["row_groups_scanned"] == 2
     assert stats["matching_row_groups"] == [1]
     assert stats["scenarios_in_matching_groups"] == [1]
-    assert stats["total_compressed_bytes_read"] > 0
+    assert stats["estimated_compressed_column_chunk_bytes"] > 0
+    # Both scanned row groups (0 and 1) had scenario_id chunk sizes accounted for
+    assert stats["compressed_bytes_by_column"]["scenario_id"] > 0
+    assert stats["compressed_bytes_by_column"]["frames_camera_front"] > 0
 
 
 def test_multiple_cameras_extraction(synthetic_parquet_path: Path, tmp_path: Path):
