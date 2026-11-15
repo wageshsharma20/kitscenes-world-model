@@ -11,11 +11,11 @@
 
 Across all 100 validation scenarios, kNN trajectory retrieval achieves a **17.85% observed reduction in Mean $L_2$ error** and a **17.28% observed reduction in Endpoint $L_2$ error** compared to Constant Velocity (CV).
 
-| Metric | Constant Velocity (CV) | kNN Trajectory Retrieval | Absolute $\Delta$ | Relative $\Delta$ | 95% Bootstrap CI (10,000 resamples) |
+| Metric | Constant Velocity (CV) | kNN Trajectory Retrieval | Absolute $\Delta$ | Relative $\Delta$ | 95% Bootstrap CI (10,000 resamples, seed=42) |
 |---|---|---|---|---|---|
-| **Mean $L_2$ Error** | 4.729 m | **3.885 m** | $-0.844\text{ m}$ | **$-17.85\%$** | $[12.75\%,\; 23.13\%]$ |
-| **Median $L_2$ Error** | 3.994 m | **3.243 m** | $-0.751\text{ m}$ | **$-18.80\%$** | $[13.20\%,\; 24.15\%]$ |
-| **Endpoint $L_2$ Error ($t=5.0\text{s}$)** | 11.963 m | **9.896 m** | $-2.067\text{ m}$ | **$-17.28\%$** | $[11.13\%,\; 23.34\%]$ |
+| **Mean $L_2$ Error** | 4.729 m | **3.885 m** | $-0.844\text{ m}$ | **$-17.85\%$** | $[12.72\%,\; 23.04\%]$ ($[0.581\text{ m},\; 1.132\text{ m}]$) |
+| **Median $L_2$ Error** | 3.994 m | **3.243 m** | $-0.751\text{ m}$ | **$-18.80\%$** | $[13.20\%,\; 24.15\%]$ ($[0.512\text{ m},\; 1.011\text{ m}]$) |
+| **Endpoint $L_2$ Error ($t=5.0\text{s}$)** | 11.963 m | **9.896 m** | $-2.067\text{ m}$ | **$-17.28\%$** | $[11.16\%,\; 23.31\%]$ ($[1.276\text{ m},\; 2.939\text{ m}]$) |
 
 ### Hypothesis Testing & Statistical Significance (scipy.stats verified):
 * **Paired Student's $t$-test (Mean $L_2$, $\text{df} = 99$):** $t = 5.979$, $p = 3.56 \times 10^{-8}$ (`scipy.stats.ttest_rel`)
@@ -25,7 +25,7 @@ Across all 100 validation scenarios, kNN trajectory retrieval achieves a **17.85
 
 *Full-precision 64-bit float paired values for all 100 scenarios are published in `reports/validation_paired_100_scenarios_full_precision.json` to ensure exact reproduction without CSV decimal rounding.*
 
-Both parametric and non-parametric tests reject the null hypothesis ($H_0$: no difference between CV and kNN) with $p < 10^{-5}$. The 95% bootstrap confidence interval demonstrates that the expected Mean $L_2$ error reduction across resampled splits is bounded between **$12.75\%$ and $23.13\%$**.
+Both parametric and non-parametric tests reject the null hypothesis ($H_0$: no difference between CV and kNN) with $p < 10^{-5}$. Note that a bootstrap 95% confidence interval is an empirical uncertainty interval for the estimated reduction under the resampling assumptions for this specific validation population; it is not a guaranteed bound on future performance across arbitrary new or out-of-distribution domains.
 
 ---
 
@@ -88,12 +88,15 @@ Evaluating per-scenario paired differences ($\Delta L_2 = \text{CV} - \text{kNN}
 
 kNN does not win universally. Understanding where and why it degrades is critical:
 
-### A. Heavy Rain Domain Shift ($+6.2\%$ degradation, $N=10$):
-* In `heavy rain`, drivers in the real world reduce speed and brake earlier due to reduced traction and visibility.
-* 2 of the 3 largest degradations across the entire validation set occurred in heavy rain:
+### A. Heavy Rain Observed Scenarios ($+6.2\%$ observed increase in Mean $L_2$, $N=10$):
+* In `heavy rain`, real-world drivers travel with increased caution.
+* 2 of the 3 largest degradations across the entire validation set occurred in heavy rain straight highway driving:
   * **Scenario `0000912`:** CV Mean $= 3.24\text{ m}$, kNN Mean $= 4.27\text{ m}$ ($\Delta = -1.04\text{ m}$).
   * **Scenario `0000954`:** CV Mean $= 4.33\text{ m}$, kNN Mean $= 5.51\text{ m}$ ($\Delta = -1.18\text{ m}$).
-* **Root Cause:** The training donor database is dominated by dry and clear scenarios. Matching on geometry without conditioning on precipitation causes kNN to retrieve faster, dry-weather donors, overshooting the conservative driving profile of wet weather.
+* **Empirical Diagnostic Finding:** An analysis of the nearest neighbors revealed that retrieval was **not** suffering from a lack of heavy-rain donors (4 of 5 retrieved donors for `0000912` and all 5 of 5 for `0000954` were already heavy-rain donors). Error decomposition showed:
+  * In `0000912`, kNN predicted longitudinal distance more accurately than CV (longitudinal error $0.17\text{ m}$ vs $0.55\text{ m}$), but real human donors had natural steering micro-adjustments ($\sim 0.5\text{–}1.0\text{ m}$ lateral weave), while Constant Velocity is mathematically straight.
+  * In `0000954`, lateral error was lower for kNN ($0.14\text{ m}$ vs $0.24\text{ m}$), but the ground-truth driver accelerated ($10 \to 14\text{ m/s}$), causing longitudinal underestimation for both models.
+* **Important Caution:** This breakdown explains the metric outcome for these specific observed highway scenarios; it is a diagnostic finding rather than a universal claim about weather behavior.
 
 ### B. Stationary Acceleration / Start-from-Stop Outliers ($N=7$):
 * In 7 scenarios (e.g. `0000902`, `0000921`, `0000944`, `0000949`, `0000951`), the ego vehicle was stopped at $t \le 0$ ($v < 0.3\text{ m/s}$) at a red light and then accelerated rapidly.
