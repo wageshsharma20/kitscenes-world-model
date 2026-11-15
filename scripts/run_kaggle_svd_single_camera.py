@@ -241,7 +241,25 @@ def main() -> int:
         })
         print(f"Detected GPU 0: {gpu_props.name} ({gpu_metadata['total_vram_mb']} MB VRAM, CC {gpu_metadata['compute_capability']})")
 
+    # Record git commit SHA for experiment reproducibility
+    git_commit = None
+    try:
+        import subprocess
+        git_res = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        if git_res.returncode == 0:
+            git_commit = git_res.stdout.strip()
+    except Exception:
+        pass
+
     software_env = {
+        "git_commit": git_commit,
         "diffusers_version": diffusers.__version__,
         "torch_version": torch.__version__,
         "transformers_version": transformers.__version__,
@@ -249,7 +267,8 @@ def main() -> int:
         "model_id": args.model_id,
         "model_revision": args.model_revision,
     }
-    print(f"Software: PyTorch={torch.__version__} | Diffusers={diffusers.__version__} | CUDA={torch.version.cuda}")
+    git_disp = git_commit[:7] if git_commit else "unknown"
+    print(f"Software: Git={git_disp} | PyTorch={torch.__version__} | Diffusers={diffusers.__version__} | CUDA={torch.version.cuda}")
 
     # 2. Load Conditioning Image & Planned Trajectory
     cond_path = args.observed_t0_dir / args.scenario_id / f"{args.camera}.jpg"
