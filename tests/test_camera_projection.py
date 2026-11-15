@@ -109,3 +109,75 @@ def test_spatial_control_mask_generation():
 
     # Upper sky should have zero mask
     assert np.all(mask[:int(spec.HEIGHT * 0.3), :] == 0.0), "Sky region must have zero mask intensity"
+
+
+def test_option_a_static_route_mask_shapes_and_values():
+    """Verify Option A (Static Route Mask) shape contract [1, 568, 876] and multi-cam dictionary."""
+    engine = camera_projection.CameraProjectionEngine()
+
+    straight_waypoints = np.column_stack([
+        np.linspace(2.0, 40.0, 25),
+        np.zeros(25),
+    ])
+
+    # 1. Single camera with channel_dim=True -> (1, 568, 876)
+    mask_c1 = engine.render_static_route_mask("front", straight_waypoints, channel_dim=True)
+    assert mask_c1.shape == (1, spec.HEIGHT, spec.WIDTH)
+    assert mask_c1.dtype == np.float32
+    assert 0.0 <= mask_c1.min() and mask_c1.max() <= 1.0
+
+    # 2. Single camera with channel_dim=False -> (568, 876)
+    mask_c0 = engine.render_static_route_mask("front", straight_waypoints, channel_dim=False)
+    assert mask_c0.shape == (spec.HEIGHT, spec.WIDTH)
+
+    # 3. All 6 cameras simultaneously
+    multi_cam = engine.render_static_route_masks_all_cameras(straight_waypoints)
+    assert len(multi_cam) == 6
+    for cam in spec.CAMERAS:
+        assert cam in multi_cam
+        assert multi_cam[cam].shape == (1, spec.HEIGHT, spec.WIDTH)
+        assert multi_cam[cam].dtype == np.float32
+
+    # 4. Batch rendering -> (B, 1, 568, 876)
+    batch_trajs = [straight_waypoints, straight_waypoints * 0.8, straight_waypoints * 1.2]
+    batch_tensor = engine.batch_static_route_masks(batch_trajs, camera_name="front")
+    assert batch_tensor.shape == (3, 1, spec.HEIGHT, spec.WIDTH)
+    assert batch_tensor.dtype == np.float32
+
+
+def test_option_b_time_indexed_spatial_masks_shapes_and_progression():
+    """Verify Option B (Time-Indexed Spatial Masks) shape contract [25, 1, 568, 876] and dynamic progression."""
+    engine = camera_projection.CameraProjectionEngine()
+
+    # Straight trajectory moving away from car within camera visible ground field of view (X >= 5.0m)
+    straight_waypoints = np.column_stack([
+        np.linspace(5.0, 50.0, 25),
+        np.zeros(25),
+    ])
+
+    # 1. Single camera time-indexed masks -> (25, 1, 568, 876)
+    time_masks = engine.render_time_indexed_spatial_masks("front", straight_waypoints, num_frames=25, channel_dim=True)
+    assert time_masks.shape == (25, 1, spec.HEIGHT, spec.WIDTH)
+    assert time_masks.dtype == np.float32
+    assert 0.0 <= time_masks.min() and time_masks.max() <= 1.0
+
+    # 2. Check temporal progression: active beacon moves toward the horizon (v decreases)
+    # At frame 0 (x=3.0m, close to bumper), beacon is low on image canvas (large v)
+    # At frame 24 (x=50.0m, far ahead), beacon is near horizon cy (smaller v)
+    beacon_v_0 = np.argmax(np.max(time_masks[0, 0], axis=1))  # row of peak intensity at t=0
+    beacon_v_24 = np.argmax(np.max(time_masks[24, 0], axis=1))  # row of peak intensity at t=24
+    assert beacon_v_0 > beacon_v_24, f"Beacon should move upward toward horizon: v_0={beacon_v_0}, v_24={beacon_v_24}"
+
+    # 3. All 6 cameras time-indexed masks -> Dict[str, (25, 1, 568, 876)]
+    multi_cam_time = engine.render_time_indexed_spatial_masks_all_cameras(straight_waypoints, num_frames=25)
+    assert len(multi_cam_time) == 6
+    for cam in spec.CAMERAS:
+        assert cam in multi_cam_time
+        assert multi_cam_time[cam].shape == (25, 1, spec.HEIGHT, spec.WIDTH)
+
+    # 4. Batch time-indexed rendering -> (B, 25, 1, 568, 876)
+    batch_trajs = [straight_waypoints, straight_waypoints * 0.9]
+    batch_time = engine.batch_time_indexed_spatial_masks(batch_trajs, camera_name="front", num_frames=25)
+    assert batch_time.shape == (2, 25, 1, spec.HEIGHT, spec.WIDTH)
+    assert batch_time.dtype == np.float32
+

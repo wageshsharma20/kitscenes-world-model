@@ -60,6 +60,11 @@ def wrap_angle(angle: float) -> float:
     return (angle + math.pi) % (2.0 * math.pi) - math.pi
 
 
+def derive_motion_bucket(speed: float) -> int:
+    """Map scalar vehicle speed (m/s) to Stable Video Diffusion motion bucket ID in [1, 255]."""
+    return int(np.clip(speed * 12.0 + 10.0, 1.0, 255.0))
+
+
 @dataclass(frozen=True)
 class CameraPose:
     """Pose and intrinsic parameters of a single camera in the rig."""
