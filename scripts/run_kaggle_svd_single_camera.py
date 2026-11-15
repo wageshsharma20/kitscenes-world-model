@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -241,22 +242,32 @@ def main() -> int:
         })
         print(f"Detected GPU 0: {gpu_props.name} ({gpu_metadata['total_vram_mb']} MB VRAM, CC {gpu_metadata['compute_capability']})")
 
-    # Record git commit SHA for experiment reproducibility
-    git_commit = None
-    try:
-        import subprocess
-        git_res = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=str(PROJECT_ROOT),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
+    # Record git commit SHA for experiment reproducibility (fail explicitly if unavailable)
+    git_commit = os.environ.get("KSC_GIT_COMMIT")
+    if not git_commit:
+        commit_file = PROJECT_ROOT / ".git_commit"
+        if commit_file.is_file():
+            git_commit = commit_file.read_text().strip()
+    if not git_commit:
+        try:
+            import subprocess
+            git_res = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(PROJECT_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            if git_res.returncode == 0 and git_res.stdout.strip():
+                git_commit = git_res.stdout.strip()
+        except Exception:
+            pass
+
+    if not git_commit:
+        raise RuntimeError(
+            "Source Git commit SHA is unavailable (KSC_GIT_COMMIT not set, .git_commit missing, git rev-parse failed)."
         )
-        if git_res.returncode == 0:
-            git_commit = git_res.stdout.strip()
-    except Exception:
-        pass
 
     software_env = {
         "git_commit": git_commit,
@@ -267,8 +278,7 @@ def main() -> int:
         "model_id": args.model_id,
         "model_revision": args.model_revision,
     }
-    git_disp = git_commit[:7] if git_commit else "unknown"
-    print(f"Software: Git={git_disp} | PyTorch={torch.__version__} | Diffusers={diffusers.__version__} | CUDA={torch.version.cuda}")
+    print(f"Software: Git={git_commit[:7]} | PyTorch={torch.__version__} | Diffusers={diffusers.__version__} | CUDA={torch.version.cuda}")
 
     # 2. Load Conditioning Image & Planned Trajectory
     cond_path = args.observed_t0_dir / args.scenario_id / f"{args.camera}.jpg"
