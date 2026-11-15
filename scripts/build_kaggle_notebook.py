@@ -101,7 +101,18 @@ def create_kaggle_notebook(output_path: Path):
             "outputs": [],
             "source": [
                 "# Install required libraries for world modeling & video processing\n",
-                "!pip install -q diffusers accelerate huggingface_hub tqdm Pillow pyarrow\n"
+                "!pip install -q diffusers transformers accelerate huggingface_hub safetensors tqdm Pillow pyarrow\n",
+                "\n",
+                "# Print installed versions for environment verification\n",
+                "import torch\n",
+                "import diffusers\n",
+                "import transformers\n",
+                "import accelerate\n",
+                "\n",
+                "print(f\"PyTorch:      {torch.__version__} (CUDA: {torch.version.cuda})\")\n",
+                "print(f\"Diffusers:    {diffusers.__version__}\")\n",
+                "print(f\"Transformers: {transformers.__version__}\")\n",
+                "print(f\"Accelerate:   {accelerate.__version__}\")\n"
             ]
         },
         {
@@ -220,8 +231,6 @@ def create_kaggle_notebook(output_path: Path):
             "source": [
                 "from huggingface_hub import hf_hub_download\n",
                 "\n",
-                "parquet_path = DATA_DIR / \"test-00000-of-00001.parquet\"\n",
-                "\n",
                 "# Check how many scenarios have already been extracted\n",
                 "existing_t0 = [\n",
                 "    d.name for d in OBSERVED_DIR.iterdir()\n",
@@ -230,16 +239,27 @@ def create_kaggle_notebook(output_path: Path):
                 "print(f\"Existing t=0 conditioning scenarios: {len(existing_t0)}/{spec.SCENARIO_COUNT}\")\n",
                 "\n",
                 "if len(existing_t0) < spec.SCENARIO_COUNT:\n",
-                "    if not parquet_path.exists():\n",
+                "    # Check candidate paths (local_dir preserves repo 'data/' directory structure)\n",
+                "    parquet_candidates = [\n",
+                "        DATA_DIR / \"data\" / \"test-00000-of-00001.parquet\",\n",
+                "        DATA_DIR / \"test-00000-of-00001.parquet\",\n",
+                "    ]\n",
+                "    parquet_path = next((p for p in parquet_candidates if p.is_file()), None)\n",
+                "\n",
+                "    if parquet_path is None:\n",
                 "        print(\"Downloading test parquet (~32 GB) to local Kaggle disk...\")\n",
-                "        hf_hub_download(\n",
+                "        downloaded_path = hf_hub_download(\n",
                 "            repo_id=\"KIT-MRT/KITScenes-LongTail\",\n",
                 "            repo_type=\"dataset\",\n",
                 "            filename=\"data/test-00000-of-00001.parquet\",\n",
                 "            token=hf_token,\n",
                 "            local_dir=DATA_DIR,\n",
                 "        )\n",
-                "        print(\"Download complete.\")\n",
+                "        parquet_path = Path(downloaded_path)\n",
+                "        print(f\"Download complete: {parquet_path}\")\n",
+                "\n",
+                "    assert parquet_path.is_file(), f\"Parquet not found: {parquet_path}\"\n",
+                "    print(f\"Verified test parquet: {parquet_path} ({parquet_path.stat().st_size / (1024**3):.2f} GB)\")\n",
                 "\n",
                 "    print(\"Extracting t=0 frames for all 400 scenarios (downscaled to 876x568)...\")\n",
                 "    subprocess.run([\n",
@@ -256,9 +276,10 @@ def create_kaggle_notebook(output_path: Path):
             "metadata": {},
             "source": [
                 "## Step 5: GPU Single-Scenario Verification (Scenario 0000000, Front Camera)\n",
-                "Execute genuine pretrained SVD inference on 1 T4 GPU for Scenario `0000000` (front camera, 25 frames @ 5 FPS) using extracted test-split frames and verified trajectory kinematics.\n",
-                "Validates real hardware constraints: peak allocated/reserved VRAM, initialization latency, inference duration per frame, denoising callback execution, and pre-encoding temporal frame differences.\n",
-                "**Strict Gate**: Fails the notebook immediately if model loading, step assertions, or video generation fail."
+                "Execute genuine pretrained SVD inference on 1 T4 GPU for Scenario `0000000` (front camera, 25 frames @ 5 FPS) using extracted test-split frames.\n",
+                "- **Trajectory Conditioning Protocol**: Evaluated with Constant Velocity (CV)-derived motion bucket conditioning (smoke-test protocol; training donor database `train_trajectories.jsonl` is not downloaded in this metadata split).\n",
+                "- **Validation Criteria**: Asserts all 15 denoising callbacks execute, measures pre-encoding consecutive frame L1 diffs, logs peak GPU memory and timing.\n",
+                "- **Strict Gate**: Halts the notebook immediately if model loading, step assertions, or video generation fail."
             ]
         },
         {
@@ -268,7 +289,8 @@ def create_kaggle_notebook(output_path: Path):
             "outputs": [],
             "source": [
                 "# Run genuine pretrained SVD single-camera inference on 1 T4 GPU\n",
-                "# Uses test scenario 0000000 (extracted in Step 4) and metadata from history.jsonl (Step 3).\n",
+                "# Uses test scenario 0000000 (extracted in Step 4) and past kinematics from history.jsonl (Step 3).\n",
+                "# Evaluates with CV-derived motion bucket conditioning (smoke-test protocol).\n",
                 "# Halts notebook execution immediately if SVD model loading, callback assertions, or video generation fail.\n",
                 "import subprocess\n",
                 "import sys\n",

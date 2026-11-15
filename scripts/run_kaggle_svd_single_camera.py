@@ -309,19 +309,25 @@ def main() -> int:
     else:
         knn_planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=None)
 
-    # Determine planner method
+    # Determine planner method and motion bucket origin
     past_arr = np.asarray(past_pts, dtype=float)
     query_kin = knn_trajectory._extract_past_kinematics(past_arr)
     speed0 = query_kin["speed0"]
     if speed0 < 0.2:
         planner_method = "Constant Velocity (vehicle stationary or near-stop, speed < 0.2 m/s)"
+        motion_bucket_source = "CV_DERIVED (stationary vehicle)"
+        planner_used_knn = False
     elif num_donors > 0:
         planner_method = f"kNN Trajectory Retrieval + CV Blend ({num_donors} training donors available)"
+        motion_bucket_source = "KNN_DERIVED"
+        planner_used_knn = True
     else:
-        planner_method = "Constant Velocity (no donor database provided)"
+        planner_method = "Constant Velocity (CV fallback: 0 training donors loaded from donor file)"
+        motion_bucket_source = "CV_DERIVED"
+        planner_used_knn = False
 
-    plan_knn = knn_planner.plan(args.scenario_id, past_pts, instruction, scenario_type=stype)
-    pts = np.asarray(plan_knn, dtype=float)
+    plan_traj = knn_planner.plan(args.scenario_id, past_pts, instruction, scenario_type=stype)
+    pts = np.asarray(plan_traj, dtype=float)
     total_dist = float(np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1))) if len(pts) > 1 else 0.0
     mean_speed = total_dist / (len(pts) * spec.WAYPOINT_STEP_S)
     motion_bucket = int(np.clip(10 + mean_speed * 12.0, 1, 255))
@@ -329,6 +335,9 @@ def main() -> int:
     print(f"History verification: {len(past_pts)} past points loaded for scenario {args.scenario_id}")
     print(f"Donor database:       {num_donors} training donor trajectories loaded from '{donor_path}'")
     print(f"Planner method:       {planner_method}")
+    print(f"Motion bucket source: {motion_bucket_source} (derived from speed={mean_speed:.2f} m/s -> bucket={motion_bucket})")
+    if not planner_used_knn:
+        print("NOTICE: SVD smoke-test is evaluated with CV-derived trajectory conditioning (training donors not loaded in this milestone).")
     print(f"Driving instruction:  '{instruction}' (scenario_type: '{stype}')")
     print(f"Planned trajectory:   length={total_dist:.2f}m | avg_speed={mean_speed:.2f}m/s | SVD motion_bucket={motion_bucket}")
 
@@ -481,13 +490,15 @@ def main() -> int:
             "history_file": str(history_file),
             "history_points_count": len(past_pts),
             "donor_file": str(donor_path) if donor_path else None,
-            "donors_count": num_donors,
+            "training_donors_loaded": num_donors,
+            "planner_used_knn": planner_used_knn,
             "planner_method": planner_method,
+            "motion_bucket_source": motion_bucket_source,
+            "motion_bucket_id": motion_bucket,
             "driving_instruction": instruction,
             "scenario_type": stype,
             "trajectory_length_m": round(total_dist, 2),
             "mean_speed_mps": round(mean_speed, 2),
-            "motion_bucket_id": motion_bucket,
         },
         "inference_parameters": {
             "num_frames": spec.FRAME_COUNT,

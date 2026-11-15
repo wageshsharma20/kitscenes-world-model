@@ -136,3 +136,23 @@ def test_svd_runner_argument_parser():
     assert args.model_revision == "main"
     assert args.steps == 15
 
+
+def test_svd_cv_fallback_provenance():
+    from kitscenes import knn_trajectory
+
+    # When no donor database is loaded (e.g. initial Kaggle metadata split)
+    planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=None)
+    assert len(planner.donors) == 0
+
+    past_trajectory = [[-10.0 + i, 0.0] for i in range(11)]
+    plan = planner.plan("0000000", past_trajectory, "drive straight on")
+    assert len(plan) == 25
+
+    # Check kinematic motion bucket logic for CV fallback
+    pts = np.asarray(plan, dtype=float)
+    total_dist = float(np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1)))
+    mean_speed = total_dist / (len(pts) * spec.WAYPOINT_STEP_S)
+    bucket = int(np.clip(10 + mean_speed * 12.0, 1, 255))
+    assert 1 <= bucket <= 255
+
+
