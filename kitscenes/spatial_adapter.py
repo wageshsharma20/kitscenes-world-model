@@ -440,6 +440,8 @@ class SpatialConditionedSVDModel(nn.Module):
         spatial_masks: Optional[torch.Tensor] = None,
         timesteps: Optional[torch.Tensor] = None,
         noise: Optional[torch.Tensor] = None,
+        encoder_hidden_states: Optional[torch.Tensor] = None,
+        added_time_ids: Optional[torch.Tensor] = None,
         loss_type: str = "latent_mse",
     ) -> Tuple[torch.Tensor, Dict[str, Any]]:
         """Compute training loss between model output and target future latents.
@@ -450,6 +452,8 @@ class SpatialConditionedSVDModel(nn.Module):
             spatial_masks: Optional conditioning masks [B, T, 1, H, W].
             timesteps: Diffusion timesteps tensor.
             noise: Injected Gaussian noise (sampled if None).
+            encoder_hidden_states: Optional image embedding tensor [B, 1, 1024].
+            added_time_ids: Optional micro-conditioning IDs [B, 3].
             loss_type: "latent_mse" (denoised latent vs target) or "noise_mse" (predicted noise vs epsilon).
 
         Returns:
@@ -458,9 +462,11 @@ class SpatialConditionedSVDModel(nn.Module):
         b, t, c, h_lat, w_lat = target_latents.shape
         device = target_latents.device
 
-        # Expand initial image latents across frames if [B, 4, H_lat, W_lat]
+        # Expand initial image latents across frames if [B, 4, H_lat, W_lat] or [B, 1, 4, H_lat, W_lat]
         if initial_image_latents.ndim == 4:
             cond_latents = initial_image_latents.unsqueeze(1).repeat(1, t, 1, 1, 1)
+        elif initial_image_latents.shape[1] == 1 and t > 1:
+            cond_latents = initial_image_latents.repeat(1, t, 1, 1, 1)
         else:
             cond_latents = initial_image_latents
 
@@ -486,8 +492,25 @@ class SpatialConditionedSVDModel(nn.Module):
         # Concatenate noisy latents and initial image conditioning -> [B, T, 8, H_lat, W_lat]
         unet_input = torch.cat([conditioned_noisy, cond_latents], dim=2)
 
-        # UNet forward pass
-        unet_out = self.unet(unet_input, timestep=t_steps)
+        # UNet forward pass (supports both UNetSpatioTemporalConditionModel and MockSVDUNet)
+        unet_kwargs = {}
+        if encoder_hidden_states is not None:
+            unet_kwargs["encoder_hidden_states"] = encoder_hidden_states
+        elif hasattr(self.unet, "config") and getattr(self.unet.config, "cross_attention_dim", None):
+            cross_dim = getattr(self.unet.config, "cross_attention_dim", 1024)
+            unet_kwargs["encoder_hidden_states"] = torch.zeros(b, 1, cross_dim, device=device, dtype=unet_input.dtype)
+
+        if added_time_ids is not None:
+            unet_kwargs["added_time_ids"] = added_time_ids
+        elif hasattr(self.unet, "config") and getattr(self.unet.config, "addition_time_embed_dim", None):
+            unet_kwargs["added_time_ids"] = torch.tensor([[5.0, 127.0, 0.0]], device=device, dtype=unet_input.dtype).repeat(b, 1)
+
+        try:
+            unet_out = self.unet(unet_input, timestep=t_steps, **unet_kwargs)
+        except TypeError:
+            # Fallback if UNet does not accept cross-attention / time IDs kwargs
+            unet_out = self.unet(unet_input, timestep=t_steps)
+
         pred_noise = unet_out.sample if hasattr(unet_out, "sample") else unet_out
 
         # Reconstructed / denoised latent: z_hat_0 = (z_t - sqrt(1-alpha)*pred) / sqrt(alpha)

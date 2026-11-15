@@ -9,6 +9,8 @@ renders/
 benchmark_renders/
 submissions/
 data/
+models/
+*.pt
 *.parquet
 *.zip
 *.jsonl
