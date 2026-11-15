@@ -1,0 +1,92 @@
+{
+  "execution_status": "SUCCESSFUL_PRETRAINED_INFERENCE",
+  "scenario_id": "0000000",
+  "camera": "front",
+  "software_environment": {
+    "git_commit": "fa9fabf4f535fcb2ee695b5c91232601dd2ed97f",
+    "diffusers_version": "0.42.0",
+    "torch_version": "2.11.0+cu130",
+    "transformers_version": "5.20.2",
+    "cuda_version": "13.0",
+    "model_id": "stabilityai/stable-video-diffusion-img2vid-xt",
+    "model_revision": "main",
+    "resolved_commit_hash": "main"
+  },
+  "hardware": {
+    "device": "cuda",
+    "gpu_name": "Tesla T4",
+    "total_vram_mb": 14911.69,
+    "compute_capability": "7.5",
+    "cuda_version": "13.0"
+  },
+  "trajectory_provenance": {
+    "history_file": "/kaggle/working/data/history.jsonl",
+    "history_points_count": 21,
+    "donor_file": "/kaggle/working/data/train_trajectories.jsonl",
+    "training_donors_loaded": 0,
+    "planner_used_knn": false,
+    "planner_method": "Constant Velocity (CV fallback: 0 training donors loaded from donor file)",
+    "motion_bucket_source": "CV_DERIVED",
+    "motion_bucket_id": 73,
+    "driving_instruction": "drive straight on",
+    "scenario_type": "0 specifically selected",
+    "trajectory_length_m": 26.35,
+    "mean_speed_mps": 5.27
+  },
+  "inference_parameters": {
+    "num_frames": 25,
+    "fps_micro_conditioning": 5,
+    "sampling_resolution": "1024x576",
+    "aspect_ratio_adaptation": "888x576 padded to 1024x576, inverse cropped at (68, 0, 956, 576)",
+    "output_resolution": "876x568",
+    "denoising_steps_requested": 15,
+    "denoising_steps_executed": 15,
+    "decode_chunk_size": 2,
+    "precision": "torch.float16",
+    "seed": 42
+  },
+  "real_hardware_measurements": {
+    "model_initialization_s": 27.42,
+    "inference_duration_s": 385.06,
+    "sec_per_frame": 15.402,
+    "peak_vram_allocated_mb": 8716.94,
+    "peak_vram_reserved_mb": 13218.0,
+    "cuda_synchronized": true
+  },
+  "raw_uncompressed_temporal_metrics": {
+    "mean_consecutive_step_diff_l1": 3.9455,
+    "total_drift_l1_from_t0": 18.6215,
+    "temporal_std": 8.776,
+    "consecutive_step_diffs": [
+      4.3341,
+      6.3298,
+      6.5438,
+      4.1319,
+      3.9181,
+      3.9482,
+      3.8765,
+      3.9548,
+      4.0965,
+      4.0703,
+      3.9744,
+      3.8116,
+      3.4338,
+      3.478,
+      3.1594,
+      3.2313,
+      2.9985,
+      3.2569,
+      3.157,
+      3.4424,
+      3.3225,
+      3.8721,
+      3.7403,
+      4.61
+    ]
+  },
+  "empirical_video_metrics": {
+    "local_pq_proxy": 52.68,
+    "official_qalign_pq": "Requires private competition evaluation server"
+  },
+  "output_video_path": "renders/verify_single_camera/svd_genuine_0000000_front_steps15.mp4"
+}
