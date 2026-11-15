@@ -146,38 +146,147 @@ def test_option_a_static_route_mask_shapes_and_values():
 
 
 def test_option_b_time_indexed_spatial_masks_shapes_and_progression():
-    """Verify Option B (Time-Indexed Spatial Masks) shape contract [25, 1, 568, 876] and dynamic progression."""
+    """Verify Option B.1 (Initial-Frame) and Option B.2 (Future-Camera-Frame) contracts."""
     engine = camera_projection.CameraProjectionEngine()
 
-    # Straight trajectory moving away from car within camera visible ground field of view (X >= 5.0m)
     straight_waypoints = np.column_stack([
         np.linspace(5.0, 50.0, 25),
         np.zeros(25),
     ])
 
-    # 1. Single camera time-indexed masks -> (25, 1, 568, 876)
-    time_masks = engine.render_time_indexed_spatial_masks("front", straight_waypoints, num_frames=25, channel_dim=True)
-    assert time_masks.shape == (25, 1, spec.HEIGHT, spec.WIDTH)
-    assert time_masks.dtype == np.float32
-    assert 0.0 <= time_masks.min() and time_masks.max() <= 1.0
+    # 1. Option B.1: Initial-Frame Temporal Masks (viewed from stationary t=0 mount)
+    init_masks = engine.render_initial_frame_temporal_masks("front", straight_waypoints, num_frames=25, channel_dim=True)
+    assert init_masks.shape == (25, 1, spec.HEIGHT, spec.WIDTH)
+    assert init_masks.dtype == np.float32
+    assert 0.0 <= init_masks.min() and init_masks.max() <= 1.0
 
-    # 2. Check temporal progression: active beacon moves toward the horizon (v decreases)
-    # At frame 0 (x=3.0m, close to bumper), beacon is low on image canvas (large v)
-    # At frame 24 (x=50.0m, far ahead), beacon is near horizon cy (smaller v)
-    beacon_v_0 = np.argmax(np.max(time_masks[0, 0], axis=1))  # row of peak intensity at t=0
-    beacon_v_24 = np.argmax(np.max(time_masks[24, 0], axis=1))  # row of peak intensity at t=24
-    assert beacon_v_0 > beacon_v_24, f"Beacon should move upward toward horizon: v_0={beacon_v_0}, v_24={beacon_v_24}"
+    # In initial frame, the beacon at waypoint P(t) moves forward toward horizon (v decreases)
+    beacon_v_0 = np.argmax(np.max(init_masks[0, 0], axis=1))
+    beacon_v_24 = np.argmax(np.max(init_masks[24, 0], axis=1))
+    assert beacon_v_0 > beacon_v_24, f"Initial frame beacon must move toward horizon: v_0={beacon_v_0}, v_24={beacon_v_24}"
 
-    # 3. All 6 cameras time-indexed masks -> Dict[str, (25, 1, 568, 876)]
-    multi_cam_time = engine.render_time_indexed_spatial_masks_all_cameras(straight_waypoints, num_frames=25)
-    assert len(multi_cam_time) == 6
+    # 2. Option B.2: Future-Camera-Frame Masks (ego-motion aligned)
+    future_masks = engine.render_future_camera_spatial_masks("front", straight_waypoints, num_frames=25, channel_dim=True)
+    assert future_masks.shape == (25, 1, spec.HEIGHT, spec.WIDTH)
+    assert future_masks.dtype == np.float32
+    assert 0.0 <= future_masks.min() and future_masks.max() <= 1.0
+
+    # 3. All 6 cameras multi-cam dictionary
+    multi_cam_future = engine.render_time_indexed_spatial_masks_all_cameras(straight_waypoints, num_frames=25, mode="future_camera")
+    assert len(multi_cam_future) == 6
     for cam in spec.CAMERAS:
-        assert cam in multi_cam_time
-        assert multi_cam_time[cam].shape == (25, 1, spec.HEIGHT, spec.WIDTH)
+        assert cam in multi_cam_future
+        assert multi_cam_future[cam].shape == (25, 1, spec.HEIGHT, spec.WIDTH)
 
     # 4. Batch time-indexed rendering -> (B, 25, 1, 568, 876)
     batch_trajs = [straight_waypoints, straight_waypoints * 0.9]
-    batch_time = engine.batch_time_indexed_spatial_masks(batch_trajs, camera_name="front", num_frames=25)
+    batch_time = engine.batch_time_indexed_spatial_masks(batch_trajs, camera_name="front", num_frames=25, mode="future_camera")
     assert batch_time.shape == (2, 25, 1, spec.HEIGHT, spec.WIDTH)
     assert batch_time.dtype == np.float32
+
+
+def test_3d_near_plane_clipping_cases():
+    """Verify robust 3D line segment clipping against near plane z >= near_clip."""
+    # Case 1: Both endpoints behind near plane (near_clip = 0.5m)
+    p1 = np.array([0.0, 0.0, -5.0])
+    p2 = np.array([0.0, 0.0, -0.5])
+    assert camera_projection.clip_segment_3d_near_plane(p1, p2, near_clip_m=0.5) is None
+
+    # Case 2: Both endpoints in front of near plane
+    p1 = np.array([1.0, 2.0, 3.0])
+    p2 = np.array([4.0, 5.0, 6.0])
+    res = camera_projection.clip_segment_3d_near_plane(p1, p2, near_clip_m=0.5)
+    assert res is not None
+    assert np.allclose(res[0], p1) and np.allclose(res[1], p2)
+
+    # Case 3: One endpoint behind, one in front
+    p1 = np.array([0.0, 0.0, -2.0])
+    p2 = np.array([0.0, 0.0, 10.0])
+    res = camera_projection.clip_segment_3d_near_plane(p1, p2, near_clip_m=0.5)
+    assert res is not None
+    p1_clipped, p2_clipped = res
+    assert np.isclose(p1_clipped[2], 0.5), f"Expected z=0.5, got {p1_clipped[2]}"
+    assert np.allclose(p2_clipped, p2)
+
+    # Case 4: Endpoints exactly on near plane
+    p1 = np.array([-1.0, 0.0, 0.5])
+    p2 = np.array([1.0, 0.0, 0.5])
+    res = camera_projection.clip_segment_3d_near_plane(p1, p2, near_clip_m=0.5)
+    assert res is not None
+    assert np.isclose(res[0][2], 0.5) and np.isclose(res[1][2], 0.5)
+
+
+def test_2d_canvas_clipping_boundaries():
+    """Verify Cohen-Sutherland 2D clipping against canvas [0, W-1] x [0, H-1]."""
+    w, h = spec.WIDTH, spec.HEIGHT  # 876, 568
+
+    # 1. Segment crossing left boundary (u0 < 0)
+    res = camera_projection.clip_segment_2d_canvas(-100.0, 300.0, 400.0, 300.0, width=w, height=h)
+    assert res is not None
+    (u0_c, v0_c), (u1_c, v1_c) = res
+    assert np.isclose(u0_c, 0.0) and np.isclose(v0_c, 300.0)
+    assert np.isclose(u1_c, 400.0) and np.isclose(v1_c, 300.0)
+
+    # 2. Segment crossing right boundary (u1 > W-1)
+    res = camera_projection.clip_segment_2d_canvas(400.0, 300.0, 1200.0, 300.0, width=w, height=h)
+    assert res is not None
+    (u0_c, v0_c), (u1_c, v1_c) = res
+    assert np.isclose(u0_c, 400.0)
+    assert np.isclose(u1_c, float(w - 1))
+
+    # 3. Segment crossing top boundary (v0 < 0)
+    res = camera_projection.clip_segment_2d_canvas(400.0, -50.0, 400.0, 200.0, width=w, height=h)
+    assert res is not None
+    (u0_c, v0_c), (u1_c, v1_c) = res
+    assert np.isclose(v0_c, 0.0)
+
+    # 4. Segment crossing bottom boundary (v1 > H-1)
+    res = camera_projection.clip_segment_2d_canvas(400.0, 300.0, 400.0, 800.0, width=w, height=h)
+    assert res is not None
+    (u0_c, v0_c), (u1_c, v1_c) = res
+    assert np.isclose(v1_c, float(h - 1))
+
+    # 5. Segment entirely outside canvas
+    res = camera_projection.clip_segment_2d_canvas(-200.0, -100.0, -50.0, -20.0, width=w, height=h)
+    assert res is None
+
+
+def test_rasterizer_zero_spurious_streaks():
+    """Verify rasterizer does not produce streak artifacts when segment crosses behind vehicle."""
+    engine = camera_projection.CameraProjectionEngine()
+
+    # Trajectory with one point behind vehicle bumper (-10m) and one far ahead (30m)
+    straddling_waypoints = np.array([
+        [-10.0, 0.0],
+        [30.0, 0.0],
+    ])
+
+    mask = engine.render_spatial_control_mask("front", straddling_waypoints)
+
+    assert mask.shape == (spec.HEIGHT, spec.WIDTH)
+    # Sky region must remain strictly zero
+    sky_region = mask[:int(spec.HEIGHT * 0.35), :]
+    assert np.all(sky_region == 0.0), "Sky region must have zero mask intensity even for straddling segments"
+    # Road region should have valid rasterized ribbon
+    road_region = mask[int(spec.HEIGHT * 0.5):, :]
+    assert np.sum(road_region > 0.1) > 0, "Road region must contain projected ribbon"
+
+
+def test_provisional_rig_attributes():
+    """Verify camera rig exposes provisional metadata and supports 6-DoF pitch/roll."""
+    rig = camera_projection.CameraRig(
+        pitch_deg={"front": 2.0},
+        roll_deg={"front": -1.0},
+        is_provisional=True,
+    )
+    assert rig.is_provisional is True
+    cam_front = rig["front"]
+    assert cam_front.is_provisional is True
+    assert cam_front.pitch_deg == 2.0
+    assert cam_front.roll_deg == -1.0
+    # Rotation matrix must be strictly orthogonal with det = +1
+    R = cam_front.rotation_matrix_body_to_cam
+    assert np.isclose(np.linalg.det(R), 1.0, atol=1e-5)
+    assert np.allclose(R @ R.T, np.eye(3), atol=1e-5)
+
 

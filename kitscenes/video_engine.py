@@ -29,8 +29,13 @@ import numpy as np
 from . import archive, media, spec
 
 
-# Camera angular offsets in degrees and radians relative to vehicle forward heading (+X).
-CAMERA_YAW_DEG: Dict[str, float] = {
+# Provisional nominal surround camera rig parameters.
+# IMPORTANT: The official KITScenes-LongTail dataset files do not publish explicit
+# extrinsic or intrinsic calibration matrices. The parameters below represent a
+# provisional nominal sensor rig model (70 deg HFOV, standard surround yaw offsets,
+# and wheelbase-scaled mounting positions). They are subject to uncertainty and should
+# not be characterized as certified exact KITScenes calibration.
+PROVISIONAL_CAMERA_YAW_DEG: Dict[str, float] = {
     "front": 0.0,
     "front_left": 60.0,
     "front_right": -60.0,
@@ -38,14 +43,16 @@ CAMERA_YAW_DEG: Dict[str, float] = {
     "rear_left": 120.0,
     "rear_right": -120.0,
 }
+CAMERA_YAW_DEG = PROVISIONAL_CAMERA_YAW_DEG  # Backward-compatible alias
 
-CAMERA_YAW_RAD: Dict[str, float] = {
-    cam: math.radians(deg) for cam, deg in CAMERA_YAW_DEG.items()
+PROVISIONAL_CAMERA_YAW_RAD: Dict[str, float] = {
+    cam: math.radians(deg) for cam, deg in PROVISIONAL_CAMERA_YAW_DEG.items()
 }
+CAMERA_YAW_RAD = PROVISIONAL_CAMERA_YAW_RAD
 
-# Standard sensor rig positions relative to vehicle center [x, y, z] in meters.
+# Provisional sensor rig positions relative to vehicle center [x, y, z] in meters.
 # x: forward, y: left, z: up.
-DEFAULT_CAMERA_POSITIONS: Dict[str, Tuple[float, float, float]] = {
+PROVISIONAL_CAMERA_POSITIONS: Dict[str, Tuple[float, float, float]] = {
     "front": (1.50, 0.00, 1.40),
     "front_left": (1.20, 0.60, 1.40),
     "front_right": (1.20, -0.60, 1.40),
@@ -53,6 +60,7 @@ DEFAULT_CAMERA_POSITIONS: Dict[str, Tuple[float, float, float]] = {
     "rear_left": (-0.50, 0.60, 1.40),
     "rear_right": (-0.50, -0.60, 1.40),
 }
+DEFAULT_CAMERA_POSITIONS = PROVISIONAL_CAMERA_POSITIONS  # Backward-compatible alias
 
 
 def wrap_angle(angle: float) -> float:
@@ -67,14 +75,17 @@ def derive_motion_bucket(speed: float) -> int:
 
 @dataclass(frozen=True)
 class CameraPose:
-    """Pose and intrinsic parameters of a single camera in the rig."""
+    """Pose and intrinsic parameters of a single camera in the rig (nominal/provisional model)."""
     name: str
     yaw_deg: float
     yaw_rad: float
     position_m: Tuple[float, float, float]
+    pitch_deg: float = 0.0
+    roll_deg: float = 0.0
     width: int = spec.WIDTH
     height: int = spec.HEIGHT
     hfov_deg: float = 70.0
+    is_provisional: bool = True
 
     @property
     def fx(self) -> float:
@@ -105,24 +116,47 @@ class CameraPose:
 
         Vehicle body: X=forward, Y=left, Z=up.
         Camera frame: x=right, y=down, z=forward along optical axis.
+        Supports full 6-DoF orientation with yaw, pitch, and roll.
         """
-        th = self.yaw_rad
-        cos_th = math.cos(th)
-        sin_th = math.sin(th)
-        # R_yaw: vehicle body to vehicle yawed by camera angle
-        # Optical axis = yawed X; camera right = - yawed Y; camera down = - Z
+        th_z = self.yaw_rad
+        th_y = math.radians(self.pitch_deg)
+        th_x = math.radians(self.roll_deg)
+
+        # Rotation matrix mapping camera-aligned body axes into vehicle body frame:
+        # R = R_z(yaw) @ R_y(pitch) @ R_x(roll)
+        cz, sz = math.cos(th_z), math.sin(th_z)
+        cy, sy = math.cos(th_y), math.sin(th_y)
+        cx, sx = math.cos(th_x), math.sin(th_x)
+
+        r11 = cz * cy
+        r12 = cz * sy * sx - sz * cx
+        r13 = cz * sy * cx + sz * sx
+
+        r21 = sz * cy
+        r22 = sz * sy * sx + cz * cx
+        r23 = sz * sy * cx - cz * sx
+
+        r31 = -sy
+        r32 = cy * sx
+        r33 = cy * cx
+
+        # In vehicle body coordinates, the camera frame unit vectors are:
+        # Optical forward = R @ [1, 0, 0]^T = [r11, r21, r31]
+        # Camera right    = R @ [0, -1, 0]^T = [-r12, -r22, -r32]
+        # Camera down     = R @ [0, 0, -1]^T = [-r13, -r23, -r33]
+        # Therefore, the projection from vehicle body to camera coordinates is:
         return np.array(
             [
-                [sin_th, -cos_th, 0.0],
-                [0.0, 0.0, -1.0],
-                [cos_th, sin_th, 0.0],
+                [-r12, -r22, -r32],  # row 0: right
+                [-r13, -r23, -r33],  # row 1: down
+                [r11, r21, r31],    # row 2: optical axis forward
             ],
             dtype=np.float64,
         )
 
 
 class CameraRig:
-    """Manages the 6-camera surround rig conforming to KITScenes specifications."""
+    """Manages the 6-camera surround rig conforming to KITScenes specifications (provisional nominal model)."""
 
     def __init__(
         self,
@@ -130,21 +164,30 @@ class CameraRig:
         height: int = spec.HEIGHT,
         hfov_deg: float = 70.0,
         positions: Optional[Dict[str, Tuple[float, float, float]]] = None,
+        pitch_deg: Optional[Dict[str, float]] = None,
+        roll_deg: Optional[Dict[str, float]] = None,
+        is_provisional: bool = True,
     ):
         self.width = width
         self.height = height
         self.hfov_deg = hfov_deg
-        pos_dict = positions or DEFAULT_CAMERA_POSITIONS
+        self.is_provisional = is_provisional
+        pos_dict = positions or PROVISIONAL_CAMERA_POSITIONS
+        pitch_dict = pitch_deg or {c: 0.0 for c in spec.CAMERAS}
+        roll_dict = roll_deg or {c: 0.0 for c in spec.CAMERAS}
 
         self.cameras: Dict[str, CameraPose] = {
             cam: CameraPose(
                 name=cam,
-                yaw_deg=CAMERA_YAW_DEG[cam],
-                yaw_rad=CAMERA_YAW_RAD[cam],
+                yaw_deg=PROVISIONAL_CAMERA_YAW_DEG[cam],
+                yaw_rad=PROVISIONAL_CAMERA_YAW_RAD[cam],
                 position_m=pos_dict[cam],
+                pitch_deg=pitch_dict.get(cam, 0.0),
+                roll_deg=roll_dict.get(cam, 0.0),
                 width=width,
                 height=height,
                 hfov_deg=hfov_deg,
+                is_provisional=is_provisional,
             )
             for cam in spec.CAMERAS
         }

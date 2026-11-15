@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 import torch
+from PIL import Image
 
 from kitscenes import dataset, spec
 
@@ -87,4 +88,81 @@ def test_dataset_tensor_shapes_and_kinematics(tmp_path):
     # Option A (6 cameras): (6, 1, 568, 876)
     assert sample_all["static_route_mask"].shape == (6, 1, spec.HEIGHT, spec.WIDTH)
     # Option B (6 cameras): (6, 25, 1, 568, 876)
-    assert sample_all["time_indexed_masks"].shape == (6, 25, 1, spec.HEIGHT, spec.WIDTH)
+    assert sample_all["future_camera_spatial_masks"].shape == (6, 25, 1, spec.HEIGHT, spec.WIDTH)
+    assert sample_all["initial_frame_temporal_masks"].shape == (6, 25, 1, spec.HEIGHT, spec.WIDTH)
+
+
+def test_future_video_loading_and_strict_assertion(tmp_path):
+    """Verify future video target loading, shape verification, and failure on missing video."""
+    # Create synthetic trajectory record
+    sample_record = {
+        "scenario_id": "0000405",
+        "driving_instruction": "drive straight on",
+        "scenario_type": "0 specifically selected",
+        "past": [[-10.0 + i * 0.5, 0.0] for i in range(21)],
+        "expert_like": [[float(i), 0.0] for i in range(1, 26)],
+    }
+    jsonl_path = tmp_path / "train_with_video.jsonl"
+    with open(jsonl_path, "w") as f:
+        f.write(json.dumps(sample_record) + "\n")
+
+    video_dir = tmp_path / "future_videos"
+    scene_dir = video_dir / "0000405" / "front"
+    scene_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Create 25 synthetic frame images
+    for i in range(25):
+        im = Image.new("RGB", (64, 64), color=(i * 10, 100, 200))
+        im.save(scene_dir / f"frame_{i:02d}.jpg")
+
+    # Load dataset with future_video_dir
+    ds = dataset.SpatialConditionedWorldModelDataset(
+        trajectories_file=jsonl_path,
+        future_video_dir=video_dir,
+        camera_name="front",
+        split="train",
+        require_future_video=True,
+    )
+    sample = ds[0]
+
+    assert sample["has_future_video"] is True
+    assert sample["future_video"] is not None
+    assert sample["future_video"].shape == (25, 3, spec.HEIGHT, spec.WIDTH)
+    assert sample["future_video"].dtype == torch.float32
+
+    # 2. Strict assertion: when future video is missing and require_future_video=True -> raises FileNotFoundError
+    ds_missing = dataset.SpatialConditionedWorldModelDataset(
+        trajectories_file=jsonl_path,
+        future_video_dir=tmp_path / "non_existent_videos",
+        camera_name="front",
+        split="train",
+        require_future_video=True,
+    )
+    with pytest.raises(FileNotFoundError, match="Missing required future ground-truth video target"):
+        _ = ds_missing[0]
+
+
+def test_dataset_handles_variable_length_trajectories(tmp_path: Path):
+    """Test that trajectories with fewer than 25 points (e.g. 18 points) are smoothly interpolated."""
+    sample_record = {
+        "scenario_id": "0000762",
+        "driving_instruction": "turn left",
+        "scenario_type": "4 intersection",
+        "past": [[-10.0 + i * 0.5, 0.0] for i in range(21)],
+        "expert_like": [[float(i), 0.0] for i in range(1, 19)],  # 18 points
+    }
+    jsonl_path = tmp_path / "short_traj.jsonl"
+    with open(jsonl_path, "w") as f:
+        f.write(json.dumps(sample_record) + "\n")
+
+    ds = dataset.SpatialConditionedWorldModelDataset(
+        trajectories_file=jsonl_path,
+        camera_name="front",
+        split="train",
+    )
+    sample = ds[0]
+    assert sample["gt_trajectory"].shape == (25, 2)
+    assert sample["initial_frame_temporal_masks"].shape == (25, 1, spec.HEIGHT, spec.WIDTH)
+    assert sample["future_camera_spatial_masks"].shape == (25, 1, spec.HEIGHT, spec.WIDTH)
+
+
