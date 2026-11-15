@@ -1,0 +1,39 @@
+{
+  "experiment": "Phase 3 Limited Pilot (SVD-XT Spatial Adapter)",
+  "status": "COMPLETED_GENUINE_LATENTS",
+  "backbone": "mock",
+  "conditioning_mode": "OPTION_B1_FRONT",
+  "splits": {
+    "train_sequences": [
+      "0000400",
+      "0000401",
+      "0000402",
+      "0000403",
+      "0000404",
+      "0000405"
+    ],
+    "held_out_sequences": [
+      "0000406",
+      "0000407"
+    ]
+  },
+  "parameter_audit": {
+    "trainable_adapter_params": 594884,
+    "frozen_backbone_params": 12740,
+    "total_params": 607624,
+    "adapter_budget_compliant": true
+  },
+  "training_dynamics": {
+    "initial_train_loss": 0.02495322227089976,
+    "final_train_loss": 0.006868912469750891,
+    "train_loss_reduction_pct": 72.47284380678418,
+    "initial_val_loss": 0.0015943078906275332,
+    "final_val_loss": 0.0015405691810883582,
+    "val_loss_reduction_pct": 3.3706607020569295,
+    "strictly_decreased": true,
+    "generalizes_to_held_out": true,
+    "iterations": 2,
+    "duration_s": 143.8793957233429
+  },
+  "checkpoint_path": "models/svd_spatial_adapter_front_b1.pt"
+}

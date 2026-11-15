@@ -2,18 +2,16 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-import pytest
 import torch
-import torch.nn as nn
 
 from kitscenes import spec
 from kitscenes.spatial_adapter import (
     MockSVDUNet,
     SpatialAdapterConfig,
     SpatialConditionedSVDModel,
-    ZeroConv2d,
     ZeroConv1d,
+    ZeroConv2d,
+    create_default_euler_scheduler,
 )
 
 
@@ -81,7 +79,7 @@ def test_strict_gradient_isolation():
 
     # Spatial adapter must receive gradients
     has_grad = False
-    for name, param in model.spatial_adapter.named_parameters():
+    for _name, param in model.spatial_adapter.named_parameters():
         if param.requires_grad and param.grad is not None:
             if param.grad.abs().sum() > 0:
                 has_grad = True
@@ -108,3 +106,129 @@ def test_zero_step_prior_preservation():
     diff = (conditioned - noisy_latents).abs().max().item()
 
     assert diff == 0.0, f"At step 0, conditioned latents must match unconditioned exactly! Diff: {diff}"
+
+
+def test_iterative_generation_from_pure_noise():
+    """Verify generate_iterative starts from pure Gaussian noise and runs Euler diffusion loop."""
+    unet = MockSVDUNet(in_channels=8, out_channels=4)
+    model = SpatialConditionedSVDModel(unet=unet)
+    scheduler = create_default_euler_scheduler()
+
+    b, t, c, h_lat, w_lat = 1, 25, 4, 72, 128
+    initial_latents = torch.randn(b, 1, c, h_lat, w_lat)
+    mask = torch.rand(b, t, 1, 568, 876)
+
+    # Pure Gaussian noise completely decoupled from ground-truth future latents
+    torch.manual_seed(42)
+    pure_noise = torch.randn(b, t, c, h_lat, w_lat)
+
+    # Baseline unconditioned iterative generation
+    gen_baseline = model.generate_iterative(
+        initial_image_latents=initial_latents,
+        spatial_masks=None,
+        scheduler=scheduler,
+        num_inference_steps=5,
+        num_frames=t,
+        noise=pure_noise.clone(),
+    )
+
+    # Conditioned iterative generation
+    gen_cond = model.generate_iterative(
+        initial_image_latents=initial_latents,
+        spatial_masks=mask,
+        scheduler=scheduler,
+        num_inference_steps=5,
+        num_frames=t,
+        noise=pure_noise.clone(),
+    )
+
+    assert gen_baseline.shape == (b, t, c, h_lat, w_lat)
+    assert gen_cond.shape == (b, t, c, h_lat, w_lat)
+    assert torch.isfinite(gen_baseline).all(), "Baseline generated latents must be finite!"
+    assert torch.isfinite(gen_cond).all(), "Conditioned generated latents must be finite!"
+    # Verify decoupled: output is not identical to input pure noise
+    assert not torch.allclose(gen_baseline, pure_noise)
+
+
+def test_unet_spatio_temporal_kwargs_construction_and_forward():
+    """Verify genuine UNet kwargs (encoder_hidden_states, added_time_ids) are properly passed."""
+    unet = MockSVDUNet(in_channels=8, out_channels=4)
+    model = SpatialConditionedSVDModel(unet=unet)
+
+    b, t, c, h_lat, w_lat = 1, 25, 4, 72, 128
+    target = torch.randn(b, t, c, h_lat, w_lat)
+    initial = torch.randn(b, 1, c, h_lat, w_lat)
+    mask = torch.rand(b, t, 1, 568, 876)
+
+    # Real CLIP embedding [B, 1, 1024] and micro-conditioning IDs [B, 3]
+    real_clip_embeds = torch.randn(b, 1, 1024)
+    fps_micro = float(spec.FPS - 1)  # fps - 1 = 4.0
+    motion_bucket = 127.0
+    aug_level = 0.0
+    real_added_time_ids = torch.tensor([[fps_micro, motion_bucket, aug_level]])
+
+    # Test in compute_latent_loss
+    loss, metrics = model.compute_latent_loss(
+        target_latents=target,
+        initial_image_latents=initial,
+        spatial_masks=mask,
+        timesteps=torch.tensor([500]),
+        encoder_hidden_states=real_clip_embeds,
+        added_time_ids=real_added_time_ids,
+        loss_type="latent_mse",
+    )
+    assert loss.item() >= 0.0
+    assert unet.last_forward_kwargs["encoder_hidden_states"] is real_clip_embeds
+    assert unet.last_forward_kwargs["added_time_ids"] is real_added_time_ids
+    assert unet.last_forward_kwargs["sample_shape"] == (b, t, 8, h_lat, w_lat)
+
+    # Test in generate_iterative
+    scheduler = create_default_euler_scheduler()
+    gen = model.generate_iterative(
+        initial_image_latents=initial,
+        spatial_masks=mask,
+        scheduler=scheduler,
+        num_inference_steps=3,
+        num_frames=t,
+        encoder_hidden_states=real_clip_embeds,
+        added_time_ids=real_added_time_ids,
+    )
+    assert gen.shape == (b, t, c, h_lat, w_lat)
+    assert unet.last_forward_kwargs["encoder_hidden_states"] is real_clip_embeds
+    assert unet.last_forward_kwargs["added_time_ids"] is real_added_time_ids
+
+
+def test_diffusion_timesteps_schedule_uniform_sampling():
+    """Verify diffusion noise schedule supports timesteps t ~ U(0, 1000) for v-prediction and eps."""
+    unet = MockSVDUNet(in_channels=8, out_channels=4)
+    model = SpatialConditionedSVDModel(unet=unet)
+
+    b, t, c, h_lat, w_lat = 2, 25, 4, 72, 128
+    target = torch.randn(b, t, c, h_lat, w_lat)
+    initial = torch.randn(b, 1, c, h_lat, w_lat)
+
+    # Sample random timesteps t ~ U(0, 1000)
+    torch.manual_seed(123)
+    t_uniform = torch.randint(0, 1000, (b,))
+
+    # Test v-prediction
+    loss_v, metrics_v = model.compute_latent_loss(
+        target_latents=target,
+        initial_image_latents=initial,
+        timesteps=t_uniform,
+        loss_type="v_mse",
+        prediction_type="v_prediction",
+    )
+    assert torch.isfinite(loss_v)
+    assert metrics_v["prediction_type"] == "v_prediction"
+
+    # Test epsilon-prediction
+    loss_eps, metrics_eps = model.compute_latent_loss(
+        target_latents=target,
+        initial_image_latents=initial,
+        timesteps=t_uniform,
+        loss_type="noise_mse",
+        prediction_type="epsilon",
+    )
+    assert torch.isfinite(loss_eps)
+    assert metrics_eps["prediction_type"] == "epsilon"

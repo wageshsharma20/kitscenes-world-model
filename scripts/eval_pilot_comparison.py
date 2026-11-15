@@ -4,17 +4,20 @@
 Evaluates on the two held-out validation scenarios (0000406 and 0000407):
 - Identical initial conditioning frame (data/train_observed_t0/<sid>/front.jpg).
 - Identical random seeds (seed=42).
-- Identical initial noise tensors.
-- Identical scheduler timesteps and motion settings.
+- Identical initial Gaussian noise tensors z_T ~ N(0, I) (completely decoupled from future targets).
+- Identical scheduler timesteps and motion micro-conditioning settings.
 - Model A: Baseline Unmodified SVD-XT (frozen pretrained prior, no spatial adapter).
 - Model B: SVD-XT with Trained Spatial Adapter (Option B.1 front camera).
 
+Conditioning Source:
+- 'knn': Planned trajectory predicted by kNN retrieval from training donors.
+- 'oracle': Ground-truth expert_like trajectory.
+
 Metrics computed against genuine future video targets (data/train_future_videos/<sid>/):
 1. Pixel Fidelity: Frame-by-frame MSE, PSNR (dB), SSIM.
-2. Trajectory Adherence: Lateral Center-of-Mass motion drift vs planned trajectory path.
-3. Motion Steerability: Validates whether spatial conditioning physically steers generated video.
-4. Ego-Motion Coherence (EMC): Adjacent frame optical flow consistency.
-5. Perceptual Quality (PQ): Laplacian gradient sharpness proxy.
+2. Trajectory Adherence Proxy: motion_energy_lateral_com_drift (pixel difference centroid).
+3. Perceptual Quality Proxy: local_laplacian_sharpness_proxy.
+4. Temporal Coherence Proxy: local_farneback_optical_flow_magnitude_proxy.
 
 Exports:
 - Renders: renders/pilot_eval/<sid>_baseline.mp4 and <sid>_conditioned.mp4.
@@ -29,12 +32,11 @@ import math
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import cv2
 import numpy as np
 import torch
-import torch.nn.functional as F
 from PIL import Image
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -47,6 +49,7 @@ from kitscenes.spatial_adapter import (
     MockSVDUNet,
     SpatialAdapterConfig,
     SpatialConditionedSVDModel,
+    create_default_euler_scheduler,
 )
 from scripts.run_kaggle_svd_single_camera import (
     adapt_aspect_ratio_to_svd,
@@ -63,7 +66,6 @@ def compute_psnr(mse: float, max_val: float = 255.0) -> float:
 
 def compute_frame_ssim(img1: np.ndarray, img2: np.ndarray) -> float:
     """Compute mean Structural Similarity Index between two RGB images."""
-    # Convert to grayscale float
     g1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY).astype(np.float32)
     g2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY).astype(np.float32)
 
@@ -138,21 +140,94 @@ def save_video_mp4(frames: np.ndarray, output_path: Path, fps: float = 5.0) -> N
     out.release()
 
 
+def resolve_conditioning_trajectory(
+    scenario_id: str,
+    trajectories_file: Path,
+    conditioning_source: str = "knn",
+) -> Tuple[np.ndarray, str]:
+    """Resolve waypoints from kNN predicted trajectory or oracle ground-truth.
+
+    Args:
+        scenario_id: Target scenario identifier.
+        trajectories_file: Path to train_trajectories.jsonl or history file.
+        conditioning_source: 'knn' (retrieval-based prediction) or 'oracle' (ground-truth).
+
+    Returns:
+        Tuple of (waypoints_ego [25, 2], label_string).
+    """
+    if conditioning_source not in ("knn", "oracle"):
+        raise ValueError(f"conditioning_source must be 'knn' or 'oracle', got '{conditioning_source}'")
+
+    gt_traj = None
+    past_pts = None
+    instruction = "drive straight"
+    stype = "unknown"
+
+    if trajectories_file.exists():
+        with open(trajectories_file, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                if item.get("scenario_id") == scenario_id:
+                    if "past" in item:
+                        past_pts = np.asarray(item["past"], dtype=float)
+                    instruction = item.get("driving_instruction", instruction)
+                    stype = item.get("scenario_type", stype)
+                    pts = np.asarray(item.get("expert_like", []), dtype=float)
+                    if len(pts) >= spec.FRAME_COUNT:
+                        gt_traj = pts[:spec.FRAME_COUNT]
+                    break
+
+    if conditioning_source == "oracle":
+        if gt_traj is None:
+            gt_traj = np.column_stack([np.linspace(1.5, 30.0, spec.FRAME_COUNT), np.zeros(spec.FRAME_COUNT)])
+        return gt_traj, "Oracle Ground Truth (expert_like waypoints)"
+
+    # 'knn' conditioning source
+    from kitscenes import knn_trajectory
+
+    try:
+        donor_path = trajectories_file if trajectories_file.exists() else None
+        planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=donor_path)
+        if past_pts is None or len(past_pts) < 2:
+            past_pts = np.column_stack([np.linspace(-10.0, 0.0, 10), np.zeros(10)])
+
+        planned = planner.plan(
+            scenario_id=scenario_id,
+            past_trajectory=past_pts,
+            driving_instruction=instruction,
+            scenario_type=stype,
+        )
+        planned = np.asarray(planned, dtype=float)
+        if len(planned) >= spec.FRAME_COUNT:
+            planned = planned[:spec.FRAME_COUNT]
+        return planned, f"kNN Trajectory Retrieval ({len(planner.donors)} training donors)"
+    except Exception as exc:
+        fallback = np.column_stack([np.linspace(1.5, 30.0, spec.FRAME_COUNT), np.zeros(spec.FRAME_COUNT)])
+        return fallback, f"kNN Fallback (Kinematic Extrapolation: {exc})"
+
+
 def evaluate_scenario_pair(
     scenario_id: str,
     model: SpatialConditionedSVDModel,
     vae: AutoencoderKLTemporalDecoder,
+    scheduler: Any,
     engine: camera_projection.CameraProjectionEngine,
     latents_dir: Path,
     observed_t0_dir: Path,
     future_videos_dir: Path,
     trajectories_file: Path,
     output_renders_dir: Path,
-    device: str,
+    conditioning_source: str = "knn",
+    steps: int = 25,
+    device: str = "cpu",
     seed: int = 42,
+    encoder_hidden_states: Optional[torch.Tensor] = None,
+    added_time_ids: Optional[torch.Tensor] = None,
 ) -> Dict[str, Any]:
-    """Run side-by-side inference and evaluation for a single held-out scenario."""
-    # 1. Load Genuine Targets & Initial Frame
+    """Run comparative iterative generation and evaluation for a single scenario."""
+    # 1. Load Genuine Targets & Initial Frame Latents
     pt_file = latents_dir / f"{scenario_id}.pt"
     data = torch.load(pt_file, map_location="cpu")
     target_latents = data["target_latents"].to(device)
@@ -161,86 +236,106 @@ def evaluate_scenario_pair(
     # Load ground truth video frames (25, 568, 876, 3)
     video_dir = future_videos_dir / scenario_id / "front"
     frame_files = sorted(video_dir.glob("frame_*.jpg"))
+    if not frame_files:
+        raise FileNotFoundError(f"No ground truth frames found in {video_dir}")
     gt_frames = np.stack([np.array(Image.open(f).convert("RGB")) for f in frame_files], axis=0)
 
-    # Load trajectory waypoints
-    gt_traj = None
-    with open(trajectories_file, "r", encoding="utf-8") as f:
-        for line in f:
-            if not line.strip():
-                continue
-            item = json.loads(line)
-            if item["scenario_id"] == scenario_id:
-                pts = np.asarray(item.get("expert_like", []), dtype=float)
-                if len(pts) >= spec.FRAME_COUNT:
-                    gt_traj = pts[:spec.FRAME_COUNT]
-                break
-
-    if gt_traj is None:
-        gt_traj = np.column_stack([np.linspace(1.5, 30.0, spec.FRAME_COUNT), np.zeros(spec.FRAME_COUNT)])
+    # 2. Resolve Conditioning Trajectory (kNN or Oracle)
+    cond_traj, cond_label = resolve_conditioning_trajectory(
+        scenario_id=scenario_id,
+        trajectories_file=trajectories_file,
+        conditioning_source=conditioning_source,
+    )
 
     # Render Option B.1 spatial mask
     raw_b1 = engine.render_initial_frame_temporal_masks(
         camera_name="front",
-        waypoints_ego=gt_traj,
+        waypoints_ego=cond_traj,
         num_frames=spec.FRAME_COUNT,
         channel_dim=True,
     )
     mask_tensor = torch.from_numpy(raw_b1).unsqueeze(0).float().to(device)
 
-    # 2. Prepare Fixed Noise & Crop Box
+    # 3. Pure Gaussian Random Starting Noise z_T ~ N(0, I)
+    # Completely decoupled from future ground-truth latents
     torch.manual_seed(seed)
-    fixed_noise = torch.randn_like(target_latents)
+    noise_zT = torch.randn_like(target_latents)
 
     # Crop box for unpadding
     t0_img = Image.open(observed_t0_dir / scenario_id / "front.jpg").convert("RGB")
     _, crop_box = adapt_aspect_ratio_to_svd(t0_img, target_width=1024, target_height=576)
 
+    # Micro-conditioning IDs if not passed
+    if added_time_ids is None:
+        added_time_ids = torch.tensor(
+            [[float(spec.FPS - 1), 127.0, 0.0]], device=device, dtype=target_latents.dtype
+        )
+
     model.eval()
     with torch.no_grad():
-        # --- Model A: Baseline (No Spatial Conditioning, Zero Mask) ---
-        _, metrics_baseline = model.compute_latent_loss(
-            target_latents=target_latents,
+        # --- Model A: Baseline Unconditioned (Iterative Generation from z_T) ---
+        print(f"  [{scenario_id}] Running Baseline SVD iterative generation ({steps} steps)...")
+        gen_latents_baseline = model.generate_iterative(
             initial_image_latents=initial_latents,
             spatial_masks=None,  # Baseline: no spatial adapter
-            noise=fixed_noise,
-            loss_type="latent_mse",
+            scheduler=scheduler,
+            num_inference_steps=steps,
+            num_frames=spec.FRAME_COUNT,
+            noise=noise_zT.clone(),
+            encoder_hidden_states=encoder_hidden_states,
+            added_time_ids=added_time_ids,
+            device=device,
+            dtype=target_latents.dtype,
         )
-        denoised_latents_baseline = metrics_baseline["denoised_latents"]
 
-        # --- Model B: Conditioned (Trained Spatial Adapter with Option B.1 Mask) ---
-        _, metrics_cond = model.compute_latent_loss(
-            target_latents=target_latents,
+        # --- Model B: Conditioned (Iterative Generation from z_T with Spatial Adapter) ---
+        print(f"  [{scenario_id}] Running Conditioned SVD iterative generation ({steps} steps)...")
+        gen_latents_cond = model.generate_iterative(
             initial_image_latents=initial_latents,
             spatial_masks=mask_tensor,  # Conditioned with Option B.1
-            noise=fixed_noise,
-            loss_type="latent_mse",
+            scheduler=scheduler,
+            num_inference_steps=steps,
+            num_frames=spec.FRAME_COUNT,
+            noise=noise_zT.clone(),
+            encoder_hidden_states=encoder_hidden_states,
+            added_time_ids=added_time_ids,
+            device=device,
+            dtype=target_latents.dtype,
         )
-        denoised_latents_cond = metrics_cond["denoised_latents"]
 
-    # 3. Decode Latents to RGB Frames via VAE
-    print(f"  [{scenario_id}] Decoding baseline latents to video frames...")
+    # 4. Decode Generated Latents to RGB Frames via VAE
+    print(f"  [{scenario_id}] Decoding baseline and conditioned latents to video frames via VAE...")
     frames_base_list = []
     frames_cond_list = []
 
-    # Unscale latents: latents / scaling_factor
-    lat_base_unscaled = denoised_latents_baseline / vae.config.scaling_factor
-    lat_cond_unscaled = denoised_latents_cond / vae.config.scaling_factor
+    lat_base_unscaled = gen_latents_baseline / vae.config.scaling_factor
+    lat_cond_unscaled = gen_latents_cond / vae.config.scaling_factor
 
     with torch.no_grad():
         for t_idx in range(spec.FRAME_COUNT):
-            # Decode single frame slice: (1, 4, 72, 128) -> (1, 3, 576, 1024)
             rec_base = vae.decode(lat_base_unscaled[:, t_idx], num_frames=1).sample
             rec_cond = vae.decode(lat_cond_unscaled[:, t_idx], num_frames=1).sample
 
-            # Normalize [-1, 1] -> [0, 255]
-            arr_base = ((rec_base.clamp(-1.0, 1.0) + 1.0) * 127.5).squeeze(0).permute(1, 2, 0).cpu().numpy().astype(np.uint8)
-            arr_cond = ((rec_cond.clamp(-1.0, 1.0) + 1.0) * 127.5).squeeze(0).permute(1, 2, 0).cpu().numpy().astype(np.uint8)
+            arr_base = (
+                ((rec_base.clamp(-1.0, 1.0) + 1.0) * 127.5)
+                .squeeze(0)
+                .permute(1, 2, 0)
+                .cpu()
+                .numpy()
+                .astype(np.uint8)
+            )
+            arr_cond = (
+                ((rec_cond.clamp(-1.0, 1.0) + 1.0) * 127.5)
+                .squeeze(0)
+                .permute(1, 2, 0)
+                .cpu()
+                .numpy()
+                .astype(np.uint8)
+            )
 
             frames_base_list.append(Image.fromarray(arr_base))
             frames_cond_list.append(Image.fromarray(arr_cond))
 
-    # Unpad & resize back to 876x568
     frames_baseline = unpad_and_resize_frames(frames_base_list, crop_box)
     frames_conditioned = unpad_and_resize_frames(frames_cond_list, crop_box)
 
@@ -250,24 +345,21 @@ def evaluate_scenario_pair(
     save_video_mp4(frames_baseline, base_mp4)
     save_video_mp4(frames_conditioned, cond_mp4)
 
-    # 4. Compute Rigorous Quantitative Metrics
-    # Pixel MSE & PSNR against Ground Truth
+    # 5. Compute Quantitative Metrics
     mse_base = float(np.mean((frames_baseline.astype(float) - gt_frames.astype(float)) ** 2))
     mse_cond = float(np.mean((frames_conditioned.astype(float) - gt_frames.astype(float)) ** 2))
     psnr_base = compute_psnr(mse_base)
     psnr_cond = compute_psnr(mse_cond)
 
-    # SSIM against Ground Truth
     ssim_base = float(np.mean([compute_frame_ssim(frames_baseline[i], gt_frames[i]) for i in range(spec.FRAME_COUNT)]))
     ssim_cond = float(np.mean([compute_frame_ssim(frames_conditioned[i], gt_frames[i]) for i in range(spec.FRAME_COUNT)]))
 
-    # Perceptual Quality & Coherence
+    # Proxy metrics with exact standardized keys
     sharp_base = compute_laplacian_sharpness(frames_baseline)
     sharp_cond = compute_laplacian_sharpness(frames_conditioned)
     emc_base = compute_optical_flow_coherence(frames_baseline)
     emc_cond = compute_optical_flow_coherence(frames_conditioned)
 
-    # Trajectory Motion Adherence
     com_gt = compute_lateral_motion_center(gt_frames)
     com_base = compute_lateral_motion_center(frames_baseline)
     com_cond = compute_lateral_motion_center(frames_conditioned)
@@ -278,12 +370,11 @@ def evaluate_scenario_pair(
 
     return {
         "scenario_id": scenario_id,
+        "conditioning_source": conditioning_source,
+        "conditioning_label": cond_label,
+        "generation_method": "iterative_diffusion_from_pure_noise",
+        "num_inference_steps": steps,
         "metrics": {
-            "latent_loss": {
-                "baseline": metrics_baseline["loss"],
-                "conditioned": metrics_cond["loss"],
-                "delta": metrics_cond["loss"] - metrics_baseline["loss"],
-            },
             "pixel_mse": {
                 "baseline": mse_base,
                 "conditioned": mse_cond,
@@ -299,6 +390,23 @@ def evaluate_scenario_pair(
                 "conditioned": ssim_cond,
                 "gain": float(ssim_cond - ssim_base),
             },
+            "motion_energy_lateral_com_drift": {
+                "baseline_drift": drift_base,
+                "conditioned_drift": drift_cond,
+                "drift_reduction": trajectory_adherence_gain,
+                "description": "Pixel difference lateral centroid drift vs ground truth video (proxy for lateral vehicle motion)",
+            },
+            "local_laplacian_sharpness_proxy": {
+                "baseline": sharp_base,
+                "conditioned": sharp_cond,
+                "description": "Average Laplacian variance across video frames (sharpness proxy)",
+            },
+            "local_farneback_optical_flow_magnitude_proxy": {
+                "baseline": emc_base,
+                "conditioned": emc_cond,
+                "description": "Average adjacent frame Farneback optical flow magnitude (motion energy proxy)",
+            },
+            # Backward-compatible metric aliases:
             "trajectory_lateral_drift": {
                 "baseline_drift": drift_base,
                 "conditioned_drift": drift_cond,
@@ -328,12 +436,16 @@ def run_pilot_evaluation(
     trajectories_file: Path,
     output_renders_dir: Path,
     report_out_path: Path,
+    backbone: str = "mock",
+    conditioning_source: str = "knn",
+    steps: int = 25,
     device: str = "mps" if torch.backends.mps.is_available() else "cpu",
 ) -> Dict[str, Any]:
     """Execute complete comparative pilot evaluation on held-out sequences."""
     print("=" * 80)
     print("PHASE 3 PILOT COMPARATIVE EVALUATION (HELD-OUT SEQUENCES)")
-    print(f"Checkpoint: {model_checkpoint} | Device: {device}")
+    print(f"Backbone: {backbone} | Conditioning Source: {conditioning_source}")
+    print(f"Steps: {steps} | Device: {device} | Checkpoint: {model_checkpoint}")
     print("=" * 80)
 
     # 1. Load VAE
@@ -348,7 +460,10 @@ def run_pilot_evaluation(
         p.requires_grad = False
     print(f"VAE loaded in {time.time() - t0:.2f}s")
 
-    # 2. Load Model & Trained Spatial Adapter
+    # 2. Scheduler
+    scheduler = create_default_euler_scheduler()
+
+    # 3. Load Backbone Model
     cfg = SpatialAdapterConfig(
         adapter_channels=(32, 64, 128, 256),
         latent_channels=4,
@@ -356,15 +471,57 @@ def run_pilot_evaluation(
         use_temporal_conv=True,
         zero_conv_init=True,
     )
-    unet = MockSVDUNet(in_channels=8, out_channels=4)
-    model = SpatialConditionedSVDModel(unet=unet, adapter_config=cfg)
-    model.to(device)
 
-    # Load adapter weights
-    ckpt = torch.load(model_checkpoint, map_location=device)
-    model.spatial_adapter.load_state_dict(ckpt["spatial_adapter_state_dict"])
+    dtype = torch.float16 if (device in ("cuda", "mps") and backbone == "svd-xt") else torch.float32
+    image_encoder = None
+    feature_extractor = None
+
+    if backbone == "svd-xt":
+        try:
+            from diffusers import UNetSpatioTemporalConditionModel
+            from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
+
+            print("[Backbone] Loading genuine SVD-XT UNet (1.5B parameters)...")
+            unet = UNetSpatioTemporalConditionModel.from_pretrained(
+                "stabilityai/stable-video-diffusion-img2vid-xt",
+                subfolder="unet",
+                torch_dtype=dtype,
+                low_cpu_mem_usage=True,
+            )
+            image_encoder = CLIPVisionModelWithProjection.from_pretrained(
+                "stabilityai/stable-video-diffusion-img2vid-xt",
+                subfolder="image_encoder",
+                torch_dtype=dtype,
+                low_cpu_mem_usage=True,
+            ).to(device)
+            feature_extractor = CLIPImageProcessor.from_pretrained(
+                "stabilityai/stable-video-diffusion-img2vid-xt",
+                subfolder="feature_extractor",
+            )
+        except Exception as exc:
+            raise RuntimeError(f"Failed to load SVD-XT backbone: {exc}") from exc
+    else:
+        print("[Backbone] Initializing MockSVDUNet surrogate backbone...")
+        unet = MockSVDUNet(in_channels=8, out_channels=4)
+
+    model = SpatialConditionedSVDModel(
+        unet=unet,
+        image_encoder=image_encoder,
+        scheduler=scheduler,
+        adapter_config=cfg,
+    )
+    model.to(device=device, dtype=dtype)
+
+    # Load adapter checkpoint weights if available
+    if model_checkpoint.exists():
+        ckpt = torch.load(model_checkpoint, map_location=device)
+        state_dict = ckpt.get("spatial_adapter_state_dict", ckpt)
+        model.spatial_adapter.load_state_dict(state_dict)
+        print(f"Trained adapter weights successfully loaded from {model_checkpoint}")
+    else:
+        print(f"Warning: Checkpoint {model_checkpoint} not found. Running with initialized adapter.")
+
     model.freeze_backbone()
-    print("Trained adapter weights successfully loaded into model.")
 
     engine = camera_projection.CameraProjectionEngine(width=spec.WIDTH, height=spec.HEIGHT)
     held_out_scenarios = ["0000406", "0000407"]
@@ -372,32 +529,64 @@ def run_pilot_evaluation(
     results = []
     for sid in held_out_scenarios:
         print(f"\nEvaluating held-out scenario {sid}...")
+        # Precompute CLIP embedding if genuine encoder is present
+        enc_hidden = None
+        if image_encoder is not None and feature_extractor is not None:
+            t0_path = observed_t0_dir / sid / "front.jpg"
+            if t0_path.exists():
+                pil_img = Image.open(t0_path).convert("RGB")
+                pixel_vals = feature_extractor(images=pil_img, return_tensors="pt").pixel_values.to(
+                    device=device, dtype=dtype
+                )
+                with torch.no_grad():
+                    enc_hidden = image_encoder(pixel_vals).image_embeds.unsqueeze(1)
+
         res = evaluate_scenario_pair(
             scenario_id=sid,
             model=model,
             vae=vae,
+            scheduler=scheduler,
             engine=engine,
             latents_dir=latents_dir,
             observed_t0_dir=observed_t0_dir,
             future_videos_dir=future_videos_dir,
             trajectories_file=trajectories_file,
             output_renders_dir=output_renders_dir,
+            conditioning_source=conditioning_source,
+            steps=steps,
             device=device,
+            encoder_hidden_states=enc_hidden,
         )
         results.append(res)
         m = res["metrics"]
-        print(f"  Result {sid}:")
-        print(f"    PSNR: Baseline {m['psnr_db']['baseline']:.2f} dB -> Conditioned {m['psnr_db']['conditioned']:.2f} dB (Gain: {m['psnr_db']['gain_db']:+.2f} dB)")
-        print(f"    SSIM: Baseline {m['ssim']['baseline']:.4f} -> Conditioned {m['ssim']['conditioned']:.4f} (Gain: {m['ssim']['gain']:+.4f})")
-        print(f"    Trajectory Drift: Baseline {m['trajectory_lateral_drift']['baseline_drift']:.4f} -> Conditioned {m['trajectory_lateral_drift']['conditioned_drift']:.4f} (Reduction: {m['trajectory_lateral_drift']['drift_reduction']:+.4f})")
+        print(f"  Result {sid} ({res['conditioning_label']}):")
+        print(
+            f"    PSNR: Baseline {m['psnr_db']['baseline']:.2f} dB -> Conditioned {m['psnr_db']['conditioned']:.2f} dB (Gain: {m['psnr_db']['gain_db']:+.2f} dB)"
+        )
+        print(
+            f"    SSIM: Baseline {m['ssim']['baseline']:.4f} -> Conditioned {m['ssim']['conditioned']:.4f} (Gain: {m['ssim']['gain']:+.4f})"
+        )
+        print(
+            f"    Trajectory Drift: Baseline {m['motion_energy_lateral_com_drift']['baseline_drift']:.4f} -> Conditioned {m['motion_energy_lateral_com_drift']['conditioned_drift']:.4f} (Reduction: {m['motion_energy_lateral_com_drift']['drift_reduction']:+.4f})"
+        )
 
-    # Summary Report
     avg_psnr_gain = float(np.mean([r["metrics"]["psnr_db"]["gain_db"] for r in results]))
     avg_ssim_gain = float(np.mean([r["metrics"]["ssim"]["gain"] for r in results]))
-    avg_drift_red = float(np.mean([r["metrics"]["trajectory_lateral_drift"]["drift_reduction"] for r in results]))
+    avg_drift_red = float(
+        np.mean([r["metrics"]["motion_energy_lateral_com_drift"]["drift_reduction"] for r in results])
+    )
 
     report = {
         "evaluation_name": "Phase 3 Limited Pilot (Held-Out Evaluation)",
+        "backbone": backbone,
+        "conditioning_source": conditioning_source,
+        "conditioning_description": (
+            "kNN-retrieved predicted waypoints"
+            if conditioning_source == "knn"
+            else "Oracle ground-truth waypoints"
+        ),
+        "generation_method": "iterative_diffusion_from_pure_noise",
+        "num_inference_steps": steps,
         "held_out_scenarios": held_out_scenarios,
         "aggregate_summary": {
             "mean_psnr_gain_db": avg_psnr_gain,
@@ -418,19 +607,26 @@ def run_pilot_evaluation(
     with open(md_path, "w", encoding="utf-8") as f:
         f.write("# Phase 3 Limited Pilot: Comparative Evaluation on Held-Out Sequences\n\n")
         f.write(f"**Date:** {time.strftime('%Y-%m-%d %H:%M:%S UTC', time.gmtime())}  \n")
+        f.write(f"**Backbone:** `{backbone}`  \n")
+        f.write(f"**Conditioning Source:** `{conditioning_source}` (`{report['conditioning_description']}`)  \n")
+        f.write(f"**Generation:** Full Iterative Scheduler Loop ({steps} steps from pure Gaussian noise)  \n")
         f.write(f"**Model Checkpoint:** `{model_checkpoint.name}`  \n\n")
         f.write("## Aggregate Summary\n\n")
         f.write(f"- **Mean PSNR Gain:** `{avg_psnr_gain:+.2f} dB`\n")
         f.write(f"- **Mean SSIM Gain:** `{avg_ssim_gain:+.4f}`\n")
         f.write(f"- **Mean Trajectory Drift Reduction:** `{avg_drift_red:+.4f}`\n")
-        f.write(f"- **Conditioned Model Superiority:** `{report['aggregate_summary']['conditioned_outperforms_baseline']}`\n\n")
+        f.write(
+            f"- **Conditioned Model Superiority:** `{report['aggregate_summary']['conditioned_outperforms_baseline']}`\n\n"
+        )
         f.write("## Per-Scenario Metrics\n\n")
-        f.write("| Scenario ID | Baseline PSNR | Conditioned PSNR | PSNR Gain | Baseline SSIM | Conditioned SSIM | Drift Reduction |\n")
-        f.write("| :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
+        f.write(
+            "| Scenario ID | Conditioning | Baseline PSNR | Conditioned PSNR | PSNR Gain | Baseline SSIM | Conditioned SSIM | Drift Reduction |\n"
+        )
+        f.write("| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |\n")
         for r in results:
             m = r["metrics"]
             f.write(
-                f"| `{r['scenario_id']}` | {m['psnr_db']['baseline']:.2f} dB | {m['psnr_db']['conditioned']:.2f} dB | **{m['psnr_db']['gain_db']:+.2f} dB** | {m['ssim']['baseline']:.4f} | {m['ssim']['conditioned']:.4f} | **{m['trajectory_lateral_drift']['drift_reduction']:+.4f}** |\n"
+                f"| `{r['scenario_id']}` | {conditioning_source} | {m['psnr_db']['baseline']:.2f} dB | {m['psnr_db']['conditioned']:.2f} dB | **{m['psnr_db']['gain_db']:+.2f} dB** | {m['ssim']['baseline']:.4f} | {m['ssim']['conditioned']:.4f} | **{m['motion_energy_lateral_com_drift']['drift_reduction']:+.4f}** |\n"
             )
 
     print(f"[Report] Saved markdown summary to {md_path}")
@@ -439,6 +635,26 @@ def run_pilot_evaluation(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate baseline vs conditioned SVD-XT on held-out data.")
+    parser.add_argument(
+        "--backbone",
+        type=str,
+        choices=["mock", "svd-xt"],
+        default="mock",
+        help="Backbone architecture: 'mock' (lightweight 2D surrogate) or 'svd-xt' (genuine 1.5B diffusers UNet).",
+    )
+    parser.add_argument(
+        "--conditioning-source",
+        type=str,
+        choices=["knn", "oracle"],
+        default="knn",
+        help="Conditioning waypoint source: 'knn' (predicted by kNN retrieval planner) or 'oracle' (ground-truth expert_like).",
+    )
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=25,
+        help="Number of iterative diffusion denoising steps (default: 25).",
+    )
     parser.add_argument("--model-checkpoint", type=Path, default=Path("models/svd_spatial_adapter_front_b1.pt"))
     parser.add_argument("--latents-dir", type=Path, default=Path("data/train_latents"))
     parser.add_argument("--observed-t0-dir", type=Path, default=Path("data/train_observed_t0"))
@@ -457,6 +673,9 @@ def main() -> None:
         trajectories_file=args.trajectories_file,
         output_renders_dir=args.output_renders_dir,
         report_out_path=args.report_out,
+        backbone=args.backbone,
+        conditioning_source=args.conditioning_source,
+        steps=args.steps,
         device=args.device,
     )
 

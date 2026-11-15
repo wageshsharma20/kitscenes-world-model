@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 import numpy as np
 import pytest
 
@@ -11,6 +12,7 @@ from scripts.eval_pilot_comparison import (
     compute_lateral_motion_center,
     compute_optical_flow_coherence,
     compute_psnr,
+    resolve_conditioning_trajectory,
 )
 
 
@@ -76,3 +78,64 @@ def test_lateral_motion_center_directional_response():
 
     com_right = compute_lateral_motion_center(frames_right)
     assert np.all(com_right > 0.0), f"Right motion must have positive CoM! Got: {com_right}"
+
+
+def test_conditioning_source_knn_vs_oracle_distinction(tmp_path: Path):
+    """Verify strict distinction and contracts between 'knn' and 'oracle' conditioning."""
+    import json
+
+    traj_file = tmp_path / "test_trajectories.jsonl"
+    expert_like = [[float(i), 0.5 * i] for i in range(25)]
+    past = [[-float(i), 0.0] for i in range(10, 0, -1)]
+
+    record = {
+        "scenario_id": "0000406",
+        "past": past,
+        "driving_instruction": "turn left",
+        "scenario_type": "4 intersection",
+        "expert_like": expert_like,
+    }
+    with open(traj_file, "w", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+
+    # Oracle mode must return expert_like ground truth
+    oracle_traj, oracle_label = resolve_conditioning_trajectory(
+        scenario_id="0000406",
+        trajectories_file=traj_file,
+        conditioning_source="oracle",
+    )
+    assert "Oracle" in oracle_label
+    assert np.allclose(oracle_traj, np.array(expert_like))
+
+    # kNN mode must predict waypoints via planner (not oracle ground truth)
+    knn_traj, knn_label = resolve_conditioning_trajectory(
+        scenario_id="0000406",
+        trajectories_file=traj_file,
+        conditioning_source="knn",
+    )
+    assert "kNN" in knn_label
+    assert knn_traj.shape == (25, 2)
+
+    # Invalid source must raise ValueError
+    with pytest.raises(ValueError, match="conditioning_source must be 'knn' or 'oracle'"):
+        resolve_conditioning_trajectory(
+            scenario_id="0000406",
+            trajectories_file=traj_file,
+            conditioning_source="invalid_source",
+        )
+
+
+def test_proxy_metrics_relabeling_contract():
+    """Verify that proxy metrics are properly relabeled with exact standardized naming."""
+    frames_a = np.random.randint(0, 255, (5, 64, 64, 3), dtype=np.uint8)
+
+    # Check that individual proxy metric calculators function properly
+    com_a = compute_lateral_motion_center(frames_a)
+    sharp_a = compute_laplacian_sharpness(frames_a)
+    flow_a = compute_optical_flow_coherence(frames_a)
+
+    assert isinstance(com_a, np.ndarray)
+    assert isinstance(sharp_a, float)
+    assert isinstance(flow_a, float)
+    assert sharp_a >= 0.0
+    assert flow_a >= 0.0

@@ -1,0 +1,134 @@
+{
+  "evaluation_name": "Phase 3 Limited Pilot (Held-Out Evaluation)",
+  "backbone": "mock",
+  "conditioning_source": "knn",
+  "conditioning_description": "kNN-retrieved predicted waypoints",
+  "generation_method": "iterative_diffusion_from_pure_noise",
+  "num_inference_steps": 2,
+  "held_out_scenarios": [
+    "0000406",
+    "0000407"
+  ],
+  "aggregate_summary": {
+    "mean_psnr_gain_db": 2.1913226016856413e-05,
+    "mean_ssim_gain": -4.493653774259587e-05,
+    "mean_trajectory_drift_reduction": -1.5865734099361484e-05,
+    "conditioned_outperforms_baseline": false
+  },
+  "per_scenario_results": [
+    {
+      "scenario_id": "0000406",
+      "conditioning_source": "knn",
+      "conditioning_label": "kNN Trajectory Retrieval (499 training donors)",
+      "generation_method": "iterative_diffusion_from_pure_noise",
+      "num_inference_steps": 2,
+      "metrics": {
+        "pixel_mse": {
+          "baseline": 1481.428892935237,
+          "conditioned": 1481.436030103758,
+          "improvement": -0.007137168521012427
+        },
+        "psnr_db": {
+          "baseline": 16.42399550240485,
+          "conditioned": 16.423974579190425,
+          "gain_db": -2.0923214425039305e-05
+        },
+        "ssim": {
+          "baseline": 0.7933519196510315,
+          "conditioned": 0.7932861399650574,
+          "gain": -6.577968597409889e-05
+        },
+        "motion_energy_lateral_com_drift": {
+          "baseline_drift": 0.200013046587014,
+          "conditioned_drift": 0.20002477804912,
+          "drift_reduction": -1.1731462106007173e-05,
+          "description": "Pixel difference lateral centroid drift vs ground truth video (proxy for lateral vehicle motion)"
+        },
+        "local_laplacian_sharpness_proxy": {
+          "baseline": 38.188778633012696,
+          "conditioned": 38.247365614906606,
+          "description": "Average Laplacian variance across video frames (sharpness proxy)"
+        },
+        "local_farneback_optical_flow_magnitude_proxy": {
+          "baseline": 0.008500380907207727,
+          "conditioned": 0.008523845540670058,
+          "description": "Average adjacent frame Farneback optical flow magnitude (motion energy proxy)"
+        },
+        "trajectory_lateral_drift": {
+          "baseline_drift": 0.200013046587014,
+          "conditioned_drift": 0.20002477804912,
+          "drift_reduction": -1.1731462106007173e-05
+        },
+        "laplacian_sharpness_pq": {
+          "baseline": 38.188778633012696,
+          "conditioned": 38.247365614906606
+        },
+        "optical_flow_emc": {
+          "baseline": 0.008500380907207727,
+          "conditioned": 0.008523845540670058
+        }
+      },
+      "renders": {
+        "baseline_mp4": "renders/pilot_eval/0000406_baseline.mp4",
+        "conditioned_mp4": "renders/pilot_eval/0000406_conditioned.mp4"
+      }
+    },
+    {
+      "scenario_id": "0000407",
+      "conditioning_source": "knn",
+      "conditioning_label": "kNN Trajectory Retrieval (499 training donors)",
+      "generation_method": "iterative_diffusion_from_pure_noise",
+      "num_inference_steps": 2,
+      "metrics": {
+        "pixel_mse": {
+          "baseline": 3704.2077362960104,
+          "conditioned": 3704.152510075675,
+          "improvement": 0.05522622033549851
+        },
+        "psnr_db": {
+          "baseline": 12.443850264332795,
+          "conditioned": 12.443915013999254,
+          "gain_db": 6.474966645875213e-05
+        },
+        "ssim": {
+          "baseline": 0.45869545102119447,
+          "conditioned": 0.4586713576316834,
+          "gain": -2.4093389511092855e-05
+        },
+        "motion_energy_lateral_com_drift": {
+          "baseline_drift": 0.10314342090953747,
+          "conditioned_drift": 0.10316342091563019,
+          "drift_reduction": -2.0000006092715794e-05,
+          "description": "Pixel difference lateral centroid drift vs ground truth video (proxy for lateral vehicle motion)"
+        },
+        "local_laplacian_sharpness_proxy": {
+          "baseline": 40.06735971253275,
+          "conditioned": 40.095324955858786,
+          "description": "Average Laplacian variance across video frames (sharpness proxy)"
+        },
+        "local_farneback_optical_flow_magnitude_proxy": {
+          "baseline": 0.009288067502590517,
+          "conditioned": 0.00930382051349928,
+          "description": "Average adjacent frame Farneback optical flow magnitude (motion energy proxy)"
+        },
+        "trajectory_lateral_drift": {
+          "baseline_drift": 0.10314342090953747,
+          "conditioned_drift": 0.10316342091563019,
+          "drift_reduction": -2.0000006092715794e-05
+        },
+        "laplacian_sharpness_pq": {
+          "baseline": 40.06735971253275,
+          "conditioned": 40.095324955858786
+        },
+        "optical_flow_emc": {
+          "baseline": 0.009288067502590517,
+          "conditioned": 0.00930382051349928
+        }
+      },
+      "renders": {
+        "baseline_mp4": "renders/pilot_eval/0000407_baseline.mp4",
+        "conditioned_mp4": "renders/pilot_eval/0000407_conditioned.mp4"
+      }
+    }
+  ]
+}
