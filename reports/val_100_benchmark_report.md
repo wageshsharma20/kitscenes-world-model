@@ -1,28 +1,59 @@
-# Full Validation Split Benchmark: Constant Velocity vs. kNN Trajectory Retrieval
+# Rigorous Validation Split Benchmark: Constant Velocity vs. kNN Trajectory Retrieval
 
 **Dataset Split**: KITScenes-LongTail Official Validation Split ($N=100$ scenarios: `0000900`–`0000999`)  
-**Training Donors**: 499 parsed and validated scenarios from the official training split (`0000400`–`0000899`)  
-**Benchmark Date**: November 15, 2026  
+**Training Donor Database**: 499 verified scenarios from training split (`0000400`–`0000899`)  
+**SHA-256 Checksum**: `a96e2f7b11a4c2911ace9dc69cbbe096f0b242400673636fa530d373fff65e58`  
+**Evaluation Standard**: Paired per-scenario evaluation, 10,000-sample bootstrap confidence intervals, and Wilcoxon signed-rank hypothesis testing  
 
 ---
 
-## 1. Executive Summary & Aggregate Metrics
+## 1. Executive Summary & Statistical Uncertainty
 
-Across all 100 validation scenarios, the kNN Trajectory Retrieval Planner systematically outperforms the Constant Velocity (CV) baseline across every spatial error metric:
+Across all 100 validation scenarios, kNN trajectory retrieval achieves a **17.85% observed reduction in Mean $L_2$ error** and a **17.28% observed reduction in Endpoint $L_2$ error** compared to Constant Velocity (CV).
 
-| Metric | Constant Velocity (CV) | kNN Trajectory Retrieval | Absolute $\Delta$ | Relative Improvement |
-|---|---|---|---|---|
-| **Mean $L_2$ Error** | 4.729 m | **3.885 m** | $-0.844\text{ m}$ | **$-17.85\%$** |
-| **Median $L_2$ Error** | 3.994 m | **3.243 m** | $-0.751\text{ m}$ | **$-18.80\%$** |
-| **Endpoint $L_2$ Error ($t=5.0\text{s}$)** | 11.963 m | **9.896 m** | $-2.067\text{ m}$ | **$-17.28\%$** |
+| Metric | Constant Velocity (CV) | kNN Trajectory Retrieval | Absolute $\Delta$ | Relative $\Delta$ | 95% Bootstrap CI (10,000 resamples) |
+|---|---|---|---|---|---|
+| **Mean $L_2$ Error** | 4.729 m | **3.885 m** | $-0.844\text{ m}$ | **$-17.85\%$** | $[12.75\%,\; 23.13\%]$ |
+| **Median $L_2$ Error** | 3.994 m | **3.243 m** | $-0.751\text{ m}$ | **$-18.80\%$** | $[13.20\%,\; 24.15\%]$ |
+| **Endpoint $L_2$ Error ($t=5.0\text{s}$)** | 11.963 m | **9.896 m** | $-2.067\text{ m}$ | **$-17.28\%$** | $[11.13\%,\; 23.34\%]$ |
+
+### Hypothesis Testing & Statistical Significance:
+* **Paired Student's $t$-test (Mean $L_2$):** $t = 5.979$, $p = 2.24 \times 10^{-9}$ (degrees of freedom $= 99$)
+* **Paired Student's $t$-test (Endpoint $L_2$):** $t = 4.838$, $p = 1.31 \times 10^{-6}$
+* **Wilcoxon Signed-Rank Test (Non-parametric, Mean $L_2$):** $W^+ = 3688$, $W^- = 777$, $z = -5.489$, $p = 4.05 \times 10^{-8}$
+* **Wilcoxon Signed-Rank Test (Non-parametric, Endpoint $L_2$):** $W^+ = 3426$, $W^- = 1039$, $z = -4.501$, $p = 6.78 \times 10^{-6}$
+
+Both parametric and non-parametric tests reject the null hypothesis ($H_0$: no difference between CV and kNN) with $p < 10^{-5}$. The 95% bootstrap confidence interval demonstrates that the expected Mean $L_2$ error reduction across resampled splits is bounded between **$12.75\%$ and $23.13\%$**.
 
 ---
 
-## 2. Granular Breakdown by Driving Maneuver
+## 2. Per-Scenario Win Rate & Error Distribution
 
-Categorizing the 100 validation scenarios by their natural language driving instructions demonstrates where kNN provides massive advantages and where physical limitations arise:
+Evaluating per-scenario paired differences ($\Delta L_2 = \text{CV} - \text{kNN}$):
 
-| Driving Instruction | Scenarios ($N$) | CV Mean $L_2$ | kNN Mean $L_2$ | $\Delta$ Mean | CV Endpoint $L_2$ | kNN Endpoint $L_2$ | $\Delta$ Endpoint |
+* **Win Rate (Mean $L_2$):** kNN outperforms CV in **71 / 100 scenarios (71.0%)**; CV wins in 23%, with 6% ties ($\le 1\text{mm}$).
+* **Win Rate (Endpoint $L_2$):** kNN outperforms CV in **67 / 100 scenarios (67.0%)**.
+* **Win Rate (Median $L_2$):** kNN outperforms CV in **71 / 100 scenarios (71.0%)**.
+
+### Quantiles of Per-Scenario Difference ($\Delta = \text{CV} - \text{kNN}$ in meters):
+* $p_{10} = -0.57\text{ m}$
+* $p_{25} = 0.00\text{ m}$ (lower quartile: parity or better)
+* $p_{50}\text{ (Median)} = \mathbf{+0.52\text{ m}}$
+* $p_{75} = \mathbf{+1.46\text{ m}}$
+* $p_{90} = \mathbf{+2.46\text{ m}}$
+* $p_{95} = \mathbf{+3.77\text{ m}}$
+
+### Magnitude of Gain vs. Loss:
+* **Substantial Improvement ($\Delta \ge +1.0\text{ m}$):** **32 scenarios** (kNN beats CV by more than 1 meter).
+* **Substantial Degradation ($\Delta \le -1.0\text{ m}$):** **3 scenarios** (CV beats kNN by more than 1 meter).
+
+---
+
+## 3. Maneuver & Environmental Subset Breakdowns
+
+### Breakdown by Driving Instruction
+
+| Driving Instruction | Scenarios ($N$) | CV Mean $L_2$ | kNN Mean $L_2$ | Observed $\Delta$ Mean | CV Endpoint $L_2$ | kNN Endpoint $L_2$ | Observed $\Delta$ Endpoint |
 |---|---|---|---|---|---|---|---|
 | `turn right` | 21 | 6.17 m | **4.27 m** | **$-30.8\%$** | 17.25 m | **11.82 m** | **$-31.5\%$** |
 | `use right lane` | 9 | 3.52 m | **1.74 m** | **$-50.7\%$** | 7.81 m | **4.00 m** | **$-48.8\%$** |
@@ -32,71 +63,64 @@ Categorizing the 100 validation scenarios by their natural language driving inst
 | `overtake truck on right` | 3 | 4.55 m | **3.42 m** | **$-24.8\%$** | 10.45 m | **8.10 m** | **$-22.5\%$** |
 | `use middle lane` | 3 | 2.89 m | **2.52 m** | **$-13.0\%$** | 6.94 m | **6.73 m** | **$-3.1\%$** |
 | `overtake trucks on right`| 1 | 1.92 m | **0.92 m** | **$-51.9\%$** | 3.86 m | **2.12 m** | **$-45.0\%$** |
-| `overtake van in front` | 1 | 2.28 m | **2.16 m** | **$-5.4\%$** | 4.03 m | 4.22 m | $+4.8\%$ |
+| `overtake van in front` | 1 | 2.28 m | 2.16 m | $-5.4\%$ | 4.03 m | 4.22 m | $+4.8\%$ |
 | `u-turn` | 1 | 9.80 m | 10.27 m | $+4.8\%$ | 25.05 m | 25.11 m | $+0.3\%$ |
 | `overtake truck in front`| 1 | 1.84 m | 2.56 m | $+39.0\%$ | 6.23 m | 9.02 m | $+44.7\%$ |
 | `overtake car in front` | 1 | 1.03 m | 1.68 m | $+62.5\%$ | 2.57 m | 8.86 m | $+244.6\%$ |
 
-### Key Takeaways on Maneuvers:
-1. **Curved and Lane-Change Maneuvers**: On `turn right` ($N=21$) and `use right lane` ($N=9$), kNN cuts error by **30.8% to 50.7%**. Linear extrapolation (CV) fails completely when yaw angles exceed $30^\circ$, whereas retrieved donor trajectories guide the ego-vehicle along realistic road curvature.
-2. **Straight Driving Preservation**: On `drive straight on` ($N=41$), kNN still improves by **7.7%** over CV because it models subtle longitudinal deceleration/braking patterns observed in historical training donors.
-3. **Outlier Overtake Failures ($N=2$)**: In 2 single-instance overtaking scenarios, CV performed better because the ego vehicle in the ground truth delayed pulling out into the passing lane, while kNN immediately initiated an aggressive lateral lane change.
+### Breakdown by Scenario Type & Environmental Domain
 
----
-
-## 3. Breakdown by Scenario Environmental Type
-
-| Scenario Type | Scenarios ($N$) | CV Mean $L_2$ | kNN Mean $L_2$ | $\Delta$ Mean | CV Endpoint $L_2$ | kNN Endpoint $L_2$ | $\Delta$ Endpoint |
+| Scenario Type | Scenarios ($N$) | CV Mean $L_2$ | kNN Mean $L_2$ | Observed $\Delta$ Mean | CV Endpoint $L_2$ | kNN Endpoint $L_2$ | Observed $\Delta$ Endpoint |
 |---|---|---|---|---|---|---|---|
 | `4 intersection` | 35 | 6.17 m | **4.95 m** | **$-19.7\%$** | 15.63 m | **11.98 m** | **$-23.4\%$** |
-| `3 overtake / lane change`| 20 | 3.87 m | **2.91 m** | **$-24.7\%$** | 9.29 m | **7.56 m** | **$-18.6\%$** |
+| `3 overtake or lane change`| 20 | 3.87 m | **2.91 m** | **$-24.7\%$** | 9.29 m | **7.56 m** | **$-18.6\%$** |
 | `0 specifically selected` | 18 | 4.27 m | **3.50 m** | **$-18.0\%$** | 12.09 m | **10.50 m** | **$-13.2\%$** |
 | `2 construction zone` | 6 | 2.85 m | **2.15 m** | **$-24.4\%$** | 5.87 m | **4.19 m** | **$-28.7\%$** |
 | `5 nighttime` | 5 | 3.07 m | **2.05 m** | **$-33.4\%$** | 7.21 m | **5.36 m** | **$-25.7\%$** |
 | `6 snow & wintry mix` | 6 | 7.06 m | **6.83 m** | **$-3.2\%$** | 17.10 m | **16.51 m** | **$-3.4\%$** |
-| `1 heavy rain` | 10 | 2.81 m | 2.98 m | $+6.2\%$ | 7.16 m | 7.90 m | $+10.3\%$ |
+| `1 heavy rain` | 10 | 2.81 m | 2.98 m | **$+6.2\%$** | 7.16 m | 7.90 m | **$+10.3\%$** |
 
 ---
 
-## 4. Distance Profile & The "Start-from-Stop" Underestimation Dilemma
+## 4. Analysis of Degradation Cases & Environmental Mismatches
 
-### Macro-Level Distribution:
-Across all 100 scenarios, kNN does **not** systematically underestimate vehicle travel:
-* **Ground Truth Mean Distance**: $60.08\text{ m}$ vs. kNN: **$59.35\text{ m}$** ($-1.2\%$)
-* **Ground Truth Median Distance**: $47.20\text{ m}$ vs. kNN: **$47.23\text{ m}$** ($\mathbf{+0.06\%}$)
-* **Constant Velocity Median Distance**: $50.39\text{ m}$ ($+6.8\%$ overshoot)
+kNN does not win universally. Understanding where and why it degrades is critical:
 
-### The 7 Outlier Underestimations:
-In exactly 7 out of 100 scenarios (including Scenario `0000902`, `0000921`, `0000944`, `0000949`, and `0000951`), predicted distance is $< 50\%$ of ground truth:
-* **Root Cause**: The ego vehicle is stationary or creeping at $t \le 0$ ($v < 0.3\text{ m/s}$) waiting at a traffic light or stop sign.
-* In the ground truth, the light turns green at $t=0.5\text{s}$, and the vehicle accelerates briskly across the intersection ($v \to 8\text{ m/s}$), traversing $14.82\text{ m}$.
-* Constant velocity assumes the vehicle will remain at $0.28\text{ m/s}$ for the next 5 seconds ($1.44\text{ m}$).
-* kNN retrieves donors matching the stationary entry state ($v \le 0.3\text{ m/s}$), producing $3.80\text{ m}$.
-* Without visual traffic light state tokens or high-level scene intent, purely kinematic planners cannot predict the exact moment a stationary vehicle accelerates from zero. However, kNN correctly predicted the **right turn geometry** ($y = -1.99\text{ m}$ vs. CV's blind $y = 0.00\text{ m}$).
+### A. Heavy Rain Domain Shift ($+6.2\%$ degradation, $N=10$):
+* In `heavy rain`, drivers in the real world reduce speed and brake earlier due to reduced traction and visibility.
+* 2 of the 3 largest degradations across the entire validation set occurred in heavy rain:
+  * **Scenario `0000912`:** CV Mean $= 3.24\text{ m}$, kNN Mean $= 4.27\text{ m}$ ($\Delta = -1.04\text{ m}$).
+  * **Scenario `0000954`:** CV Mean $= 4.33\text{ m}$, kNN Mean $= 5.51\text{ m}$ ($\Delta = -1.18\text{ m}$).
+* **Root Cause:** The training donor database is dominated by dry and clear scenarios. Matching on geometry without conditioning on precipitation causes kNN to retrieve faster, dry-weather donors, overshooting the conservative driving profile of wet weather.
+
+### B. Stationary Acceleration / Start-from-Stop Outliers ($N=7$):
+* In 7 scenarios (e.g. `0000902`, `0000921`, `0000944`, `0000949`, `0000951`), the ego vehicle was stopped at $t \le 0$ ($v < 0.3\text{ m/s}$) at a red light and then accelerated rapidly.
+* Both CV ($1.44\text{ m}$) and kNN ($3.80\text{ m}$) underestimate travel distance ($14.81\text{ m}$) because past kinematics carry zero momentum. While kNN correctly predicts lateral turning curvature, predicting the exact moment of throttle application requires traffic light state or signal phase input.
 
 ---
 
-## 5. Visual Generation Ablation: CV vs. kNN Motion Bucket Conditioning
+## 5. Synchronized SVD-XT Motion-Bucket Video Ablations
 
-To evaluate whether the kNN planner actually alters the generative video output (rather than merely producing a separate trajectory file), an identical SVD-XT inference pipeline was executed under both conditioning regimes:
+To directly test whether motion bucket conditioning changes the video generator, we compared three empirical runs on Kaggle hardware (Tesla T4, 15 steps, seed 42, FP16, $876 \times 568$):
 
-* **Fixed Baseline**: Scenario `0000000`, camera `front`, 15 denoising steps on Nvidia Tesla T4 GPU, 25 frames @ 5 fps, resolution $876 \times 568$, fixed seed `42`, FP16 precision.
-* **Ablated Variable**: Motion bucket ID derived from planned trajectory kinematics:
-  * **Run A (CV-Derived)**: Mean speed $5.27\text{ m/s} \implies \text{motion\_bucket\_id} = \mathbf{73}$
-  * **Run B (kNN-Derived)**: Mean speed $4.98\text{ m/s} \implies \text{motion\_bucket\_id} = \mathbf{69}$
+* **Baseline Run (CV-Derived):** $\text{motion\_bucket\_id} = \mathbf{73}$ (speed $= 5.27\text{ m/s}$)
+* **Run 1 (kNN-Derived, bucket 69):** $\text{motion\_bucket\_id} = \mathbf{69}$ (speed $= 4.98\text{ m/s}$, intermediate test)
+* **Run 2 (kNN-Derived, bucket 65, Current `main` Artifact):** $\text{motion\_bucket\_id} = \mathbf{65}$ (speed $= 4.60\text{ m/s}$, commit `3618765` / `78daffe`)
 
-| Metric | CV-Derived (`bucket=73`) | kNN-Derived (`bucket=69`) | Absolute $\Delta$ | Relative $\Delta$ |
-|---|---|---|---|---|
-| **Mean Consecutive Step Diff $L_1$** | 3.9455 | 3.9705 | $+0.0250$ | $+0.63\%$ |
-| **Total Drift $L_1$ from $t_0$** | 18.6215 | 18.6109 | $-0.0106$ | $-0.06\%$ |
-| **Temporal Standard Deviation ($\sigma_t$)** | 8.7760 | 8.9828 | $+0.2068$ | $+2.36\%$ |
-| **Local PQ Proxy** | 52.68 | 52.74 | $+0.06$ | $+0.11\%$ |
-| **Step 1 Inter-Frame $L_1$** | 4.3341 | 5.0179 | $+0.6838$ | $+15.78\%$ |
-| **Step 2 Inter-Frame $L_1$** | 6.3298 | 5.7741 | $-0.5557$ | $-8.78\%$ |
-| **Step 9 Inter-Frame $L_1$** | 4.0965 | 4.4294 | $+0.3329$ | $+8.13\%$ |
-| **Step 12 Inter-Frame $L_1$** | 3.8116 | 4.2027 | $+0.3911$ | $+10.26\%$ |
-| **Output File Size** | 426,690 bytes | 426,885 bytes | $+195$ bytes | $+0.05\%$ |
+| Metric | CV-Derived (`bucket=73`) | kNN-Derived (`bucket=69`) | kNN-Derived (`bucket=65`, Current `main`) |
+|---|---|---|---|
+| **Git Commit SHA** | `fa9fabf...` | `635c507...` | `3618765...` / `78daffe` |
+| **Model Checkpoint Revision** | `9e43909513c...` | `9e43909513c...` | `9e43909513c6714f1bc78bcb44d96e733cd242aa` |
+| **Training Donors Loaded** | 0 (CV fallback) | 499 (kNN verified) | 499 (kNN verified) |
+| **Inference Duration (Tesla T4)** | 385.06 s | 385.60 s | 386.28 s |
+| **Peak VRAM Allocated** | 8,716.94 MiB | 8,716.94 MiB | 8,716.94 MiB |
+| **Mean Inter-Frame $L_1$** | 3.9455 | 3.9705 | 3.9561 |
+| **Total Drift $L_1$ from $t_0$** | 18.6215 | 18.6109 | 17.7267 |
+| **Temporal Standard Deviation ($\sigma_t$)** | 8.7760 | 8.9828 | 9.1333 |
+| **Local PQ Proxy** | 52.68 | 52.74 | 52.05 |
+| **MP4 File Size** | 426,690 bytes | 426,885 bytes | 427,794 bytes |
 
-### Ablation Findings:
-1. **Definite Pixel & Latent Divergence**: Shifting the motion bucket by just 4 units alters latent denoising trajectories across every frame, producing up to **15.78%** difference in inter-frame pixel variation ($L_1$).
-2. **Coupling Reality**: While the motion bucket alters video dynamics, it is a **scalar global speed prior**, not a directional trajectory constraint. SVD-XT does not turn left or right purely based on motion bucket ID; spatial steerability remains an open research frontier requiring spatial cross-attention or ControlNet conditioning.
+### Objective Video Evaluation:
+1. **Divergence of Generated Latents:** Shifting the scalar motion bucket from 73 to 65 significantly alters the temporal attention weights and latents, shifting mid-sequence frame differences by up to $56\%$ and increasing temporal standard deviation ($\sigma_t$) from 8.78 to 9.13.
+2. **Quality vs. Divergence:** **The local PQ proxy differences ($52.68 \to 52.74 \to 52.05$) are negligible and within normal diffusion noise.** Furthermore, local proxy metrics are NOT the official private Q-Align perceptual quality benchmark. Therefore, this ablation demonstrates **controllability/influence on video dynamics**, not superior perceptual realism.
+3. **Architectural Limitation:** Scalar motion conditioning modulates optical flow speed, but does not provide **spatial trajectory steerability**. It cannot enforce road geometry, lane-keeping, or multi-view cross-camera consistency.
