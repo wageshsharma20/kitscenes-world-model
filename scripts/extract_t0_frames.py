@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract observed t=0 conditioning frames for all 6 camera views from the KITScenes test split.
+"""Extract observed t=0 conditioning frames for camera views from the KITScenes test split.
 
 In KITScenes-LongTail, past camera observations run from t = -4.0s to 0.0s (21 frames at 5 Hz).
 The frame at index -1 (t = 0.0s) is the exact observation conditioning image required by
@@ -18,8 +18,8 @@ Usage:
   # On Kaggle (with local parquet file):
   python scripts/extract_t0_frames.py --parquet data/test-00000-of-00001.parquet
 
-  # Over remote stream for 2 scenarios:
-  python scripts/extract_t0_frames.py --token hf_... --limit 2
+  # Over remote stream for single front camera on scenario 0000000:
+  python scripts/extract_t0_frames.py --token hf_... --scenarios 0000000 --cameras front
 """
 
 from __future__ import annotations
@@ -91,6 +91,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Comma-separated list of scenario IDs to extract (e.g. 0000000,0000001)",
     )
     parser.add_argument(
+        "--cameras",
+        type=str,
+        default=None,
+        help="Comma-separated list of cameras to extract (e.g. front or front,rear; default: all 6 cameras)",
+    )
+    parser.add_argument(
         "--limit",
         type=int,
         help="Limit number of scenarios to extract",
@@ -112,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="re-extract scenarios that already have all six images on disk",
+        help="re-extract scenarios that already have images on disk",
     )
     return parser
 
@@ -141,20 +147,19 @@ def resize_image_bytes(
                 "error",
                 "-f",
                 "image2pipe",
-                "-vcodec",
-                "mjpeg",
                 "-i",
-                "-",
+                "pipe:0",
                 "-vf",
-                f"scale={width}:{height}",
-                "-q:v",
-                "2",
+                f"scale={width}:{height}:flags=lanczos",
                 "-f",
                 "image2",
-                "-",
+                "-q:v",
+                "2",
+                "pipe:1",
             ],
             input=raw_bytes,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             check=False,
         )
         if res.returncode == 0 and res.stdout:
@@ -165,16 +170,21 @@ def resize_image_bytes(
 def extract_scenario_t0(
     row: dict[str, Any],
     output_dir: Path,
+    target_cameras: set[str] | None = None,
     resize: bool = True,
 ) -> dict[str, Path]:
-    """Extract and save t=0 frames for all 6 cameras for a single row dict."""
+    """Extract and save t=0 frames for requested cameras for a single row dict."""
     scenario_id = str(row.get("scenario_id", "")).zfill(7)
     scenario_dir = output_dir / scenario_id
     scenario_dir.mkdir(parents=True, exist_ok=True)
 
     saved_paths: dict[str, Path] = {}
+    cams_to_process = target_cameras if target_cameras else set(CAMERA_FRAME_COLUMNS.keys())
 
-    for cam_name, col_name in CAMERA_FRAME_COLUMNS.items():
+    for cam_name in cams_to_process:
+        col_name = CAMERA_FRAME_COLUMNS.get(cam_name)
+        if not col_name:
+            continue
         frames_list = row.get(col_name)
         if not frames_list or not isinstance(frames_list, list):
             continue
@@ -202,15 +212,20 @@ def process_parquet_file(
     parquet_source: Any,
     output_dir: Path,
     target_scenarios: set[str] | None = None,
+    target_cameras: set[str] | None = None,
     limit: int | None = None,
     resize: bool = True,
     force: bool = False,
-) -> dict[str, dict[str, Path]]:
+    return_stats: bool = False,
+) -> dict[str, dict[str, Path]] | tuple[dict[str, dict[str, Path]], dict[str, Any]]:
     """Process a ParquetFile instance (local or remote fsspec stream) and extract t=0 frames.
 
-    Reading a column chunk transfers every frame of that row group, not just the last one:
-    parquet cannot seek to a single list element. The saving is on disk (six images per
-    scenario instead of 126) and in repeated runs, which skip completed scenarios.
+    Reading a column chunk transfers every frame of that row group, not just the last one.
+    To minimize network transfer:
+    - We only read columns for requested cameras (e.g. 'frames_camera_front' when --cameras front).
+    - We skip row groups that contain no target scenarios.
+    - We stop scanning row groups early once all target scenarios have been extracted.
+    - We log precise compressed byte sizes of the transferred column chunks.
     """
     import pyarrow.parquet as pq
 
@@ -222,34 +237,71 @@ def process_parquet_file(
     all_extracted: dict[str, dict[str, Path]] = {}
     total_rgs = pf.num_row_groups
 
-    print(f"[*] Processing {total_rgs} row group(s)")
-
-    available = [
-        name for name in CAMERA_FRAME_COLUMNS.values() if name in pf.schema_arrow.names
+    cams_to_extract = target_cameras if target_cameras else set(CAMERA_FRAME_COLUMNS.keys())
+    selected_cols = [
+        col_name
+        for cam_name, col_name in CAMERA_FRAME_COLUMNS.items()
+        if cam_name in cams_to_extract and col_name in pf.schema_arrow.names
     ]
-    if not available:
+
+    if not selected_cols:
         raise RuntimeError(
-            "this parquet file has none of the camera frame columns; check --split"
+            f"No camera frame columns found matching requested cameras {cams_to_extract} in parquet schema. "
+            f"Available: {pf.schema_arrow.names}"
         )
+
+    # Parquet Row-Group Transfer Accounting
+    transfer_stats: dict[str, Any] = {
+        "total_row_groups": total_rgs,
+        "row_groups_scanned": 0,
+        "matching_row_groups": [],
+        "scenarios_in_matching_groups": [],
+        "compressed_bytes_by_column": {col: 0 for col in ["scenario_id"] + selected_cols},
+        "total_compressed_bytes_read": 0,
+    }
+
+    print(f"[*] Processing parquet with {total_rgs} row group(s)")
+    print(f"[*] Selected camera column(s) to read: {selected_cols}")
 
     for rg_idx in range(total_rgs):
         if limit and len(all_extracted) >= limit:
             break
 
+        transfer_stats["row_groups_scanned"] += 1
+
         # Fast pre-filtering: read only scenario_id column to check if target scenarios exist
         if target_scenarios:
-            rg_meta = pf.read_row_group(rg_idx, columns=["scenario_id"])
-            rg_sids = {str(s).zfill(7) for s in rg_meta["scenario_id"].to_pylist()}
+            rg_meta_table = pf.read_row_group(rg_idx, columns=["scenario_id"])
+            rg_sids = {str(s).zfill(7) for s in rg_meta_table["scenario_id"].to_pylist()}
             matching_sids = rg_sids.intersection(target_scenarios)
+
             # If no targets in this row group, or all already extracted, skip entire row group
-            if not matching_sids or all(
-                all((output_dir / sid / f"{cam}.jpg").exists() for cam in spec.CAMERAS)
-                for sid in matching_sids
+            if not matching_sids or (
+                not force
+                and all(
+                    all((output_dir / sid / f"{cam}.jpg").exists() for cam in cams_to_extract)
+                    for sid in matching_sids
+                )
             ):
                 continue
 
-        # One pass per row group: all camera columns and the id travel together.
-        table = pf.read_row_group(rg_idx, columns=["scenario_id"] + available)
+        # Found matching row group: record transfer statistics from chunk metadata
+        transfer_stats["matching_row_groups"].append(rg_idx)
+        rg_meta = pf.metadata.row_group(rg_idx)
+        transfer_stats["scenarios_in_matching_groups"].append(rg_meta.num_rows)
+
+        read_cols = ["scenario_id"] + selected_cols
+        for col_name in read_cols:
+            col_chunk_bytes = sum(
+                rg_meta.column(i).total_compressed_size
+                for i in range(rg_meta.num_columns)
+                if rg_meta.column(i).path_in_schema.startswith(col_name)
+            )
+            transfer_stats["compressed_bytes_by_column"][col_name] += col_chunk_bytes
+            transfer_stats["total_compressed_bytes_read"] += col_chunk_bytes
+
+        # Read only the selected camera columns and scenario_id for this row group
+        table = pf.read_row_group(rg_idx, columns=read_cols)
         rows = table.to_pylist()
 
         for row in rows:
@@ -264,11 +316,13 @@ def process_parquet_file(
 
             destination = output_dir / sid
             if not force and all(
-                (destination / f"{camera}.jpg").exists() for camera in spec.CAMERAS
+                (destination / f"{camera}.jpg").exists() for camera in cams_to_extract
             ):
                 continue
 
-            saved = extract_scenario_t0(row, output_dir, resize=resize)
+            saved = extract_scenario_t0(
+                row, output_dir, target_cameras=cams_to_extract, resize=resize
+            )
             if saved:
                 all_extracted[sid] = saved
 
@@ -278,6 +332,16 @@ def process_parquet_file(
             flush=True,
         )
 
+        # Early stopping: once every requested scenario has been extracted, stop scanning
+        if target_scenarios and target_scenarios.issubset(all_extracted.keys()):
+            print(
+                f"[*] All {len(target_scenarios)} target scenario(s) extracted. "
+                f"Stopping row-group scan at row group {rg_idx + 1}/{total_rgs}."
+            )
+            break
+
+    if return_stats:
+        return all_extracted, transfer_stats
     return all_extracted
 
 
@@ -291,9 +355,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.scenarios:
         target_scenarios = {s.strip().zfill(7) for s in args.scenarios.split(",") if s.strip()}
 
+    target_cameras = None
+    if args.cameras:
+        target_cameras = {c.strip() for c in args.cameras.split(",") if c.strip()}
+        invalid = target_cameras - set(spec.CAMERAS)
+        if invalid:
+            print(f"[X] Error: Invalid camera name(s): {invalid}. Valid cameras: {spec.CAMERAS}", file=sys.stderr)
+            return 1
+
     print("=" * 65)
     print("KITScenes-LongTail Observed t=0 Frame Extraction")
     print(f"Output Directory: {args.output_dir}")
+    print(f"Cameras:          {sorted(target_cameras) if target_cameras else 'all 6 surround cameras'}")
     print(f"Resolution:       {'876x568 (downscaled)' if args.resize else '3504x2272 (native)'}")
     print("=" * 65)
 
@@ -302,13 +375,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     # Mode 1: Local Parquet File
     if args.parquet and Path(args.parquet).exists():
         print(f"[*] Reading from local Parquet file: {args.parquet}")
-        results = process_parquet_file(
+        results, stats = process_parquet_file(
             parquet_source=args.parquet,
             output_dir=args.output_dir,
             target_scenarios=target_scenarios,
+            target_cameras=target_cameras,
             limit=args.limit,
             resize=args.resize,
             force=args.force,
+            return_stats=True,
         )
     else:
         # Mode 2: Remote Streaming
@@ -333,23 +408,51 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(f"[*] Streaming remote Parquet via range requests: {remote_uri}")
 
         with fs.open(remote_uri, "rb") as remote_file:
-            results = process_parquet_file(
+            results, stats = process_parquet_file(
                 parquet_source=remote_file,
                 output_dir=args.output_dir,
                 target_scenarios=target_scenarios,
+                target_cameras=target_cameras,
                 limit=args.limit,
                 resize=args.resize,
                 force=args.force,
+                return_stats=True,
             )
 
     elapsed = time.time() - start_time
     total_imgs = sum(len(cams) for cams in results.values())
-    print("\n" + "=" * 65)
-    print("EXTRACTION COMPLETE")
-    print("=" * 65)
-    print(f"Extracted {len(results)} scenarios ({total_imgs} camera frames) in {elapsed:.1f}s.")
-    print(f"Saved into: {args.output_dir.resolve()}")
 
+    print("\n" + "=" * 65)
+    print("PARQUET ROW-GROUP TRANSFER ACCOUNTING")
+    print("=" * 65)
+    print(f"Total Row Groups in File:       {stats['total_row_groups']}")
+    print(f"Row Groups Scanned:             {stats['row_groups_scanned']}")
+    print(f"Matching Row Groups Read:       {stats['matching_row_groups']}")
+    print(f"Scenarios in Matching Groups:   {stats['scenarios_in_matching_groups']} (total: {sum(stats['scenarios_in_matching_groups'])})")
+    print(f"Target Cameras Requested:       {sorted(target_cameras) if target_cameras else list(CAMERA_FRAME_COLUMNS.keys())}")
+    print("Compressed Column Chunk Bytes:")
+    for col, nbytes in stats["compressed_bytes_by_column"].items():
+        mb = nbytes / (1024 * 1024)
+        print(f"  - {col:30s}: {mb:8.2f} MB ({nbytes} bytes)")
+    total_mb = stats["total_compressed_bytes_read"] / (1024 * 1024)
+    print(f"Total Compressed Data Read:     {total_mb:8.2f} MB ({stats['total_compressed_bytes_read']} bytes)")
+    print("=" * 65)
+
+    # Check for missing scenarios
+    if target_scenarios:
+        missing = target_scenarios - set(results.keys())
+        # Also check if already existing on disk
+        cams_to_check = target_cameras if target_cameras else set(CAMERA_FRAME_COLUMNS.keys())
+        missing_on_disk = {
+            sid for sid in missing
+            if not all((args.output_dir / sid / f"{c}.jpg").exists() for c in cams_to_check)
+        }
+        if missing_on_disk:
+            print(f"[X] Error: Target scenario(s) not found in dataset or on disk: {sorted(missing_on_disk)}", file=sys.stderr)
+            return 3
+
+    print(f"\nExtracted {len(results)} scenario(s) ({total_imgs} camera frame(s)) in {elapsed:.1f}s.")
+    print(f"Saved into: {args.output_dir.resolve()}")
     return 0
 
 
