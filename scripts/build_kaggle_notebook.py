@@ -261,15 +261,17 @@ def create_kaggle_notebook(output_path: Path):
                 "file_sha = hasher.hexdigest()\n",
                 "\n",
                 "planner_check = knn_trajectory.KNNTrajectoryPlanner(donor_path=train_donors_file)\n",
+                "EXPECTED_DONORS_SHA256 = \"a96e2f7b11a4c2911ace9dc69cbbe096f0b242400673636fa530d373fff65e58\"\n",
                 "print(f\"Training donors file size: {train_donors_file.stat().st_size / 1024:.1f} KB\")\n",
                 "print(f\"Training donors SHA-256:   {file_sha}\")\n",
+                "assert file_sha == EXPECTED_DONORS_SHA256, f\"Donor file SHA-256 mismatch: got {file_sha}, expected {EXPECTED_DONORS_SHA256}\"\n",
                 "print(f\"Total scenario records:    {donor_lines}/500\")\n",
                 "print(f\"Valid donors loaded:       {len(planner_check.donors)}/499\")\n",
                 "assert donor_lines == 500, f\"Expected 500 training scenarios, got {donor_lines}\"\n",
                 "assert len(planner_check.donors) >= 499, f\"Expected >= 499 valid donors, got {len(planner_check.donors)}\"\n",
                 "for d in planner_check.donors:\n",
                 "    assert d.scenario_id in spec.TRAIN_SCENARIO_ID_SET, f\"Split leakage: {d.scenario_id} not in train split\"\n",
-                "print(\"Training donor database verified (split isolation confirmed, fail-fast satisfied).\")\n"
+                "print(\"Training donor database verified (SHA-256 matched, split isolation confirmed, fail-fast satisfied).\")\n"
             ]
         },
         {
@@ -367,7 +369,7 @@ def create_kaggle_notebook(output_path: Path):
             "source": [
                 "## Step 5: GPU Single-Scenario Verification (Scenario 0000000, Front Camera)\n",
                 "Execute genuine pretrained SVD inference on 1 T4 GPU for Scenario `0000000` (front camera, 25 frames @ 5 FPS) using extracted test-split frames.\n",
-                "- **Trajectory Conditioning Protocol**: Evaluated with kNN trajectory retrieval (--planner knn) conditioned on verified training donor database `train_trajectories.jsonl` (499 valid donors loaded, zero leakage).\n",
+                "- **Trajectory Conditioning Protocol**: Evaluated with kNN-derived motion-bucket conditioning (`--planner knn`). kNN predicts the 25-waypoint future trajectory from the verified training donor database `train_trajectories.jsonl`, from which a calibrated scalar motion bucket is derived for SVD-XT (notice: SVD-XT receives scalar motion conditioning rather than direct spatial waypoint cross-attention).\n",
                 "- **Model Pinning**: SVD-XT is pinned to immutable commit SHA `9e43909513c6714f1bc78bcb44d96e733cd242aa`.\n",
                 "- **Validation Criteria**: Asserts all 15 denoising callbacks execute, measures pre-encoding consecutive frame L1 diffs, logs peak GPU memory and timing.\n",
                 "- **Strict Fail-Fast Gate**: Halts the notebook immediately if model loading, step assertions, video generation, or donor loading fail."
@@ -381,7 +383,7 @@ def create_kaggle_notebook(output_path: Path):
             "source": [
                 "# Run genuine pretrained SVD single-camera inference on 1 T4 GPU\n",
                 "# Uses test scenario 0000000 (extracted in Step 4) and past kinematics from history.jsonl (Step 3).\n",
-                "# Evaluates with kNN trajectory retrieval conditioning (strict fail-fast: zero donors raises exception).\n",
+                "# Evaluates with kNN-derived motion-bucket conditioning (strict fail-fast: zero donors raises exception).\n",
                 "# Halts notebook execution immediately if SVD model loading, callback assertions, or video generation fail.\n",
                 "import subprocess\n",
                 "import sys\n",
