@@ -80,6 +80,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="File containing training donor trajectories for kNN planner (default: data/train_trajectories.jsonl)",
     )
     parser.add_argument(
+        "--planner",
+        type=str,
+        choices=["knn", "cv"],
+        default="knn",
+        help="Trajectory planner architecture: 'knn' (requires valid training donors) or 'cv' (Constant Velocity baseline) (default: knn)",
+    )
+    parser.add_argument(
         "--model-id",
         type=str,
         default="stabilityai/stable-video-diffusion-img2vid-xt",
@@ -88,8 +95,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--model-revision",
         type=str,
-        default="main",
-        help="Pinned Hugging Face model git commit SHA or branch revision (default: main)",
+        default="9e43909513c6714f1bc78bcb44d96e733cd242aa",
+        help="Pinned Hugging Face model git commit SHA (default: 9e43909513c6714f1bc78bcb44d96e733cd242aa)",
     )
     parser.add_argument(
         "--steps",
@@ -329,31 +336,31 @@ def main() -> int:
         print(f"FATAL: Scenario {args.scenario_id} has empty past trajectory in '{history_file}'.")
         return 5
 
-    # Check training donor trajectories for kNN planner
+    # Check training donor trajectories for planner
     donor_path = args.donor_file
-    num_donors = 0
-    if donor_path and donor_path.exists():
+    if args.planner == "knn":
+        if not donor_path or not donor_path.is_file():
+            raise FileNotFoundError(
+                f"kNN planner requested (--planner knn) but donor file does not exist at '{donor_path}'. "
+                f"Refusing silent fallback to Constant Velocity. Ensure training donors are downloaded and validated."
+            )
         knn_planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=donor_path)
         num_donors = len(knn_planner.donors)
-    else:
-        knn_planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=None)
-
-    # Determine planner method and motion bucket origin
-    past_arr = np.asarray(past_pts, dtype=float)
-    query_kin = knn_trajectory._extract_past_kinematics(past_arr)
-    speed0 = query_kin["speed0"]
-    if speed0 < 0.2:
-        planner_method = "Constant Velocity (vehicle stationary or near-stop, speed < 0.2 m/s)"
-        motion_bucket_source = "CV_DERIVED (stationary vehicle)"
-        planner_used_knn = False
-    elif num_donors > 0:
-        planner_method = f"kNN Trajectory Retrieval + CV Blend ({num_donors} training donors available)"
-        motion_bucket_source = "KNN_DERIVED"
+        if num_donors == 0:
+            raise RuntimeError(
+                f"kNN planner requested (--planner knn) but zero valid training donors could be parsed from '{donor_path}'. "
+                f"Refusing silent fallback to Constant Velocity."
+            )
         planner_used_knn = True
+        planner_method = f"kNN Trajectory Retrieval + CV Blend ({num_donors} training donors loaded)"
+        motion_bucket_source = "KNN_DERIVED"
     else:
-        planner_method = "Constant Velocity (CV fallback: 0 training donors loaded from donor file)"
-        motion_bucket_source = "CV_DERIVED"
+        # Constant Velocity baseline explicitly selected
+        knn_planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=None)
+        num_donors = 0
         planner_used_knn = False
+        planner_method = "Constant Velocity (CV explicitly selected via --planner cv)"
+        motion_bucket_source = "CV_DERIVED (baseline)"
 
     plan_traj = knn_planner.plan(args.scenario_id, past_pts, instruction, scenario_type=stype)
     pts = np.asarray(plan_traj, dtype=float)
@@ -520,6 +527,8 @@ def main() -> int:
             "history_points_count": len(past_pts),
             "donor_file": str(donor_path) if donor_path else None,
             "training_donors_loaded": num_donors,
+            "planner_type": args.planner,
+            "fail_fast_verified": True,
             "planner_used_knn": planner_used_knn,
             "planner_method": planner_method,
             "motion_bucket_source": motion_bucket_source,

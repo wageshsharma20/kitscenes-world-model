@@ -204,13 +204,23 @@ class KNNTrajectoryPlanner:
             for line in f:
                 if not line.strip():
                     continue
-                data = json.loads(line)
-                sid = data["scenario_id"]
+                try:
+                    data = json.loads(line)
+                    sid = data["scenario_id"]
+                except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+
                 # Enforce split constraint: only train scenarios (0000400-0000899)
                 if sid not in spec.TRAIN_SCENARIO_ID_SET:
                     continue
 
-                past = np.asarray(data["past"], dtype=float)
+                past = data.get("past")
+                if past is None:
+                    continue
+                past_arr = np.asarray(past, dtype=float)
+                if past_arr.ndim != 2 or len(past_arr) < 2:
+                    continue
+
                 expert = data.get("expert_like")
                 if expert is None or len(expert) != HORIZON_STEPS:
                     continue
@@ -218,7 +228,7 @@ class KNNTrajectoryPlanner:
                 if np.allclose(future, -100.0):
                     continue
 
-                kin = _extract_past_kinematics(past)
+                kin = _extract_past_kinematics(past_arr)
                 maneuver = classify_instruction(data.get("driving_instruction", ""))
 
                 self.donors.append(

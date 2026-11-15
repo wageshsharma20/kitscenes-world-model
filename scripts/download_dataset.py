@@ -156,7 +156,29 @@ def stream_split_metadata(
             f_hist.write(json.dumps(hist_rec) + "\n")
             f_inst.write(json.dumps({"scenario_id": sid, "instruction": instr}) + "\n")
 
-    return [meta_path, hist_path, inst_path]
+    output_files = [meta_path, hist_path, inst_path]
+    if split_name == "train":
+        train_traj_path = output_dir / "train_trajectories.jsonl"
+        with open(train_traj_path, "w", encoding="utf-8") as f_train:
+            for sid in sorted_sids:
+                row = all_scenarios[sid]
+                traj_data = row.get("trajectory") or {}
+                if isinstance(traj_data, dict):
+                    rec = {
+                        "scenario_id": sid,
+                        "driving_instruction": row.get("driving_instruction") or "",
+                        "scenario_type": row.get("scenario_type") or "",
+                        "past": traj_data.get("past") or [],
+                        "expert_like": traj_data.get("expert_like") or [],
+                        "wrong_speed": traj_data.get("wrong_speed") or [],
+                        "neglect_instruction": traj_data.get("neglect_instruction") or [],
+                        "off_road": traj_data.get("off_road") or [],
+                        "crash": traj_data.get("crash") or [],
+                    }
+                    f_train.write(json.dumps(rec) + "\n")
+        output_files.append(train_traj_path)
+
+    return output_files
 
 
 def main(argv=None) -> int:
