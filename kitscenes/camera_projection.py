@@ -28,19 +28,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
 
 from kitscenes import spec
 from kitscenes.video_engine import (
-    CAMERA_YAW_DEG,
-    CAMERA_YAW_RAD,
-    DEFAULT_CAMERA_POSITIONS,
     CameraPose,
     CameraRig,
-    wrap_angle,
 )
 
 # Cohen-Sutherland 2D outcodes
@@ -470,6 +466,8 @@ class CameraProjectionEngine:
         ribbon_width_px: int = 14,
         decay_with_depth: bool = True,
         channel_dim: bool = True,
+        extrapolate_horizon: bool = False,
+        extrapolate_steps: int = 5,
     ) -> np.ndarray:
         """Render Option B.2: Future-Camera-Frame Spatial Conditioning (Ego-Motion Aligned).
 
@@ -480,6 +478,17 @@ class CameraProjectionEngine:
         and then projected into the future camera frame:
             P_cam(t) = R_body_to_cam * (P_ego(t) - t_cam)
         This models what the camera actually observes as the vehicle traverses the scene.
+
+        Args:
+            camera_name: Target camera ('front', 'front_left', etc.).
+            waypoints_ego: (N, 2) array of planned trajectory points.
+            num_frames: Number of output temporal frames (default: 25).
+            ribbon_width_px: Line width for road corridor rendering.
+            decay_with_depth: If True, attenuates line intensity and thickness with distance.
+            channel_dim: If True, returns (num_frames, 1, H, W); else (num_frames, H, W).
+            extrapolate_horizon: If True, kinematically extrapolates trajectory forward beyond
+                                 the final frame to prevent the end-of-horizon corridor vanishing artifact.
+            extrapolate_steps: Number of forward kinematic steps to extrapolate (default: 5 steps = 1.0s).
 
         Returns:
             np.ndarray: float32 tensor of shape (num_frames, 1, H, W) or (num_frames, H, W).
@@ -496,7 +505,12 @@ class CameraProjectionEngine:
                 np.interp(alphas, orig_alphas, pts_in[:, 1]),
             ])
         else:
-            pts_world = pts_in[:num_frames]
+            pts_world = pts_in.copy()
+
+        if extrapolate_horizon and extrapolate_steps > 0 and len(pts_world) >= 2:
+            d_last = pts_world[-1] - pts_world[-2]
+            extra_pts = [pts_world[-1] + (m + 1) * d_last for m in range(extrapolate_steps)]
+            pts_world = np.vstack([pts_world, extra_pts])
 
         headings = compute_trajectory_headings(pts_world)
         masks = np.zeros((num_frames, self.height, self.width), dtype=np.float32)

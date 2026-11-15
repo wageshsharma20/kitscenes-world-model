@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 
 from kitscenes import camera_projection, spec
 
@@ -288,5 +287,24 @@ def test_provisional_rig_attributes():
     R = cam_front.rotation_matrix_body_to_cam
     assert np.isclose(np.linalg.det(R), 1.0, atol=1e-5)
     assert np.allclose(R @ R.T, np.eye(3), atol=1e-5)
+
+
+def test_future_camera_extrapolate_horizon():
+    """Verify extrapolate_horizon prevents end-of-horizon corridor vanishing at frame 24."""
+    engine = camera_projection.CameraProjectionEngine()
+
+    straight_waypoints = np.column_stack([
+        np.linspace(2.0, 50.0, 25),
+        np.zeros(25),
+    ])
+
+    # Unpadded B.2: Frame 24 has n_up=1 so 0 segments -> empty mask
+    m_unpadded = engine.render_future_camera_spatial_masks("front", straight_waypoints, extrapolate_horizon=False)
+    assert np.sum(m_unpadded[24] > 0.05) == 0, "Unpadded B.2 frame 24 must be empty due to n_up < 2"
+
+    # Extrapolated B.2: Extrapolates 5 forward steps -> frame 24 has valid corridor
+    m_extrap = engine.render_future_camera_spatial_masks("front", straight_waypoints, extrapolate_horizon=True, extrapolate_steps=5)
+    assert np.sum(m_extrap[24] > 0.05) > 500, "Extrapolated B.2 frame 24 must contain active road corridor"
+
 
 

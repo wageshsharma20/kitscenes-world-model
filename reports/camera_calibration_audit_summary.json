@@ -1,0 +1,121 @@
+{
+  "dataset_name": "KITScenes-LongTail",
+  "dataset_repo": "KIT-MRT/KITScenes-LongTail",
+  "scenarios_audited": 10,
+  "total_camera_views_audited": 60,
+  "calibration_status": "PROVISIONAL NOMINAL",
+  "provisional_model_parameters": {
+    "image_width": 876,
+    "image_height": 568,
+    "hfov_deg": 70.0,
+    "focal_length_px": 625.529,
+    "principal_point": [
+      438.0,
+      284.0
+    ],
+    "camera_height_m": 1.4,
+    "near_clip_m": 0.5,
+    "yaw_angles_deg": {
+      "front": 0.0,
+      "front_left": 60.0,
+      "front_right": -60.0,
+      "rear": 180.0,
+      "rear_left": 120.0,
+      "rear_right": -120.0
+    }
+  },
+  "overall_statistics": {
+    "mean_horizon_error_px": -25.1,
+    "median_horizon_error_px": -35.36,
+    "std_horizon_error_px": 47.34,
+    "mean_pitch_offset_deg": -2.289,
+    "std_pitch_offset_deg": 4.315,
+    "mean_road_alignment_iou_pct": 34.53
+  },
+  "by_camera_summary": {
+    "front": {
+      "num_scenarios": 10,
+      "mean_horizon_delta_cy_px": -21.46,
+      "median_horizon_delta_cy_px": -42.64,
+      "std_horizon_delta_cy_px": 51.41,
+      "mean_equivalent_pitch_deg": -1.958,
+      "std_equivalent_pitch_deg": 4.689,
+      "mean_ground_grid_vis_pct": 52.23,
+      "mean_road_alignment_iou_pct": 47.1,
+      "mean_trajectory_vis_pct": 66.0,
+      "vp_detected_count": 9,
+      "mean_vp_delta_cx_px": 7.66,
+      "mean_vp_delta_cy_px": -10.76
+    },
+    "front_left": {
+      "num_scenarios": 10,
+      "mean_horizon_delta_cy_px": -21.16,
+      "median_horizon_delta_cy_px": -20.29,
+      "std_horizon_delta_cy_px": 34.03,
+      "mean_equivalent_pitch_deg": -1.931,
+      "std_equivalent_pitch_deg": 3.108,
+      "mean_ground_grid_vis_pct": 6.63,
+      "mean_road_alignment_iou_pct": 26.11,
+      "mean_trajectory_vis_pct": 6.8,
+      "vp_detected_count": 8,
+      "mean_vp_delta_cx_px": 91.64,
+      "mean_vp_delta_cy_px": 27.08
+    },
+    "front_right": {
+      "num_scenarios": 10,
+      "mean_horizon_delta_cy_px": -38.11,
+      "median_horizon_delta_cy_px": -34.93,
+      "std_horizon_delta_cy_px": 50.87,
+      "mean_equivalent_pitch_deg": -3.472,
+      "std_equivalent_pitch_deg": 4.625,
+      "mean_ground_grid_vis_pct": 6.63,
+      "mean_road_alignment_iou_pct": 26.55,
+      "mean_trajectory_vis_pct": 0.0,
+      "vp_detected_count": 8,
+      "mean_vp_delta_cx_px": -143.88,
+      "mean_vp_delta_cy_px": -10.76
+    },
+    "rear": {
+      "num_scenarios": 10,
+      "mean_horizon_delta_cy_px": -30.37,
+      "median_horizon_delta_cy_px": -43.14,
+      "std_horizon_delta_cy_px": 29.79,
+      "mean_equivalent_pitch_deg": -2.775,
+      "std_equivalent_pitch_deg": 2.722,
+      "mean_ground_grid_vis_pct": 24.11,
+      "mean_road_alignment_iou_pct": 47.3,
+      "mean_trajectory_vis_pct": 0.0,
+      "vp_detected_count": 9,
+      "mean_vp_delta_cx_px": 22.99,
+      "mean_vp_delta_cy_px": -31.88
+    },
+    "rear_left": {
+      "num_scenarios": 10,
+      "mean_horizon_delta_cy_px": -8.93,
+      "median_horizon_delta_cy_px": -6.29,
+      "std_horizon_delta_cy_px": 49.95,
+      "mean_equivalent_pitch_deg": -0.809,
+      "std_equivalent_pitch_deg": 4.553,
+      "mean_ground_grid_vis_pct": 6.97,
+      "mean_road_alignment_iou_pct": 30.23,
+      "mean_trajectory_vis_pct": 0.4,
+      "vp_detected_count": 8,
+      "mean_vp_delta_cx_px": -100.4,
+      "mean_vp_delta_cy_px": -20.74
+    },
+    "rear_right": {
+      "num_scenarios": 10,
+      "mean_horizon_delta_cy_px": -30.57,
+      "median_horizon_delta_cy_px": -53.21,
+      "std_horizon_delta_cy_px": 56.18,
+      "mean_equivalent_pitch_deg": -2.785,
+      "std_equivalent_pitch_deg": 5.122,
+      "mean_ground_grid_vis_pct": 6.97,
+      "mean_road_alignment_iou_pct": 29.86,
+      "mean_trajectory_vis_pct": 0.0,
+      "vp_detected_count": 9,
+      "mean_vp_delta_cx_px": 138.23,
+      "mean_vp_delta_cy_px": -51.98
+    }
+  }
+}

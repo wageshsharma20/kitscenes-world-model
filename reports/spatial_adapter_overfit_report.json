@@ -1,0 +1,160 @@
+{
+  "experiment_name": "spatial_adapter_small_overfit",
+  "timestamp": "2026-11-15T10:57:17Z",
+  "config": {
+    "num_sequences": 8,
+    "iterations": 30,
+    "lr": 0.001,
+    "loss_type": "latent_mse",
+    "use_synthetic": false,
+    "fast_mode": true,
+    "device": "cpu"
+  },
+  "parameter_audit": {
+    "trainable_adapter_params": 151524,
+    "frozen_backbone_params": 12740,
+    "total_params": 164264,
+    "adapter_budget_compliant": true
+  },
+  "training_trajectory": {
+    "loss_history": [
+      0.04291546996682882,
+      0.011445478070527315,
+      0.010812018881551921,
+      0.0107342388946563,
+      0.010642241220921278,
+      0.010600161855109036,
+      0.0105858693132177,
+      0.010565255652181804,
+      0.010559963411651552,
+      0.01055670261848718,
+      0.010556620545685291,
+      0.010555275483056903,
+      0.010554493172094226,
+      0.01055427105166018,
+      0.010553929372690618,
+      0.010553473606705666,
+      0.010553167667239904,
+      0.010552893858402967,
+      0.010552576859481633,
+      0.010552241699770093,
+      0.010551933199167252,
+      0.010551633080467582,
+      0.010551330517046154,
+      0.0105510224821046,
+      0.010550710605457425,
+      0.010550398612394929,
+      0.010550086502917111,
+      0.010549772065132856,
+      0.010549455881118774,
+      0.010549135971814394
+    ],
+    "initial_loss": 0.04291546996682882,
+    "final_loss": 0.010549135971814394,
+    "loss_reduction_pct": 75.41880356904336,
+    "strictly_decreased": true,
+    "duration_s": 142.29396774999998
+  },
+  "motion_steerability": {
+    "is_steerable": true,
+    "mask_lateral_bias": {
+      "left": -0.3544813719170743,
+      "right": 0.3590519388192185,
+      "delta": 0.7135333107362928
+    },
+    "adapter_feature_bias": {
+      "baseline": -0.019299310418962396,
+      "left": -0.029572225911789932,
+      "right": -0.00275337959548695,
+      "adapter_steerability": 0.026818846316302984
+    },
+    "denoised_differential_bias": {
+      "left_vs_baseline": -0.013666253103707676,
+      "right_vs_baseline": -0.009395133371582234,
+      "steerability_index": 0.004271119732125442
+    },
+    "differential_l2_norms": {
+      "norm_left_vs_baseline": 5.65936803817749,
+      "norm_right_vs_baseline": 5.693478584289551,
+      "norm_right_vs_left": 0.8499222993850708
+    }
+  },
+  "ablation_summary": {
+    "NO_SPATIAL_CONDITIONING": {
+      "mode_id": 0,
+      "mask_shape": [
+        1,
+        16,
+        1,
+        284,
+        438
+      ],
+      "latent_shape": [
+        1,
+        16,
+        4,
+        32,
+        48
+      ],
+      "motion_bucket": 90,
+      "mask_mean": 0.0
+    },
+    "OPTION_B1_ORACLE": {
+      "mode_id": 1,
+      "mask_shape": [
+        1,
+        16,
+        1,
+        284,
+        438
+      ],
+      "latent_shape": [
+        1,
+        16,
+        4,
+        32,
+        48
+      ],
+      "motion_bucket": 90,
+      "mask_mean": 0.0067169093526899815
+    },
+    "OPTION_B1_PREDICTED": {
+      "mode_id": 2,
+      "mask_shape": [
+        1,
+        16,
+        1,
+        284,
+        438
+      ],
+      "latent_shape": [
+        1,
+        16,
+        4,
+        32,
+        48
+      ],
+      "motion_bucket": 90,
+      "mask_mean": 0.005731165409088135
+    },
+    "OPTION_B2_ORACLE": {
+      "mode_id": 3,
+      "mask_shape": [
+        1,
+        16,
+        1,
+        284,
+        438
+      ],
+      "latent_shape": [
+        1,
+        16,
+        4,
+        32,
+        48
+      ],
+      "motion_bucket": 90,
+      "mask_mean": 0.012042077258229256
+    }
+  }
+}
