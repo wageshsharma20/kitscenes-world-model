@@ -1,0 +1,101 @@
+scenario_id,driving_instruction,scenario_type,gt_distance_m,cv_predicted_dist_m,knn_predicted_dist_m,cv_mean_l2_m,knn_mean_l2_m,diff_mean_l2_m,cv_endpoint_l2_m,knn_endpoint_l2_m,diff_endpoint_l2_m,knn_won_mean,knn_won_endpoint
+0000900,drive straight on,6 snow & wintry mix,57.51,68.84,66.29,5.554,5.455,0.1,12.028,11.252,0.776,True,True
+0000901,use right lane,3 overtake or lane change,154.31,161.52,157.12,3.559,1.512,2.047,8.031,3.455,4.577,True,True
+0000902,turn right,4 intersection,14.82,1.44,3.8,4.432,3.937,0.495,13.379,11.817,1.562,True,True
+0000903,drive straight on,1 heavy rain,100.69,100.94,101.74,5.04,5.92,-0.88,12.736,15.605,-2.869,False,False
+0000904,drive straight on,2 construction zone,55.35,59.52,57.27,1.818,1.057,0.761,4.178,1.996,2.182,True,True
+0000905,turn right,0 specifically selected,5.1,0.0,0.0,1.165,1.165,0.0,5.098,5.098,0.0,False,False
+0000906,use left lane,5 nighttime,152.03,160.13,157.57,3.294,2.108,1.186,8.106,5.585,2.522,True,True
+0000907,use left lane,0 specifically selected,116.39,122.15,122.16,2.587,2.192,0.395,5.895,5.794,0.101,True,True
+0000908,turn right,0 specifically selected,40.86,50.79,44.96,4.883,2.632,2.251,11.499,5.465,6.034,True,True
+0000909,drive straight on,6 snow & wintry mix,62.25,54.38,51.97,12.892,12.43,0.462,30.515,29.41,1.105,True,True
+0000910,drive straight on,6 snow & wintry mix,67.9,71.96,69.98,5.761,4.309,1.452,13.695,9.346,4.348,True,True
+0000911,turn left,0 specifically selected,11.04,6.01,8.18,1.324,2.032,-0.708,5.536,7.661,-2.126,False,False
+0000912,drive straight on,1 heavy rain,104.59,105.75,104.6,3.237,4.274,-1.037,6.715,9.974,-3.26,False,False
+0000913,turn right,4 intersection,28.46,37.64,32.96,2.779,2.457,0.322,11.385,6.458,4.927,True,True
+0000914,use right lane,3 overtake or lane change,89.2,97.92,94.6,4.115,2.612,1.503,9.576,5.781,3.794,True,True
+0000915,drive straight on,1 heavy rain,108.74,112.15,110.01,1.677,2.167,-0.49,3.417,5.875,-2.458,False,False
+0000916,use left lane,3 overtake or lane change,50.05,44.22,42.14,5.253,5.831,-0.578,11.502,13.002,-1.5,False,False
+0000917,drive straight on,6 snow & wintry mix,60.62,62.75,61.24,11.189,11.753,-0.564,27.029,28.528,-1.498,False,False
+0000918,drive straight on,2 construction zone,49.75,45.58,46.37,1.492,1.194,0.298,4.177,3.393,0.783,True,True
+0000919,overtake truck driving on the right,3 overtake or lane change,58.34,51.33,62.34,4.518,4.891,-0.373,10.596,11.614,-1.019,False,False
+0000920,turn right,4 intersection,46.12,32.58,38.0,5.675,4.47,1.205,16.247,11.992,4.255,True,True
+0000921,turn right,0 specifically selected,15.71,0.0,0.0,4.87,4.87,0.0,15.711,15.711,0.0,False,False
+0000922,use right lane,3 overtake or lane change,156.76,161.95,157.42,2.271,1.711,0.56,6.161,5.121,1.04,True,True
+0000923,turn left,4 intersection,26.44,17.53,21.07,5.241,5.818,-0.578,9.043,11.765,-2.722,False,False
+0000924,turn right,4 intersection,50.17,35.58,43.5,5.801,3.309,2.491,15.663,7.869,7.794,True,True
+0000925,drive straight on,0 specifically selected,59.91,67.08,66.77,6.306,5.006,1.3,18.766,15.523,3.244,True,True
+0000926,use middle lane,5 nighttime,165.43,169.44,166.97,1.986,1.09,0.896,4.008,2.097,1.911,True,True
+0000927,drive straight on,4 intersection,38.4,34.54,31.14,1.923,2.281,-0.358,5.093,7.679,-2.586,False,False
+0000928,drive straight on,4 intersection,28.86,20.15,21.75,6.247,5.946,0.301,15.248,14.706,0.542,True,True
+0000929,drive straight on,4 intersection,45.36,48.13,48.09,1.812,1.716,0.096,4.681,4.452,0.23,True,True
+0000930,turn left,1 heavy rain,14.22,15.88,13.78,3.521,2.193,1.328,10.965,6.361,4.604,True,True
+0000931,turn left,4 intersection,20.89,29.31,13.75,8.142,4.383,3.76,19.834,11.012,8.822,True,True
+0000932,turn left,4 intersection,12.15,15.38,16.66,5.61,4.82,0.791,13.59,9.822,3.768,True,True
+0000933,drive straight on,0 specifically selected,79.71,81.32,78.62,5.12,4.58,0.54,13.208,11.816,1.392,True,True
+0000934,drive straight on,2 construction zone,56.91,59.38,56.89,2.129,2.058,0.071,3.808,3.646,0.162,True,True
+0000935,drive straight on,2 construction zone,49.53,54.04,48.32,2.245,0.804,1.441,4.728,1.867,2.861,True,True
+0000936,turn left,4 intersection,25.0,32.25,17.35,7.178,4.0,3.178,22.558,10.438,12.12,True,True
+0000937,overtake truck in front,3 overtake or lane change,165.38,164.1,161.51,1.843,2.562,-0.718,6.234,9.018,-2.784,False,False
+0000938,drive straight on,4 intersection,30.28,49.99,48.32,12.006,11.503,0.503,23.361,22.172,1.189,True,True
+0000939,use right lane,3 overtake or lane change,154.17,158.23,153.71,2.448,0.613,1.835,5.152,1.694,3.457,True,True
+0000940,drive straight on,1 heavy rain,112.14,114.53,111.75,1.264,1.776,-0.511,2.406,5.072,-2.666,False,False
+0000941,use left lane,3 overtake or lane change,37.31,51.69,45.78,10.171,8.113,2.058,31.088,26.13,4.958,True,True
+0000942,drive straight on,0 specifically selected,16.84,5.25,10.69,3.324,2.334,0.99,12.43,8.616,3.814,True,True
+0000943,drive straight on,4 intersection,44.2,51.25,50.05,4.149,4.145,0.004,7.862,7.53,0.332,True,True
+0000944,turn right,1 heavy rain,12.74,5.75,5.55,2.136,2.011,0.125,8.196,7.255,0.941,True,True
+0000945,turn right,4 intersection,23.29,26.46,22.11,8.456,2.997,5.459,24.054,8.201,15.854,True,True
+0000946,use left lane,3 overtake or lane change,97.63,94.31,90.28,2.491,2.814,-0.323,5.636,8.058,-2.422,False,False
+0000947,use right lane,3 overtake or lane change,54.89,59.76,53.24,3.576,1.445,2.131,5.656,1.653,4.002,True,True
+0000948,turn right,0 specifically selected,18.48,30.01,20.54,6.338,2.326,4.013,17.758,5.611,12.147,True,True
+0000949,drive straight on,0 specifically selected,16.2,0.0,0.0,4.955,4.955,0.0,16.196,16.196,0.0,False,False
+0000950,turn right,0 specifically selected,7.79,0.79,0.79,2.49,2.49,0.0,8.138,8.138,0.0,False,False
+0000951,turn left,0 specifically selected,11.41,0.0,0.0,2.985,2.985,0.0,11.409,11.409,0.0,False,False
+0000952,drive straight on,0 specifically selected,56.28,62.64,58.8,2.712,1.725,0.987,7.357,4.816,2.541,True,True
+0000953,use right lane,3 overtake or lane change,47.58,55.7,50.23,3.372,1.384,1.988,8.758,2.76,5.998,True,True
+0000954,drive straight on,1 heavy rain,62.95,52.07,48.47,4.334,5.511,-1.177,10.899,14.489,-3.59,False,False
+0000955,use right lane,3 overtake or lane change,38.43,41.74,34.82,2.982,1.267,1.715,4.637,3.638,0.999,True,True
+0000956,turn right,4 intersection,21.88,30.85,20.15,10.998,6.135,4.864,28.826,14.889,13.937,True,True
+0000957,overtake trucks driving on the right,3 overtake or lane change,145.23,149.1,147.33,1.921,0.925,0.997,3.863,2.123,1.74,True,True
+0000958,turn left,4 intersection,10.97,17.0,18.51,5.51,5.473,0.037,8.738,7.65,1.088,True,True
+0000959,drive straight on,4 intersection,40.98,38.07,39.62,2.54,1.923,0.616,3.098,1.363,1.735,True,True
+0000960,drive straight on,4 intersection,57.32,55.15,53.26,5.616,5.444,0.173,15.705,15.205,0.5,True,True
+0000961,drive straight on,0 specifically selected,8.82,26.75,20.67,8.061,5.607,2.454,18.579,12.19,6.389,True,True
+0000962,use middle lane,5 nighttime,149.44,153.56,154.09,3.424,2.75,0.675,8.145,7.485,0.66,True,True
+0000963,drive straight on,6 snow & wintry mix,63.59,72.0,70.06,4.234,4.328,-0.094,12.392,13.333,-0.941,False,False
+0000964,turn left,4 intersection,28.82,19.99,27.3,5.831,7.293,-1.463,10.07,16.929,-6.859,False,False
+0000965,drive straight on,2 construction zone,42.81,48.39,45.67,3.009,2.246,0.763,5.6,2.971,2.629,True,True
+0000966,use right lane,3 overtake or lane change,58.66,73.56,69.55,5.985,4.504,1.481,15.159,10.889,4.271,True,True
+0000967,drive straight on,1 heavy rain,88.02,86.53,86.55,1.552,2.209,-0.657,4.861,6.938,-2.077,False,False
+0000968,use left lane,3 overtake or lane change,35.82,16.88,22.29,7.273,5.868,1.405,18.998,13.547,5.451,True,True
+0000969,drive straight on,4 intersection,46.82,44.7,42.82,2.468,2.284,0.184,6.528,6.614,-0.086,True,False
+0000970,turn left,4 intersection,20.51,0.88,0.88,6.693,6.693,0.0,20.146,20.146,0.0,False,False
+0000971,use left lane,3 overtake or lane change,140.54,133.96,134.17,3.077,2.924,0.153,7.442,7.024,0.418,True,True
+0000972,use right lane,5 nighttime,159.61,165.77,159.67,3.411,0.581,2.83,7.142,1.019,6.123,True,True
+0000973,overtake car in front,3 overtake or lane change,28.62,31.13,37.33,1.033,1.678,-0.646,2.572,8.861,-6.289,False,False
+0000974,use middle lane,5 nighttime,154.71,158.32,157.52,3.259,3.706,-0.447,8.661,10.597,-1.936,False,False
+0000975,turn right,4 intersection,18.37,1.5,3.85,6.559,5.994,0.565,16.909,14.821,2.089,True,True
+0000976,overtake truck driving on the right,3 overtake or lane change,157.76,170.04,165.43,5.482,3.388,2.094,12.29,7.669,4.621,True,True
+0000977,drive straight on,6 snow & wintry mix,72.43,75.14,73.52,2.711,2.713,-0.003,6.943,7.221,-0.278,False,False
+0000978,turn right,4 intersection,21.84,35.0,22.8,8.328,3.735,4.593,23.823,10.573,13.25,True,True
+0000979,drive straight on,4 intersection,28.03,33.77,30.44,6.766,6.183,0.583,11.294,10.079,1.214,True,True
+0000980,drive straight on,2 construction zone,25.95,37.92,36.88,6.405,5.568,0.837,12.755,11.256,1.499,True,True
+0000981,drive straight on,0 specifically selected,20.27,19.38,15.6,3.32,2.828,0.492,5.911,6.822,-0.911,True,False
+0000982,drive straight on,0 specifically selected,53.14,53.86,48.83,3.234,2.513,0.721,8.585,7.783,0.802,True,True
+0000983,drive straight on,1 heavy rain,112.53,116.25,113.43,3.634,1.734,1.901,8.079,2.363,5.716,True,True
+0000984,u-turn,4 intersection,12.91,20.51,19.14,9.796,10.265,-0.469,25.05,25.115,-0.064,False,False
+0000985,turn right,4 intersection,36.47,24.96,26.78,4.118,3.869,0.249,13.393,10.261,3.132,True,True
+0000986,turn right,4 intersection,27.62,23.72,24.47,11.779,8.076,3.703,31.475,20.616,10.859,True,True
+0000987,drive straight on,1 heavy rain,114.29,117.53,115.9,1.701,2.053,-0.353,3.368,5.082,-1.714,False,False
+0000988,turn right,0 specifically selected,24.57,34.35,37.23,11.734,11.051,0.684,31.872,35.557,-3.685,True,False
+0000989,turn right,4 intersection,60.77,72.93,61.49,11.866,5.883,5.982,33.78,17.763,16.017,True,True
+0000990,turn left,4 intersection,26.51,33.92,17.59,3.799,3.935,-0.135,13.171,8.997,4.173,False,True
+0000991,drive straight on,0 specifically selected,54.34,53.32,50.15,1.443,1.736,-0.292,3.759,4.81,-1.051,False,False
+0000992,overtake truck driving on the right,3 overtake or lane change,152.86,159.34,152.48,3.656,1.995,1.661,8.456,5.013,3.443,True,True
+0000993,turn right,4 intersection,26.57,32.35,31.12,6.457,5.63,0.826,18.186,13.409,4.777,True,True
+0000994,overtake van in front,3 overtake or lane change,149.17,149.7,147.7,2.282,2.158,0.124,4.029,4.221,-0.191,True,False
+0000995,drive straight on,4 intersection,62.81,62.81,63.42,5.036,4.869,0.167,15.557,15.478,0.079,True,True
+0000996,drive straight on,4 intersection,31.35,42.64,38.33,9.109,7.291,1.818,17.363,13.385,3.978,True,True
+0000997,turn right,4 intersection,41.74,37.19,43.34,4.768,3.079,1.689,5.888,6.23,-0.341,True,False
+0000998,drive straight on,4 intersection,51.58,63.16,61.6,4.466,3.931,0.535,15.11,13.443,1.667,True,True
+0000999,turn right,4 intersection,33.12,23.63,24.32,3.857,3.474,0.383,11.067,10.42,0.647,True,True
