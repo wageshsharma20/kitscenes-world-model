@@ -726,8 +726,15 @@ def run_svd_gpu_smoke_test(
     if test_cssc and conditioner is not None:
         camera_clip_embeds = torch.randn(1, 6, 1024, device=parsed_device, dtype=dtype)
         motion_states = torch.randn(1, 25, 6, device=parsed_device, dtype=dtype)
-        cssc_out = conditioner(camera_clip_embeds, motion_states, target_camera="front")
-        encoder_hidden_states = cssc_out["encoder_hidden_states"]  # [1, 27, 1024]
+        if enable_gradient_checkpointing:
+            def _run_conditioner(c_embeds, m_states):
+                return conditioner(c_embeds, m_states, target_camera="front")["encoder_hidden_states"]
+            encoder_hidden_states = torch.utils.checkpoint.checkpoint(
+                _run_conditioner, camera_clip_embeds, motion_states, use_reentrant=False
+            )
+        else:
+            cssc_out = conditioner(camera_clip_embeds, motion_states, target_camera="front")
+            encoder_hidden_states = cssc_out["encoder_hidden_states"]
         print(f"  - CSSC encoder_hidden_states: {tuple(encoder_hidden_states.shape)} (27-token bank)")
     else:
         encoder_hidden_states = torch.randn(1, 1, 1024, device=parsed_device, dtype=dtype)
@@ -746,8 +753,19 @@ def run_svd_gpu_smoke_test(
     t_fwd_start = time.perf_counter()
 
     autocast_device = parsed_device.type if parsed_device.type in ["cuda", "cpu"] else "cpu"
+    n_frames = noisy_latents.shape[1]
     with torch.autocast(device_type=autocast_device, dtype=dtype):
-        conditioned_latents = spatial_adapter.apply_to_latent(noisy_latents, spatial_masks)
+        target_shape = (h_lat, w_lat)
+        if enable_gradient_checkpointing:
+            def _run_spatial_adapter(m, n_f=n_frames, t_sz=target_shape):
+                out = spatial_adapter(m, target_latent_shape=t_sz, num_frames=n_f)
+                return out.latent_conditioning
+            spatial_cond = torch.utils.checkpoint.checkpoint(
+                _run_spatial_adapter, spatial_masks, use_reentrant=False
+            )
+            conditioned_latents = noisy_latents + spatial_cond
+        else:
+            conditioned_latents = spatial_adapter.apply_to_latent(noisy_latents, spatial_masks)
         unet_input = torch.cat([conditioned_latents, initial_image_latents], dim=2)
 
         unet_out = unet(
@@ -779,7 +797,16 @@ def run_svd_gpu_smoke_test(
         sample_tensor = sample_tensor[0]
     loss = sample_tensor.mean()
     loss_val = float(loss.item())
+
+    # Free large non-essential forward containers before backward pass
     del unet_out
+    del sample_tensor
+    del initial_image_latents_4d
+    if "cssc_out" in locals():
+        del cssc_out
+    if parsed_device.type == "cuda":
+        torch.cuda.empty_cache()
+
     print(f"[*] Computed dummy scalar loss: {loss_val:.6f}")
 
     # 11. Execute exactly ONE backward pass
