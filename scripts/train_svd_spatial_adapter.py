@@ -45,6 +45,85 @@ from kitscenes.spatial_adapter import (
 )
 
 
+def validate_device_and_dtype(
+    device: str | torch.device,
+    backbone: str,
+) -> Tuple[torch.device, torch.dtype]:
+    """Validate compute device and precision according to backbone safety contracts.
+
+    Contracts:
+    - If backbone == 'svd-xt':
+      * Check torch.cuda.is_available(). If False, raise RuntimeError.
+      * Parse device using torch.device. Device type must be 'cuda'.
+      * Validate device index against torch.cuda.device_count().
+      * Precision dtype is torch.float16.
+    - If backbone == 'mock':
+      * CPU, MPS, and CUDA are permitted.
+      * Precision dtype is torch.float32.
+    """
+    device_obj = torch.device(device) if not isinstance(device, torch.device) else device
+    if backbone == "svd-xt":
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA is strictly required for backbone='svd-xt'. CPU and MPS execution are prohibited to prevent OOM and system crashes."
+            )
+        if device_obj.type != "cuda":
+            raise RuntimeError(
+                f"Invalid device '{device}' for backbone='svd-xt'. Must be a CUDA device (e.g. 'cuda' or 'cuda:0')."
+            )
+        if device_obj.index is not None and device_obj.index >= torch.cuda.device_count():
+            raise RuntimeError(
+                f"CUDA device index {device_obj.index} is out of bounds for available device count {torch.cuda.device_count()}."
+            )
+        dtype = torch.float16
+    elif backbone == "mock":
+        dtype = torch.float32
+    else:
+        raise ValueError(f"Unknown backbone: {backbone}")
+
+    return device_obj, dtype
+
+
+def evaluate_validation_loss(
+    model: SpatialConditionedSVDModel,
+    val_records: List[Dict[str, Any]],
+    val_noises: List[List[torch.Tensor]],
+    val_sigma_grid: List[float],
+    scheduler: Any,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> Tuple[float, Dict[float, float]]:
+    """Evaluate held-out validation loss across multiple reproducible noise realizations and sigma grid."""
+    model.eval()
+    all_losses: List[float] = []
+    per_sigma_losses: Dict[float, List[float]] = {s: [] for s in val_sigma_grid}
+
+    with torch.no_grad():
+        for r, noises in zip(val_records, val_noises):
+            for sigma_val in val_sigma_grid:
+                sigmas = torch.full((1,), sigma_val, device=device, dtype=dtype)
+                c_n = sigma_to_c_noise(sigmas)
+                for n in noises:
+                    loss_v, _ = model.compute_latent_loss(
+                        target_latents=r["target_latents"],
+                        initial_image_latents=r["initial_latents"],
+                        spatial_masks=r["spatial_masks"],
+                        noise=n,
+                        sigmas=sigmas,
+                        c_noise=c_n,
+                        scheduler=scheduler,
+                        encoder_hidden_states=r.get("encoder_hidden_states"),
+                        added_time_ids=r.get("added_time_ids"),
+                        loss_type="v_mse",
+                    )
+                    all_losses.append(loss_v.item())
+                    per_sigma_losses[sigma_val].append(loss_v.item())
+
+    mean_loss = float(np.mean(all_losses)) if all_losses else 0.0
+    sigma_means = {s: float(np.mean(losses)) for s, losses in per_sigma_losses.items()}
+    return mean_loss, sigma_means
+
+
 def load_dataset_records(
     latents_dir: Path,
     observed_t0_dir: Path,
@@ -179,13 +258,18 @@ def train_pilot_adapter(
     conditioning_source: str = "knn",
     iterations: int = 25,
     lr: float = 1e-4,
-    device: str = "mps" if torch.backends.mps.is_available() else "cpu",
+    device: str | torch.device = "mps" if torch.backends.mps.is_available() else "cpu",
+    train_ids: Optional[List[str]] = None,
+    val_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Execute SVD-XT spatial adapter training pilot on genuine latents."""
+    # 0. Strict device and precision safety validation
+    device_obj, dtype = validate_device_and_dtype(device, backbone)
+
     title = f"Phase 3 Pilot ({'Mock Surrogate' if backbone == 'mock' else 'Genuine SVD-XT 1.5B'})"
     print("=" * 80)
     print(title.upper())
-    print(f"Backbone: {backbone} | Conditioning Source: {conditioning_source} | Device: {device}")
+    print(f"Backbone: {backbone} | Conditioning Source: {conditioning_source} | Device: {device_obj} | Dtype: {dtype}")
     print(f"Iterations: {iterations} | Learning Rate: {lr}")
     if backbone == "mock":
         print("NOTE: 'mock' is a lightweight 2D neural surrogate for fast verification without 9GB SVD weights.")
@@ -193,13 +277,14 @@ def train_pilot_adapter(
         print("NOTE: 'svd-xt' loads the genuine 1.5B diffusers UNetSpatioTemporalConditionModel backbone.")
     print("=" * 80)
 
-    train_ids = ["0000400", "0000401", "0000402", "0000403", "0000404", "0000405"]
-    val_ids = ["0000406", "0000407"]
+    if train_ids is None:
+        train_ids = ["0000400", "0000401", "0000402", "0000403", "0000404", "0000405"]
+    if val_ids is None:
+        val_ids = ["0000406", "0000407"]
 
     print(f"Training split ({len(train_ids)} sequences): {train_ids}")
     print(f"Held-out validation split ({len(val_ids)} sequences): {val_ids}")
 
-    dtype = torch.float16 if (device in ("cuda", "mps") and backbone == "svd-xt") else torch.float32
     image_encoder = None
     feature_extractor = None
 
@@ -221,7 +306,7 @@ def train_pilot_adapter(
                 subfolder="image_encoder",
                 torch_dtype=dtype,
                 low_cpu_mem_usage=True,
-            ).to(device)
+            ).to(device_obj)
             feature_extractor = CLIPImageProcessor.from_pretrained(
                 "stabilityai/stable-video-diffusion-img2vid-xt",
                 subfolder="feature_extractor",
@@ -245,14 +330,19 @@ def train_pilot_adapter(
         train_ids=train_ids,
         val_ids=val_ids,
         engine=engine,
-        device=device,
+        device=str(device_obj),
         dtype=dtype,
         image_encoder=image_encoder,
         feature_extractor=feature_extractor,
         conditioning_source=conditioning_source,
     )
 
-    print(f"Successfully loaded {len(train_records)} training records and {len(val_records)} validation records.")
+    train_sequences_count = len(train_records)
+    optimizer_updates_per_iteration = len(train_records)
+    total_optimizer_updates = iterations * len(train_records)
+
+    print(f"Successfully loaded {train_sequences_count} training records and {len(val_records)} validation records.")
+    print(f"Optimizer updates per iteration: {optimizer_updates_per_iteration} | Total updates: {total_optimizer_updates}")
 
     cfg = SpatialAdapterConfig(
         adapter_channels=(32, 64, 128, 256),
@@ -268,7 +358,7 @@ def train_pilot_adapter(
         scheduler=scheduler,
         adapter_config=cfg,
     )
-    model.to(device=device, dtype=dtype)
+    model.to(device=device_obj, dtype=dtype)
     model.freeze_backbone()
 
     audit = model.count_parameters()
@@ -283,29 +373,35 @@ def train_pilot_adapter(
 
     optimizer = torch.optim.AdamW(model.spatial_adapter.parameters(), lr=lr, weight_decay=1e-4)
 
-    torch.manual_seed(42)
-    train_noises = [torch.randn_like(r["target_latents"]) for r in train_records]
-    val_noises = [torch.randn_like(r["target_latents"]) for r in val_records]
+    # Multi-level reproducible validation noise across sigma grid [1.0, 15.0, 70.0]
+    val_sigma_grid = [1.0, 15.0, 70.0]
+    val_rng = torch.Generator(device="cpu").manual_seed(42)
+    val_noise_realizations = 2
+    val_noises = [
+        [
+            torch.randn(
+                r["target_latents"].shape,
+                generator=val_rng,
+            ).to(device=r["target_latents"].device, dtype=r["target_latents"].dtype)
+            for _ in range(val_noise_realizations)
+        ]
+        for r in val_records
+    ]
 
-    # Pre-Training Step 0 Baseline Validation Loss (sigma=15.0)
-    model.eval()
-    with torch.no_grad():
-        initial_val_losses = []
-        for r, n in zip(val_records, val_noises):
-            loss_v, _ = model.compute_latent_loss(
-                target_latents=r["target_latents"],
-                initial_image_latents=r["initial_latents"],
-                spatial_masks=r["spatial_masks"],
-                noise=n,
-                sigmas=torch.full((1,), 15.0, device=device, dtype=dtype),
-                scheduler=scheduler,
-                encoder_hidden_states=r.get("encoder_hidden_states"),
-                added_time_ids=r.get("added_time_ids"),
-            )
-            initial_val_losses.append(loss_v.item())
-        initial_val_loss = float(np.mean(initial_val_losses))
-
-    print(f"[Pre-Training Step 0 Baseline] Held-Out Validation Loss: {initial_val_loss:.6f}")
+    # Pre-Training Step 0 Baseline Validation Loss across sigma grid
+    initial_val_loss, initial_val_per_sigma = evaluate_validation_loss(
+        model=model,
+        val_records=val_records,
+        val_noises=val_noises,
+        val_sigma_grid=val_sigma_grid,
+        scheduler=scheduler,
+        device=device_obj,
+        dtype=dtype,
+    )
+    print(
+        f"[Pre-Training Step 0 Baseline] Held-Out Validation Loss: {initial_val_loss:.6f} "
+        f"(sigmas {val_sigma_grid}: {[round(initial_val_per_sigma[s], 6) for s in val_sigma_grid]})"
+    )
 
     t_start = time.time()
     train_loss_history: List[float] = []
@@ -316,17 +412,21 @@ def train_pilot_adapter(
         model.train()
         it_train_losses = []
 
-        for r, n in zip(train_records, train_noises):
+        # Blocker 4: Sample fresh Gaussian noise for each training example at each optimizer step
+        for r in train_records:
             optimizer.zero_grad()
+            noise = torch.randn_like(
+                r["target_latents"], device=r["target_latents"].device, dtype=r["target_latents"].dtype
+            )
 
             # Continuous training noise sampling: log(sigma) ~ Normal(1.0, 1.6^2)
-            sigmas, c_n = sample_training_noise_levels(1, loc=1.0, scale=1.6, device=torch.device(device), dtype=dtype)
+            sigmas, c_n = sample_training_noise_levels(1, loc=1.0, scale=1.6, device=device_obj, dtype=dtype)
 
             loss, _ = model.compute_latent_loss(
                 target_latents=r["target_latents"],
                 initial_image_latents=r["initial_latents"],
                 spatial_masks=r["spatial_masks"],
-                noise=n,
+                noise=noise,
                 sigmas=sigmas,
                 c_noise=c_n,
                 scheduler=scheduler,
@@ -353,24 +453,17 @@ def train_pilot_adapter(
         mean_train_loss = float(np.mean(it_train_losses))
         train_loss_history.append(mean_train_loss)
 
-        # Validation Step (fixed sigma=15.0)
-        model.eval()
-        with torch.no_grad():
-            it_val_losses = []
-            for r, n in zip(val_records, val_noises):
-                loss_v, _ = model.compute_latent_loss(
-                    target_latents=r["target_latents"],
-                    initial_image_latents=r["initial_latents"],
-                    spatial_masks=r["spatial_masks"],
-                    noise=n,
-                    sigmas=torch.full((1,), 15.0, device=device, dtype=dtype),
-                    scheduler=scheduler,
-                    encoder_hidden_states=r.get("encoder_hidden_states"),
-                    added_time_ids=r.get("added_time_ids"),
-                )
-                it_val_losses.append(loss_v.item())
-            mean_val_loss = float(np.mean(it_val_losses))
-            val_loss_history.append(mean_val_loss)
+        # Validation Step across noise realizations and sigma grid
+        mean_val_loss, val_per_sigma = evaluate_validation_loss(
+            model=model,
+            val_records=val_records,
+            val_noises=val_noises,
+            val_sigma_grid=val_sigma_grid,
+            scheduler=scheduler,
+            device=device_obj,
+            dtype=dtype,
+        )
+        val_loss_history.append(mean_val_loss)
 
         if it % 5 == 0 or it == iterations - 1:
             print(
@@ -401,12 +494,20 @@ def train_pilot_adapter(
             "model_version": "Phase 3 Limited Pilot (Option B.1 front)",
             "backbone": backbone,
             "conditioning_source": conditioning_source,
-            "scheduler_config": scheduler.config if hasattr(scheduler, "config") else {},
+            "scheduler_config": dict(scheduler.config) if hasattr(scheduler, "config") else {},
             "adapter_config": cfg.__dict__,
             "train_sequences": train_ids,
+            "train_sequences_count": train_sequences_count,
             "held_out_sequences": val_ids,
             "iterations": iterations,
+            "optimizer_updates_per_iteration": optimizer_updates_per_iteration,
+            "total_optimizer_updates": total_optimizer_updates,
             "lr": lr,
+            "device": str(device_obj),
+            "dtype": str(dtype),
+            "model_revision": "main",
+            "val_sigma_grid": val_sigma_grid,
+            "val_noise_realizations": val_noise_realizations,
             "train_drop_pct": train_drop_pct,
             "val_drop_pct": val_drop_pct,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
@@ -421,10 +522,14 @@ def train_pilot_adapter(
         "title": title,
         "status": "COMPLETED_GENUINE_LATENTS",
         "backbone": backbone,
+        "model_revision": "main",
+        "device": str(device_obj),
+        "dtype": str(dtype),
         "conditioning_source": conditioning_source,
         "conditioning_mode": "OPTION_B1_FRONT",
         "splits": {
             "train_sequences": train_ids,
+            "train_sequences_count": train_sequences_count,
             "held_out_sequences": val_ids,
         },
         "parameter_audit": audit,
@@ -438,7 +543,20 @@ def train_pilot_adapter(
             "strictly_decreased": bool(l_final < l_init),
             "generalizes_to_held_out": bool(val_final < val_init),
             "iterations": iterations,
+            "optimizer_updates_per_iteration": optimizer_updates_per_iteration,
+            "total_optimizer_updates": total_optimizer_updates,
+            "val_sigma_grid": val_sigma_grid,
             "duration_s": train_duration,
+        },
+        "metadata": {
+            "iterations": iterations,
+            "train_sequences_count": train_sequences_count,
+            "optimizer_updates_per_iteration": optimizer_updates_per_iteration,
+            "total_optimizer_updates": total_optimizer_updates,
+            "device": str(device_obj),
+            "dtype": str(dtype),
+            "backbone": backbone,
+            "model_revision": "main",
         },
         "checkpoint_path": str(output_model_path),
     }

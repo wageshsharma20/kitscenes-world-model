@@ -108,6 +108,86 @@ def test_knn_planner_plan_execution():
     assert np.all(speeds <= MAX_SPEED + 1.0)
 
 
+def test_knn_planner_excluded_scenario_ids_global_block():
+    train_path = Path("data/train_trajectories.jsonl")
+    if not train_path.exists():
+        pytest.skip("train_trajectories.jsonl not found")
+
+    # Excluding held-out pilot evaluation scenarios 0000406 and 0000407
+    excluded = {"0000406", "0000407"}
+    planner = KNNTrajectoryPlanner(donor_path=train_path, excluded_scenario_ids=excluded)
+    # 499 total valid donors - 2 excluded = 497 donors
+    assert len(planner.donors) == 497
+
+    # Ensure 0000406 and 0000407 are completely absent from donor pool
+    donor_sids = {d.scenario_id for d in planner.donors}
+    assert "0000406" not in donor_sids
+    assert "0000407" not in donor_sids
+
+    # Querying the planner never retrieves excluded scenarios
+    hist = _make_straight_history(speed=15.0)
+    traj, prov = planner.plan_with_provenance("0000902", hist, "turn right", k=10)
+    assert prov["fallback_used"] is False
+    assert prov["method"] == "knn_retrieval_with_cv_blend"
+    assert "0000406" not in prov["retrieved_donors"]
+    assert "0000407" not in prov["retrieved_donors"]
+    assert len(prov["retrieved_donors"]) == 10
+
+
+def test_knn_planner_provenance_metadata_modes(tmp_path: Path):
+    # Mode 1: constant_velocity_stationary when speed0 < 0.2
+    planner = KNNTrajectoryPlanner()
+    stationary_hist = np.zeros((21, 2), dtype=float)  # speed0 == 0.0 < 0.2
+    traj_stat, prov_stat = planner.plan_with_provenance("0000900", stationary_hist, "drive straight")
+    assert prov_stat["method"] == "constant_velocity_stationary"
+    assert prov_stat["fallback_used"] is True
+    assert prov_stat["donor_count"] == 0
+    assert prov_stat["retrieved_donors"] == []
+    assert np.allclose(traj_stat, 0.0)
+
+    # Mode 2: constant_velocity_empty_candidates when candidates is empty
+    moving_hist = _make_straight_history(speed=12.0)
+    traj_empty, prov_empty = planner.plan_with_provenance("0000900", moving_hist, "turn left")
+    assert prov_empty["method"] == "constant_velocity_empty_candidates"
+    assert prov_empty["fallback_used"] is True
+    assert prov_empty["donor_count"] == 0
+    assert prov_empty["retrieved_donors"] == []
+
+    # Mode 3: knn_retrieval_with_cv_blend when donors exist and vehicle is moving
+    import json
+    jsonl_file = tmp_path / "synthetic_donors.jsonl"
+    expert_like = [[float(i + 1) * 2.0, 0.0] for i in range(25)]
+    past_pts = [[-float(i) * 2.0, 0.0] for i in range(10, 0, -1)]
+
+    records = [
+        {"scenario_id": "0000406", "past": past_pts, "driving_instruction": "turn left", "expert_like": expert_like},
+        {"scenario_id": "0000407", "past": past_pts, "driving_instruction": "turn right", "expert_like": expert_like},
+        {"scenario_id": "0000408", "past": past_pts, "driving_instruction": "turn left", "expert_like": expert_like},
+        {"scenario_id": "0000409", "past": past_pts, "driving_instruction": "turn left", "expert_like": expert_like},
+    ]
+    with open(jsonl_file, "w", encoding="utf-8") as f:
+        for r in records:
+            f.write(json.dumps(r) + "\n")
+
+    # Exclude 0000406 and 0000407
+    planner_donors = KNNTrajectoryPlanner(donor_path=jsonl_file, excluded_scenario_ids={"0000406", "0000407"})
+    assert len(planner_donors.donors) == 2
+    donor_sids = {d.scenario_id for d in planner_donors.donors}
+    assert donor_sids == {"0000408", "0000409"}
+
+    traj_knn, prov_knn = planner_donors.plan_with_provenance("0000406", moving_hist, "turn left", k=2)
+    assert prov_knn["method"] == "knn_retrieval_with_cv_blend"
+    assert prov_knn["fallback_used"] is False
+    assert prov_knn["donor_count"] == 2
+    assert set(prov_knn["retrieved_donors"]) == {"0000408", "0000409"}
+    assert "0000406" not in prov_knn["retrieved_donors"]
+    assert "0000407" not in prov_knn["retrieved_donors"]
+
+    # Verify plan() backwards compatibility
+    traj_plan = planner_donors.plan("0000406", moving_hist, "turn left", k=2)
+    assert np.allclose(traj_plan, traj_knn)
+
+
 def test_compute_l2_metrics():
     a = np.zeros((25, 2))
     b = np.ones((25, 2)) * 3.0  # dist = sqrt(9+9) = sqrt(18) = 4.2426...

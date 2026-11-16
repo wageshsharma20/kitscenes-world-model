@@ -33,7 +33,7 @@ import math
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Sequence, Set, Tuple
 
 import cv2
 import numpy as np
@@ -57,6 +57,7 @@ from scripts.run_kaggle_svd_single_camera import (
     adapt_aspect_ratio_to_svd,
     unpad_and_resize_frames,
 )
+from scripts.train_svd_spatial_adapter import validate_device_and_dtype
 
 
 def compute_psnr(mse: float, max_val: float = 255.0) -> float:
@@ -146,15 +147,18 @@ def resolve_conditioning_trajectory(
     scenario_id: str,
     trajectories_file: Path,
     conditioning_source: str = "knn",
+    excluded_scenario_ids: Optional[Sequence[str] | Set[str]] = None,
 ) -> Tuple[np.ndarray, str, Dict[str, Any]]:
     """Resolve waypoints from kNN predicted trajectory or oracle ground-truth.
 
     Strictly fail-loud: NEVER silently fall back to straight line or kinematic extrapolation.
+    Strictly prevents data leakage: held-out scenarios (0000406, 0000407) are excluded from donor pool.
 
     Args:
         scenario_id: Target scenario identifier.
         trajectories_file: Path to train_trajectories.jsonl or history file.
         conditioning_source: 'knn' (retrieval-based prediction) or 'oracle' (ground-truth).
+        excluded_scenario_ids: Scenario IDs to block from kNN donor pool. Defaults to {"0000406", "0000407"}.
 
     Returns:
         Tuple of (waypoints_ego [25, 2], label_string, metadata_dict).
@@ -164,6 +168,11 @@ def resolve_conditioning_trajectory(
 
     if not trajectories_file.exists():
         raise FileNotFoundError(f"Required trajectories file does not exist: {trajectories_file}")
+
+    if excluded_scenario_ids is None:
+        effective_excluded: Set[str] = {"0000406", "0000407"}
+    else:
+        effective_excluded = set(excluded_scenario_ids) | {"0000406", "0000407"}
 
     gt_traj = None
     past_pts = None
@@ -195,10 +204,12 @@ def resolve_conditioning_trajectory(
         checksum = hashlib.sha256(traj_bytes).hexdigest()
         meta = {
             "source": "oracle",
+            "method": "oracle_ground_truth",
             "scenario_id": scenario_id,
             "trajectory_checksum": checksum,
             "donor_count": None,
             "fallback_used": False,
+            "retrieved_donors": [],
         }
         return gt_traj, "Oracle Ground Truth (expert_like waypoints)", meta
 
@@ -210,11 +221,23 @@ def resolve_conditioning_trajectory(
             f"Fail-loud: Observed past trajectory for scenario '{scenario_id}' missing or has < 2 points in {trajectories_file}."
         )
 
-    planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=trajectories_file)
+    planner = knn_trajectory.KNNTrajectoryPlanner(
+        donor_path=trajectories_file,
+        excluded_scenario_ids=effective_excluded,
+    )
     if len(planner.donors) == 0:
         raise RuntimeError(f"Fail-loud: No kNN donors available in {trajectories_file}.")
 
-    planned = planner.plan(
+    # Strictly guarantee neither 0000406 nor 0000407 can ever be in donor list
+    donor_sids = {d.scenario_id for d in planner.donors}
+    for excluded in ("0000406", "0000407"):
+        if excluded in donor_sids:
+            raise RuntimeError(
+                f"Fail-loud: Held-out validation scenario {excluded} found in donor pool! "
+                "Data leakage strictly prohibited."
+            )
+
+    planned, provenance = planner.plan_with_provenance(
         scenario_id=scenario_id,
         past_trajectory=past_pts,
         driving_instruction=instruction,
@@ -227,16 +250,26 @@ def resolve_conditioning_trajectory(
         )
     planned = planned[:spec.FRAME_COUNT]
 
+    # Strictly guarantee neither 0000406 nor 0000407 can ever be retrieved
+    for ret_sid in provenance.get("retrieved_donors", []):
+        if ret_sid in ("0000406", "0000407"):
+            raise RuntimeError(
+                f"Fail-loud: Held-out validation scenario {ret_sid} retrieved as donor! "
+                "Data leakage strictly prohibited."
+            )
+
     traj_bytes = planned.astype(np.float64).tobytes()
     checksum = hashlib.sha256(traj_bytes).hexdigest()
     meta = {
         "source": "knn",
+        "method": provenance["method"],
         "scenario_id": scenario_id,
         "trajectory_checksum": checksum,
-        "donor_count": len(planner.donors),
-        "fallback_used": False,
+        "donor_count": provenance["donor_count"],
+        "fallback_used": provenance["fallback_used"],
+        "retrieved_donors": provenance["retrieved_donors"],
     }
-    return planned, f"kNN Trajectory Retrieval ({len(planner.donors)} training donors)", meta
+    return planned, f"kNN Trajectory Retrieval ({provenance['donor_count']} training donors)", meta
 
 
 def evaluate_scenario_pair(
@@ -254,7 +287,8 @@ def evaluate_scenario_pair(
     steps: int = 25,
     min_guidance_scale: float = 1.0,
     max_guidance_scale: float = 3.0,
-    device: str = "cpu",
+    device: str | torch.device = "cpu",
+    dtype: Optional[torch.dtype] = None,
     seed: int = 42,
     encoder_hidden_states: Optional[torch.Tensor] = None,
     added_time_ids: Optional[torch.Tensor] = None,
@@ -263,8 +297,9 @@ def evaluate_scenario_pair(
     # 1. Load Genuine Targets & Initial Frame Latents
     pt_file = latents_dir / f"{scenario_id}.pt"
     data = torch.load(pt_file, map_location="cpu")
-    target_latents = data["target_latents"].to(device)
-    initial_latents = data["initial_latents"].to(device)
+    eff_dtype = dtype if dtype is not None else data["target_latents"].dtype
+    target_latents = data["target_latents"].to(device=device, dtype=eff_dtype)
+    initial_latents = data["initial_latents"].to(device=device, dtype=eff_dtype)
 
     # Load ground truth video frames (25, 568, 876, 3)
     video_dir = future_videos_dir / scenario_id / "front"
@@ -287,7 +322,7 @@ def evaluate_scenario_pair(
         num_frames=spec.FRAME_COUNT,
         channel_dim=True,
     )
-    mask_tensor = torch.from_numpy(raw_b1).unsqueeze(0).float().to(device)
+    mask_tensor = torch.from_numpy(raw_b1).unsqueeze(0).to(device=device, dtype=eff_dtype)
 
     # 3. Pure Gaussian Random Starting Noise z_T ~ N(0, I)
     # Completely decoupled from future ground-truth latents
@@ -298,10 +333,10 @@ def evaluate_scenario_pair(
     t0_img = Image.open(observed_t0_dir / scenario_id / "front.jpg").convert("RGB")
     _, crop_box = adapt_aspect_ratio_to_svd(t0_img, target_width=1024, target_height=576)
 
-    # Micro-conditioning IDs if not passed
+    # Micro-conditioning IDs if not passed (Blocker 2: noise augmentation 0.02, matching training and latent encoding)
     if added_time_ids is None:
         added_time_ids = torch.tensor(
-            [[float(spec.FPS - 1), 127.0, 0.0]], device=device, dtype=target_latents.dtype
+            [[float(spec.FPS - 1), 127.0, 0.02]], device=device, dtype=eff_dtype
         )
 
     model.eval()
@@ -462,16 +497,21 @@ def run_pilot_evaluation(
     fresh_adapter: bool = False,
     min_guidance_scale: float = 1.0,
     max_guidance_scale: float = 3.0,
-    device: str = "mps" if torch.backends.mps.is_available() else "cpu",
+    device: Optional[str | torch.device] = None,
 ) -> Dict[str, Any]:
     """Execute complete comparative pilot evaluation on held-out sequences."""
+    if device is None:
+        device = "mps" if torch.backends.mps.is_available() else "cpu"
+    # 0. Strict device and precision safety validation
+    device_obj, dtype = validate_device_and_dtype(device, backbone)
+
     print("=" * 80)
     print("PHASE 3 PILOT COMPARATIVE EVALUATION (HELD-OUT SEQUENCES)")
     print(f"Backbone: {backbone} | Conditioning Source: {conditioning_source}")
-    print(f"Steps: {steps} | Device: {device} | Checkpoint: {model_checkpoint}")
+    print(f"Steps: {steps} | Device: {device_obj} | Dtype: {dtype} | Checkpoint: {model_checkpoint}")
     print("=" * 80)
 
-    # 0. Check checkpoint compatibility upfront before allocating any heavy models
+    # 1. Check checkpoint compatibility upfront before allocating any heavy models
     loaded_state_dict = None
     ckpt_backbone = None
     if fresh_adapter:
@@ -489,22 +529,22 @@ def run_pilot_evaluation(
     else:
         print(f"Warning: Checkpoint {model_checkpoint} not found. Running with initialized adapter.")
 
-    # 1. Load VAE
+    # 2. Load VAE
     t0 = time.time()
     vae = AutoencoderKLTemporalDecoder.from_pretrained(
         "stabilityai/stable-video-diffusion-img2vid-xt",
         subfolder="vae",
         local_files_only=True,
-    ).to(device)
+    ).to(device_obj)
     vae.eval()
     for p in vae.parameters():
         p.requires_grad = False
     print(f"VAE loaded in {time.time() - t0:.2f}s")
 
-    # 2. Scheduler
+    # 3. Scheduler
     scheduler = create_default_euler_scheduler()
 
-    # 3. Load Backbone Model
+    # 4. Load Backbone Model
     cfg = SpatialAdapterConfig(
         adapter_channels=(32, 64, 128, 256),
         latent_channels=4,
@@ -513,7 +553,6 @@ def run_pilot_evaluation(
         zero_conv_init=True,
     )
 
-    dtype = torch.float16 if (device in ("cuda", "mps") and backbone == "svd-xt") else torch.float32
     image_encoder = None
     feature_extractor = None
 
@@ -534,7 +573,7 @@ def run_pilot_evaluation(
                 subfolder="image_encoder",
                 torch_dtype=dtype,
                 low_cpu_mem_usage=True,
-            ).to(device)
+            ).to(device_obj)
             feature_extractor = CLIPImageProcessor.from_pretrained(
                 "stabilityai/stable-video-diffusion-img2vid-xt",
                 subfolder="feature_extractor",
@@ -551,7 +590,7 @@ def run_pilot_evaluation(
         scheduler=scheduler,
         adapter_config=cfg,
     )
-    model.to(device=device, dtype=dtype)
+    model.to(device=device_obj, dtype=dtype)
 
     # Load adapter checkpoint weights if available
     if loaded_state_dict is not None:
@@ -563,6 +602,14 @@ def run_pilot_evaluation(
     engine = camera_projection.CameraProjectionEngine(width=spec.WIDTH, height=spec.HEIGHT)
     held_out_scenarios = ["0000406", "0000407"]
 
+    # SVD micro-conditioning: noise augmentation 0.02 explicitly passed matching training & encoding
+    fps_micro = float(spec.FPS - 1)
+    motion_bucket = 127.0
+    noise_aug_strength = 0.02
+    eval_added_time_ids = torch.tensor(
+        [[fps_micro, motion_bucket, noise_aug_strength]], device=device_obj, dtype=dtype
+    )
+
     results = []
     for sid in held_out_scenarios:
         print(f"\nEvaluating held-out scenario {sid}...")
@@ -573,7 +620,7 @@ def run_pilot_evaluation(
             if t0_path.exists():
                 pil_img = Image.open(t0_path).convert("RGB")
                 pixel_vals = feature_extractor(images=pil_img, return_tensors="pt").pixel_values.to(
-                    device=device, dtype=dtype
+                    device=device_obj, dtype=dtype
                 )
                 with torch.no_grad():
                     enc_hidden = image_encoder(pixel_vals).image_embeds.unsqueeze(1)
@@ -593,8 +640,10 @@ def run_pilot_evaluation(
             steps=steps,
             min_guidance_scale=min_guidance_scale,
             max_guidance_scale=max_guidance_scale,
-            device=device,
+            device=device_obj,
+            dtype=dtype,
             encoder_hidden_states=enc_hidden,
+            added_time_ids=eval_added_time_ids,
         )
         results.append(res)
         m = res["metrics"]
@@ -618,6 +667,8 @@ def run_pilot_evaluation(
     report = {
         "evaluation_name": "Phase 3 Limited Pilot (Held-Out Evaluation)",
         "backbone": backbone,
+        "device": str(device_obj),
+        "dtype": str(dtype),
         "conditioning_source": conditioning_source,
         "conditioning_description": (
             "kNN-retrieved predicted waypoints"

@@ -18,7 +18,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
@@ -188,13 +188,29 @@ class KNNTrajectoryPlanner:
     and scaled by speed ratio, with fallback/blending to Constant Velocity.
     """
 
-    def __init__(self, donor_path: Optional[str | Path] = None) -> None:
+    def __init__(
+        self,
+        donor_path: Optional[str | Path] = None,
+        excluded_scenario_ids: Optional[Sequence[str] | Set[str]] = None,
+    ) -> None:
+        self.excluded_scenario_ids: Set[str] = (
+            {str(sid) for sid in excluded_scenario_ids}
+            if excluded_scenario_ids is not None
+            else set()
+        )
         self.donors: List[DonorRecord] = []
         if donor_path is not None:
-            self.load_donors(Path(donor_path))
+            self.load_donors(Path(donor_path), excluded_scenario_ids=self.excluded_scenario_ids)
 
-    def load_donors(self, path: Path) -> int:
+    def load_donors(
+        self,
+        path: str | Path,
+        excluded_scenario_ids: Optional[Sequence[str] | Set[str]] = None,
+    ) -> int:
         """Load and index donors from jsonl file (must be from train split)."""
+        if excluded_scenario_ids is not None:
+            self.excluded_scenario_ids.update(str(sid) for sid in excluded_scenario_ids)
+
         path = Path(path)
         if not path.exists():
             return 0
@@ -206,8 +222,12 @@ class KNNTrajectoryPlanner:
                     continue
                 try:
                     data = json.loads(line)
-                    sid = data["scenario_id"]
+                    sid = str(data["scenario_id"])
                 except (json.JSONDecodeError, KeyError, TypeError):
+                    continue
+
+                # Exclude any scenarios in excluded_scenario_ids (e.g. held-out evaluation scenarios)
+                if sid in self.excluded_scenario_ids:
                     continue
 
                 # Enforce split constraint: only train scenarios (0000400-0000899)
@@ -250,7 +270,7 @@ class KNNTrajectoryPlanner:
 
         return loaded
 
-    def plan(
+    def plan_with_provenance(
         self,
         scenario_id: str,
         past_trajectory: Sequence[Sequence[float]],
@@ -258,8 +278,8 @@ class KNNTrajectoryPlanner:
         scenario_type: str = "",
         k: int = 5,
         cv_blend_weight: float = 0.25,
-    ) -> np.ndarray:
-        """Plan 25 future waypoints using kNN trajectory retrieval + CV blending."""
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Plan 25 future waypoints with execution provenance metadata."""
         past_arr = np.asarray(past_trajectory, dtype=float)
         query_kin = _extract_past_kinematics(past_arr)
         query_maneuver = classify_instruction(driving_instruction)
@@ -270,19 +290,32 @@ class KNNTrajectoryPlanner:
         cv_planner = ConstantVelocityPlanner()
         cv_traj = cv_planner.plan(past_trajectory)
 
-        # If vehicle is stopped or driving straight with low yaw rate, CV is optimal
+        # 1. Constant velocity for stationary vehicle
         if speed0 < 0.2:
-            return cv_traj
+            provenance = {
+                "method": "constant_velocity_stationary",
+                "fallback_used": True,
+                "donor_count": len(self.donors),
+                "retrieved_donors": [],
+            }
+            return cv_traj, provenance
 
-        if not self.donors:
-            return cv_traj
-
-        # Filter candidates: exclude self-retrieval
-        candidates = [d for d in self.donors if d.scenario_id != scenario_id]
+        # 2. Filter candidates: exclude self-retrieval and any excluded scenarios
+        target_sid = str(scenario_id)
+        candidates = [
+            d for d in self.donors
+            if d.scenario_id != target_sid and d.scenario_id not in self.excluded_scenario_ids
+        ]
         if not candidates:
-            return cv_traj
+            provenance = {
+                "method": "constant_velocity_empty_candidates",
+                "fallback_used": True,
+                "donor_count": len(self.donors),
+                "retrieved_donors": [],
+            }
+            return cv_traj, provenance
 
-        # Prefer candidates matching maneuver class
+        # 3. Prefer candidates matching maneuver class
         maneuver_matches = [d for d in candidates if d.maneuver == query_maneuver]
         pool = maneuver_matches if len(maneuver_matches) >= k else candidates
 
@@ -320,6 +353,7 @@ class KNNTrajectoryPlanner:
 
         scored.sort(key=lambda x: x[0])
         top_k = scored[:k]
+        retrieved_donors = [donor.scenario_id for _, donor in top_k]
 
         # Transfer trajectories from top-k donors
         transferred_list: List[np.ndarray] = []
@@ -369,7 +403,35 @@ class KNNTrajectoryPlanner:
             blended[i] = (1.0 - alpha) * knn_traj[i] + alpha * cv_traj[i]
 
         # Enforce physical smoothness and kinematic limits
-        return self._enforce_kinematics(blended, p0, speed0, heading0)
+        final_traj = self._enforce_kinematics(blended, p0, speed0, heading0)
+
+        provenance = {
+            "method": "knn_retrieval_with_cv_blend",
+            "fallback_used": False,
+            "donor_count": len(self.donors),
+            "retrieved_donors": retrieved_donors,
+        }
+        return final_traj, provenance
+
+    def plan(
+        self,
+        scenario_id: str,
+        past_trajectory: Sequence[Sequence[float]],
+        driving_instruction: str,
+        scenario_type: str = "",
+        k: int = 5,
+        cv_blend_weight: float = 0.25,
+    ) -> np.ndarray:
+        """Plan 25 future waypoints using kNN trajectory retrieval + CV blending."""
+        traj, _ = self.plan_with_provenance(
+            scenario_id=scenario_id,
+            past_trajectory=past_trajectory,
+            driving_instruction=driving_instruction,
+            scenario_type=scenario_type,
+            k=k,
+            cv_blend_weight=cv_blend_weight,
+        )
+        return traj
 
     def _enforce_kinematics(
         self,

@@ -47,7 +47,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
-from PIL import Image
 
 # Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

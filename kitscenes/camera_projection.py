@@ -216,17 +216,22 @@ class CameraProjectionEngine:
         width: int = spec.WIDTH,
         height: int = spec.HEIGHT,
         near_clip_m: float = 0.5,
+        ground_z_m: Optional[float] = None,
     ):
         self.width = width
         self.height = height
         self.near_clip_m = near_clip_m
         self.rig = rig or CameraRig(width=width, height=height)
+        if ground_z_m is not None:
+            self.default_ground_z = float(ground_z_m)
+        else:
+            self.default_ground_z = float(getattr(self.rig, "nominal_ground_z_ego", 0.0))
 
     def project_waypoints_to_camera(
         self,
         camera_name: str,
         waypoints_ego: np.ndarray,
-        ground_z_m: float = 0.0,
+        ground_z_m: Optional[float] = None,
     ) -> ProjectedCameraView:
         """Project ego-frame waypoints onto the specified camera's image canvas.
 
@@ -234,13 +239,15 @@ class CameraProjectionEngine:
             camera_name: One of spec.CAMERAS ('front', 'front_left', etc.)
             waypoints_ego: (N, 2) or (N, 3) array in vehicle body frame
                            (X: forward, Y: left, Z: up).
-            ground_z_m: Elevation of road surface relative to vehicle origin (default: 0.0).
+            ground_z_m: Elevation of road surface relative to vehicle origin
+                        (defaults to rig's nominal_ground_z_ego).
 
         Returns:
             ProjectedCameraView containing 2D points, optical depths, and visibility masks.
         """
         assert camera_name in self.rig.cameras, f"Unknown camera: {camera_name}"
         cam = self.rig.cameras[camera_name]
+        gz = self.default_ground_z if ground_z_m is None else float(ground_z_m)
 
         pts = np.asarray(waypoints_ego, dtype=np.float64)
         if pts.ndim == 1:
@@ -248,7 +255,7 @@ class CameraProjectionEngine:
         n = pts.shape[0]
 
         if pts.shape[1] == 2:
-            p_ego = np.column_stack([pts[:, 0], pts[:, 1], np.full(n, ground_z_m, dtype=np.float64)])
+            p_ego = np.column_stack([pts[:, 0], pts[:, 1], np.full(n, gz, dtype=np.float64)])
         else:
             p_ego = pts[:, :3]
 
@@ -285,7 +292,7 @@ class CameraProjectionEngine:
     def project_all_cameras(
         self,
         waypoints_ego: np.ndarray,
-        ground_z_m: float = 0.0,
+        ground_z_m: Optional[float] = None,
     ) -> Dict[str, ProjectedCameraView]:
         """Project waypoints across all 6 surround cameras simultaneously."""
         return {
@@ -299,7 +306,7 @@ class CameraProjectionEngine:
         waypoints_ego: np.ndarray,
         ribbon_width_px: int = 14,
         decay_with_depth: bool = True,
-        ground_z_m: float = 0.0,
+        ground_z_m: Optional[float] = None,
     ) -> np.ndarray:
         """Render a single-channel spatial conditioning mask (H, W) using robust 3D/2D clipping.
 
@@ -308,6 +315,7 @@ class CameraProjectionEngine:
         """
         assert camera_name in self.rig.cameras, f"Unknown camera: {camera_name}"
         cam = self.rig.cameras[camera_name]
+        gz = self.default_ground_z if ground_z_m is None else float(ground_z_m)
         mask = np.zeros((self.height, self.width), dtype=np.float32)
 
         pts = np.asarray(waypoints_ego, dtype=np.float64)
@@ -318,7 +326,7 @@ class CameraProjectionEngine:
             return mask
 
         if pts.shape[1] == 2:
-            p_ego = np.column_stack([pts[:, 0], pts[:, 1], np.full(n, ground_z_m, dtype=np.float64)])
+            p_ego = np.column_stack([pts[:, 0], pts[:, 1], np.full(n, gz, dtype=np.float64)])
         else:
             p_ego = pts[:, :3]
 
@@ -376,6 +384,7 @@ class CameraProjectionEngine:
         trail_width_px: int = 8,
         decay_with_depth: bool = True,
         channel_dim: bool = True,
+        ground_z_m: Optional[float] = None,
     ) -> np.ndarray:
         """Render Option B.1: Route-Initial-Frame Temporal Masks.
 
@@ -390,6 +399,7 @@ class CameraProjectionEngine:
         """
         assert camera_name in self.rig.cameras, f"Unknown camera: {camera_name}"
         cam = self.rig.cameras[camera_name]
+        gz = self.default_ground_z if ground_z_m is None else float(ground_z_m)
 
         pts_in = np.asarray(waypoints_ego, dtype=np.float64)
         if pts_in.shape[0] < num_frames:
@@ -404,10 +414,10 @@ class CameraProjectionEngine:
 
         n = len(pts_ego)
         t_cam = np.asarray(cam.position_m, dtype=np.float64)
-        p_ego_3d = np.column_stack([pts_ego[:, 0], pts_ego[:, 1], np.zeros(n, dtype=np.float64)])
+        p_ego_3d = np.column_stack([pts_ego[:, 0], pts_ego[:, 1], np.full(n, gz, dtype=np.float64)])
         p_cam = (p_ego_3d - t_cam[None, :]) @ cam.rotation_matrix_body_to_cam.T
 
-        proj = self.project_waypoints_to_camera(camera_name, pts_ego)
+        proj = self.project_waypoints_to_camera(camera_name, pts_ego, ground_z_m=gz)
         pts_2d = proj.points_2d
         vis = proj.is_visible
         depths = proj.depths
@@ -468,6 +478,7 @@ class CameraProjectionEngine:
         channel_dim: bool = True,
         extrapolate_horizon: bool = False,
         extrapolate_steps: int = 5,
+        ground_z_m: Optional[float] = None,
     ) -> np.ndarray:
         """Render Option B.2: Future-Camera-Frame Spatial Conditioning (Ego-Motion Aligned).
 
@@ -489,12 +500,15 @@ class CameraProjectionEngine:
             extrapolate_horizon: If True, kinematically extrapolates trajectory forward beyond
                                  the final frame to prevent the end-of-horizon corridor vanishing artifact.
             extrapolate_steps: Number of forward kinematic steps to extrapolate (default: 5 steps = 1.0s).
+            ground_z_m: Elevation of road surface relative to vehicle origin
+                        (defaults to rig's nominal_ground_z_ego).
 
         Returns:
             np.ndarray: float32 tensor of shape (num_frames, 1, H, W) or (num_frames, H, W).
         """
         assert camera_name in self.rig.cameras, f"Unknown camera: {camera_name}"
         cam = self.rig.cameras[camera_name]
+        gz = self.default_ground_z if ground_z_m is None else float(ground_z_m)
 
         pts_in = np.asarray(waypoints_ego, dtype=np.float64)
         if pts_in.shape[0] < num_frames:
@@ -537,7 +551,7 @@ class CameraProjectionEngine:
 
             x_ego = cos_y * dx + sin_y * dy
             y_ego = -sin_y * dx + cos_y * dy
-            z_ego = np.zeros(n_up, dtype=np.float64)
+            z_ego = np.full(n_up, gz, dtype=np.float64)
 
             p_ego_t = np.column_stack([x_ego, y_ego, z_ego])
             p_cam_t = (p_ego_t - t_cam[None, :]) @ r_cam.T

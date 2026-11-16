@@ -23,13 +23,14 @@ def test_front_camera_straight_motion():
     assert front_view.camera_name == "front"
     assert front_view.visible_count > 0
 
-    # 1. Horizontal centering: all points should lie near center column cx (438 px)
-    cx = spec.WIDTH / 2.0
+    # 1. Horizontal centering: all points should lie near camera optical center cx
+    cx = engine.rig["front"].cx
     u_pts = front_view.points_2d[front_view.is_visible, 0]
-    assert np.allclose(u_pts, cx, atol=2.0), f"Straight path not centered horizontally: {u_pts}"
+    atol = 10.0 if engine.rig.is_calibrated else 2.0
+    assert np.allclose(u_pts, cx, atol=atol), f"Straight path not centered horizontally near cx={cx}: {u_pts}"
 
-    # 2. Vertical position: ground is below camera mounting height (1.4m), so v > cy (284 px)
-    cy = spec.HEIGHT / 2.0
+    # 2. Vertical position: ground is below camera mounting height, so v > cy
+    cy = engine.rig["front"].cy
     v_pts = front_view.points_2d[front_view.is_visible, 1]
     assert np.all(v_pts > cy), "Ground road waypoints must project below optical horizon"
 
@@ -305,6 +306,63 @@ def test_future_camera_extrapolate_horizon():
     # Extrapolated B.2: Extrapolates 5 forward steps -> frame 24 has valid corridor
     m_extrap = engine.render_future_camera_spatial_masks("front", straight_waypoints, extrapolate_horizon=True, extrapolate_steps=5)
     assert np.sum(m_extrap[24] > 0.05) > 500, "Extrapolated B.2 frame 24 must contain active road corridor"
+
+
+def test_official_calibration_orthogonality_and_scaling():
+    """Verify official KITScenes calibration matrices satisfy SO(3) and intrinsic scaling."""
+    rig = camera_projection.CameraRig()
+    assert rig.is_calibrated is True
+    assert rig.is_provisional is False
+
+    src_w, src_h = 3488.0, 2272.0
+    sx, sy = spec.WIDTH / src_w, spec.HEIGHT / src_h
+
+    for cam_name in spec.CAMERAS:
+        cam = rig[cam_name]
+        assert cam.is_calibrated is True
+        assert cam.is_provisional is False
+
+        # 1. Rotation matrix orthogonality: R @ R.T = I, det(R) = +1.0
+        R = cam.rotation_matrix_body_to_cam
+        assert np.isclose(np.linalg.det(R), 1.0, atol=1e-5), f"det(R) != 1 for {cam_name}"
+        assert np.allclose(R @ R.T, np.eye(3), atol=1e-5), f"R @ R.T != I for {cam_name}"
+
+        # 2. Intrinsic matrix scaling: K_output = A @ K_source
+        K_out = cam.intrinsic_matrix
+        K_src = cam.k_source_matrix
+        assert K_src is not None
+        assert np.isclose(K_out[0, 0], K_src[0, 0] * sx)
+        assert np.isclose(K_out[1, 1], K_src[1, 1] * sy)
+        assert np.isclose(K_out[0, 2], K_src[0, 2] * sx)
+        assert np.isclose(K_out[1, 2], K_src[1, 2] * sy)
+
+        # 3. Principal point near image center
+        assert abs(cam.cx - spec.WIDTH / 2.0) < 15.0
+        assert abs(cam.cy - spec.HEIGHT / 2.0) < 10.0
+
+
+def test_official_calibration_surround_projections():
+    """Verify all 6 surround views correctly project their respective directions."""
+    engine = camera_projection.CameraProjectionEngine()
+    assert engine.rig.is_calibrated is True
+
+    # 1. Straight path ahead -> front camera sees it, rear does not
+    straight = np.column_stack([np.linspace(3.0, 40.0, 20), np.zeros(20)])
+    views = engine.project_all_cameras(straight)
+    assert views["front"].visible_count > 0
+    assert views["rear"].visible_count == 0
+
+    # 2. Path strictly behind vehicle -> rear camera sees it, front does not
+    behind = np.column_stack([np.linspace(-3.0, -40.0, 20), np.zeros(20)])
+    views_behind = engine.project_all_cameras(behind)
+    assert views_behind["rear"].visible_count > 0
+    assert views_behind["front"].visible_count == 0
+
+    # 3. Left turn -> front_left camera has active visibility
+    left_turn = np.column_stack([np.linspace(2.0, 20.0, 20), np.linspace(0.0, 15.0, 20)])
+    views_left = engine.project_all_cameras(left_turn)
+    assert views_left["front_left"].visible_count > 0
+
 
 
 

@@ -8,7 +8,8 @@ from kitscenes import archive, media, spec, video_engine
 
 
 def test_camera_rig_geometry():
-    rig = video_engine.CameraRig()
+    # 1. Provisional nominal rig test
+    rig = video_engine.CameraRig(is_provisional=True)
 
     assert len(rig.cameras) == 6
     assert set(rig.cameras.keys()) == set(spec.CAMERAS)
@@ -36,6 +37,16 @@ def test_camera_rig_geometry():
         assert K[0, 2] == cam.cx
         assert K[1, 2] == cam.cy
         assert K[2, 2] == 1.0
+
+    # 2. Official calibrated rig test
+    rig_calib = video_engine.CameraRig()
+    assert rig_calib.is_calibrated is True
+    for cam in rig_calib.cameras.values():
+        assert cam.width == spec.WIDTH
+        assert cam.height == spec.HEIGHT
+        assert abs(cam.cx - spec.WIDTH / 2.0) < 15.0
+        assert abs(cam.cy - spec.HEIGHT / 2.0) < 10.0
+        assert cam.intrinsic_matrix.shape == (3, 3)
 
 
 def test_straight_line_motion_analysis():

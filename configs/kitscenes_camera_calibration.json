@@ -1,0 +1,125 @@
+{
+  "source": "KITScenes-LongTail Dataset (KIT-MRT / Wagner et al., arXiv:2603.23607, 2026)",
+  "dataset_url": "https://huggingface.co/datasets/KIT-MRT/KITScenes-LongTail",
+  "provenance": "Extracted directly from official HuggingFace dataset card (pinhole camera model)",
+  "coordinate_system": {
+    "vehicle_ego_body": {
+      "x": "forward (+X)",
+      "y": "left (+Y)",
+      "z": "up (+Z)",
+      "origin": "rear axle center at ground projection",
+      "units": "meters"
+    },
+    "camera_optical_frame": {
+      "x": "right (+X)",
+      "y": "down (+Y)",
+      "z": "forward along optical axis (+Z)",
+      "units": "meters"
+    },
+    "transformation": "P_camera = R @ P_ego + t"
+  },
+  "source_image_dimensions": {
+    "width": 3488,
+    "height": 2272,
+    "description": "Original pinhole image format optimized for 16x16 px patches (ViTs)"
+  },
+  "challenge_image_dimensions": {
+    "width": 876,
+    "height": 568,
+    "scale_x": 0.2511467889908257,
+    "scale_y": 0.25
+  },
+  "nominal_ground_z_ego": -1.60,
+  "cameras": {
+    "front": {
+      "K_source": [
+        [1841.0, 0.0, 1765.0],
+        [0.0, 1841.0, 1139.0],
+        [0.0, 0.0, 1.0]
+      ],
+      "R": [
+        [0.01709344, -0.99983669, 0.00586657],
+        [0.00538969, -0.00577520, -0.99996880],
+        [0.99983937, 0.01712452, 0.00529009]
+      ],
+      "t": [-0.01833970, -0.18646863, -0.20817565],
+      "nominal_yaw_deg": 0.0,
+      "description": "Front-facing wide camera"
+    },
+    "front_left": {
+      "K_source": [
+        [1844.0, 0.0, 1764.0],
+        [0.0, 1844.0, 1131.0],
+        [0.0, 0.0, 1.0]
+      ],
+      "R": [
+        [0.87490947, -0.48422726, 0.00757555],
+        [0.00382071, -0.00874058, -0.99995450],
+        [0.48427144, 0.87489861, -0.00579713]
+      ],
+      "t": [-0.00990917, -0.18619818, -0.19092926],
+      "nominal_yaw_deg": 60.0,
+      "description": "Front-left surround camera"
+    },
+    "front_right": {
+      "K_source": [
+        [1845.0, 0.0, 1749.0],
+        [0.0, 1845.0, 1138.0],
+        [0.0, 0.0, 1.0]
+      ],
+      "R": [
+        [-0.851906736, -0.523693303, 0.000485398655],
+        [0.00104631263, -0.00262893385, -0.999995998],
+        [0.523692486, -0.851902824, 0.00278755405]
+      ],
+      "t": [-0.00863543, -0.18592461, -0.22478478],
+      "nominal_yaw_deg": -60.0,
+      "description": "Front-right surround camera"
+    },
+    "rear": {
+      "K_source": [
+        [1845.0, 0.0, 1765.0],
+        [0.0, 1845.0, 1135.0],
+        [0.0, 0.0, 1.0]
+      ],
+      "R": [
+        [-0.0232531565, 0.999699927, -0.00770433147],
+        [-0.000934666883, -0.00772815425, -0.999969706],
+        [-0.999729168, -0.0232452442, 0.00111409296]
+      ],
+      "t": [0.01893959, -0.18635925, -0.20259226],
+      "nominal_yaw_deg": 180.0,
+      "description": "Rear-facing surround camera"
+    },
+    "rear_left": {
+      "K_source": [
+        [1843.0, 0.0, 1769.0],
+        [0.0, 1843.0, 1136.0],
+        [0.0, 0.0, 1.0]
+      ],
+      "R": [
+        [0.85288016, 0.52210461, 0.00148434],
+        [0.00680007, -0.00826537, -0.99994272],
+        [-0.52206244, 0.85284141, -0.01059972]
+      ],
+      "t": [0.00806251, -0.18614501, -0.18860823],
+      "nominal_yaw_deg": 120.0,
+      "description": "Rear-left surround camera"
+    },
+    "rear_right": {
+      "K_source": [
+        [1847.0, 0.0, 1756.0],
+        [0.0, 1847.0, 1148.0],
+        [0.0, 0.0, 1.0]
+      ],
+      "R": [
+        [-0.881148667, 0.472814031, 0.00489123238],
+        [-0.00420872288, 0.00250132715, -0.999988016],
+        [-0.472820592, -0.881158694, -0.000214095393]
+      ],
+      "t": [0.01272224, -0.18561945, -0.22249366],
+      "nominal_yaw_deg": -120.0,
+      "description": "Rear-right surround camera"
+    }
+  }
+}

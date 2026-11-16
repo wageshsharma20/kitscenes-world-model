@@ -75,7 +75,16 @@ def derive_motion_bucket(speed: float) -> int:
 
 @dataclass(frozen=True)
 class CameraPose:
-    """Pose and intrinsic parameters of a single camera in the rig (nominal/provisional model)."""
+    """Pose and intrinsic parameters of a single camera in the rig.
+
+    Supports both:
+    1. Certified official calibration matrices (Wagner et al. 2026, KITScenes-LongTail):
+       - Exact 3x3 intrinsic matrix K_output (scaled from pinhole source format to 876x568)
+       - Exact 3x3 rotation matrix R (vehicle body coordinates to camera optical frame)
+       - Exact 3-element translation vector t (in camera optical coordinates)
+       - Camera center C = -R^T @ t in vehicle body frame
+    2. Nominal/provisional pinhole approximation (70° HFOV, nominal yaw, wheelbase positions).
+    """
     name: str
     yaw_deg: float
     yaw_rad: float
@@ -86,25 +95,41 @@ class CameraPose:
     height: int = spec.HEIGHT
     hfov_deg: float = 70.0
     is_provisional: bool = True
+    is_calibrated: bool = False
+    k_matrix: Optional[np.ndarray] = None
+    k_source_matrix: Optional[np.ndarray] = None
+    r_matrix: Optional[np.ndarray] = None
+    t_vec: Optional[np.ndarray] = None
+    calibration_source: str = "Provisional Nominal Rig Model"
 
     @property
     def fx(self) -> float:
+        if self.k_matrix is not None:
+            return float(self.k_matrix[0, 0])
         return (self.width / 2.0) / math.tan(math.radians(self.hfov_deg / 2.0))
 
     @property
     def fy(self) -> float:
+        if self.k_matrix is not None:
+            return float(self.k_matrix[1, 1])
         return self.fx
 
     @property
     def cx(self) -> float:
+        if self.k_matrix is not None:
+            return float(self.k_matrix[0, 2])
         return self.width / 2.0
 
     @property
     def cy(self) -> float:
+        if self.k_matrix is not None:
+            return float(self.k_matrix[1, 2])
         return self.height / 2.0
 
     @property
     def intrinsic_matrix(self) -> np.ndarray:
+        if self.k_matrix is not None:
+            return np.asarray(self.k_matrix, dtype=np.float64)
         return np.array(
             [[self.fx, 0.0, self.cx], [0.0, self.fy, self.cy], [0.0, 0.0, 1.0]],
             dtype=np.float64,
@@ -116,8 +141,10 @@ class CameraPose:
 
         Vehicle body: X=forward, Y=left, Z=up.
         Camera frame: x=right, y=down, z=forward along optical axis.
-        Supports full 6-DoF orientation with yaw, pitch, and roll.
         """
+        if self.r_matrix is not None:
+            return np.asarray(self.r_matrix, dtype=np.float64)
+
         th_z = self.yaw_rad
         th_y = math.radians(self.pitch_deg)
         th_x = math.radians(self.roll_deg)
@@ -140,11 +167,6 @@ class CameraPose:
         r32 = cy * sx
         r33 = cy * cx
 
-        # In vehicle body coordinates, the camera frame unit vectors are:
-        # Optical forward = R @ [1, 0, 0]^T = [r11, r21, r31]
-        # Camera right    = R @ [0, -1, 0]^T = [-r12, -r22, -r32]
-        # Camera down     = R @ [0, 0, -1]^T = [-r13, -r23, -r33]
-        # Therefore, the projection from vehicle body to camera coordinates is:
         return np.array(
             [
                 [-r12, -r22, -r32],  # row 0: right
@@ -154,9 +176,48 @@ class CameraPose:
             dtype=np.float64,
         )
 
+    @property
+    def translation_vector(self) -> np.ndarray:
+        """3-element translation vector in camera optical frame: P_c = R @ P_ego + t."""
+        if self.t_vec is not None:
+            return np.asarray(self.t_vec, dtype=np.float64)
+        # In provisional model: t_cam = -R @ C
+        c = np.asarray(self.position_m, dtype=np.float64)
+        return -self.rotation_matrix_body_to_cam @ c
+
+
+def load_official_camera_calibration(
+    calibration_path: Optional[Union[str, Path]] = None,
+    width: int = spec.WIDTH,
+    height: int = spec.HEIGHT,
+) -> Optional[Dict[str, Any]]:
+    """Load official 6-camera pinhole calibration from JSON config if available."""
+    if calibration_path is None:
+        default_cfg = Path(__file__).resolve().parent.parent / "configs" / "kitscenes_camera_calibration.json"
+        if default_cfg.exists():
+            calibration_path = default_cfg
+        else:
+            return None
+
+    p = Path(calibration_path)
+    if not p.exists():
+        return None
+
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data
+    except Exception:
+        return None
+
 
 class CameraRig:
-    """Manages the 6-camera surround rig conforming to KITScenes specifications (provisional nominal model)."""
+    """Manages the 6-camera surround rig conforming to KITScenes specifications.
+
+    When official calibration config (configs/kitscenes_camera_calibration.json) is available,
+    rig initializes with exact verified K, R, t matrices (Wagner et al. 2026).
+    Otherwise, it gracefully falls back to the provisional nominal rig.
+    """
 
     def __init__(
         self,
@@ -166,31 +227,89 @@ class CameraRig:
         positions: Optional[Dict[str, Tuple[float, float, float]]] = None,
         pitch_deg: Optional[Dict[str, float]] = None,
         roll_deg: Optional[Dict[str, float]] = None,
-        is_provisional: bool = True,
+        is_provisional: Optional[bool] = None,
+        calibration_path: Optional[Union[str, Path]] = None,
     ):
         self.width = width
         self.height = height
         self.hfov_deg = hfov_deg
-        self.is_provisional = is_provisional
-        pos_dict = positions or PROVISIONAL_CAMERA_POSITIONS
-        pitch_dict = pitch_deg or {c: 0.0 for c in spec.CAMERAS}
-        roll_dict = roll_deg or {c: 0.0 for c in spec.CAMERAS}
 
-        self.cameras: Dict[str, CameraPose] = {
-            cam: CameraPose(
-                name=cam,
-                yaw_deg=PROVISIONAL_CAMERA_YAW_DEG[cam],
-                yaw_rad=PROVISIONAL_CAMERA_YAW_RAD[cam],
-                position_m=pos_dict[cam],
-                pitch_deg=pitch_dict.get(cam, 0.0),
-                roll_deg=roll_dict.get(cam, 0.0),
-                width=width,
-                height=height,
-                hfov_deg=hfov_deg,
-                is_provisional=is_provisional,
+        calib_data = None
+        # Only load official calibration if not explicitly requested provisional
+        if is_provisional is not True:
+            calib_data = load_official_camera_calibration(calibration_path, width=width, height=height)
+
+        if calib_data is not None and "cameras" in calib_data:
+            self.is_provisional = False
+            self.is_calibrated = True
+            self.calibration_source = calib_data.get(
+                "source", "Official KITScenes-LongTail Calibration (Wagner et al. 2026)"
             )
-            for cam in spec.CAMERAS
-        }
+            self.nominal_ground_z_ego = float(calib_data.get("nominal_ground_z_ego", -1.60))
+
+            src_w = float(calib_data.get("source_image_dimensions", {}).get("width", 3488.0))
+            src_h = float(calib_data.get("source_image_dimensions", {}).get("height", 2272.0))
+            sx = float(width) / src_w
+            sy = float(height) / src_h
+            a_matrix = np.array([[sx, 0.0, 0.0], [0.0, sy, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64)
+
+            self.cameras: Dict[str, CameraPose] = {}
+            for cam_name in spec.CAMERAS:
+                c_info = calib_data["cameras"][cam_name]
+                k_src = np.array(c_info["K_source"], dtype=np.float64)
+                r_mat = np.array(c_info["R"], dtype=np.float64)
+                t_vec = np.array(c_info["t"], dtype=np.float64)
+                k_out = a_matrix @ k_src
+
+                # Compute camera center C = -R^T @ t in vehicle body frame
+                c_pos = -r_mat.T @ t_vec
+                pos_m = (float(c_pos[0]), float(c_pos[1]), float(c_pos[2]))
+                yaw_deg = float(c_info.get("nominal_yaw_deg", PROVISIONAL_CAMERA_YAW_DEG[cam_name]))
+
+                self.cameras[cam_name] = CameraPose(
+                    name=cam_name,
+                    yaw_deg=yaw_deg,
+                    yaw_rad=math.radians(yaw_deg),
+                    position_m=pos_m,
+                    pitch_deg=0.0,
+                    roll_deg=0.0,
+                    width=width,
+                    height=height,
+                    hfov_deg=hfov_deg,
+                    is_provisional=False,
+                    is_calibrated=True,
+                    k_matrix=k_out,
+                    k_source_matrix=k_src,
+                    r_matrix=r_mat,
+                    t_vec=t_vec,
+                    calibration_source=self.calibration_source,
+                )
+        else:
+            self.is_provisional = True
+            self.is_calibrated = False
+            self.calibration_source = "Provisional Nominal Rig Model"
+            self.nominal_ground_z_ego = 0.0
+
+            pos_dict = positions or PROVISIONAL_CAMERA_POSITIONS
+            pitch_dict = pitch_deg or {c: 0.0 for c in spec.CAMERAS}
+            roll_dict = roll_deg or {c: 0.0 for c in spec.CAMERAS}
+
+            self.cameras = {
+                cam: CameraPose(
+                    name=cam,
+                    yaw_deg=PROVISIONAL_CAMERA_YAW_DEG[cam],
+                    yaw_rad=PROVISIONAL_CAMERA_YAW_RAD[cam],
+                    position_m=pos_dict[cam],
+                    pitch_deg=pitch_dict.get(cam, 0.0),
+                    roll_deg=roll_dict.get(cam, 0.0),
+                    width=width,
+                    height=height,
+                    hfov_deg=hfov_deg,
+                    is_provisional=True,
+                    calibration_source="Provisional Nominal Rig Model",
+                )
+                for cam in spec.CAMERAS
+            }
 
     def __getitem__(self, name: str) -> CameraPose:
         return self.cameras[name]

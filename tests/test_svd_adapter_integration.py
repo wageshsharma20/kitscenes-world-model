@@ -335,7 +335,7 @@ def test_frame_wise_cfg_generation_mock():
     assert torch.isfinite(latents_cfg).all()
 
 
-def test_checkpoint_backbone_mismatch_rejection(tmp_path):
+def test_checkpoint_backbone_mismatch_rejection(tmp_path, monkeypatch):
     """Verify evaluator rejects checkpoint trained on mock backbone when requested backbone is svd-xt."""
     import pytest
     from scripts.eval_pilot_comparison import run_pilot_evaluation
@@ -349,6 +349,10 @@ def test_checkpoint_backbone_mismatch_rejection(tmp_path):
         mock_ckpt_path,
     )
 
+    # Mock CUDA availability to test checkpoint backbone validation on svd-xt
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+
     with pytest.raises(ValueError, match="Checkpoint backbone mismatch"):
         run_pilot_evaluation(
             model_checkpoint=mock_ckpt_path,
@@ -359,6 +363,7 @@ def test_checkpoint_backbone_mismatch_rejection(tmp_path):
             output_renders_dir=tmp_path,
             report_out_path=tmp_path / "report.json",
             backbone="svd-xt",
+            device="cuda:0",
         )
 
 
@@ -481,3 +486,199 @@ def test_svd_v_prediction_loss_weighting_equivalence():
         assert abs(metrics["loss_v"] - metrics["weighted_latent_mse"]) < 1e-4, (
             f"Equivalence failed at sigma={sig_val}: v_loss={metrics['loss_v']}, weighted={metrics['weighted_latent_mse']}"
         )
+
+
+def test_svd_xt_train_fails_loud_on_cpu_mps(tmp_path, monkeypatch):
+    """Verify that svd-xt execution on CPU or MPS fails loud immediately with RuntimeError on training."""
+    import pytest
+    from scripts.train_svd_spatial_adapter import train_pilot_adapter, validate_device_and_dtype
+
+    # 1. When CUDA is unavailable: CPU and MPS must fail loud immediately
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    with pytest.raises(RuntimeError, match="CUDA is strictly required for backbone='svd-xt'"):
+        train_pilot_adapter(
+            latents_dir=tmp_path,
+            data_path=tmp_path / "train_trajectories.jsonl",
+            output_model_path=tmp_path / "model.pt",
+            report_out_path=tmp_path / "report.json",
+            backbone="svd-xt",
+            device="cpu",
+        )
+
+    with pytest.raises(RuntimeError, match="CUDA is strictly required for backbone='svd-xt'"):
+        validate_device_and_dtype("mps", "svd-xt")
+
+    # 2. When CUDA is available: non-cuda device string must fail loud
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+
+    with pytest.raises(RuntimeError, match="Invalid device 'cpu' for backbone='svd-xt'"):
+        validate_device_and_dtype("cpu", "svd-xt")
+
+    with pytest.raises(RuntimeError, match="Invalid device 'mps' for backbone='svd-xt'"):
+        validate_device_and_dtype("mps", "svd-xt")
+
+    # 3. CUDA device index out of bounds must fail loud
+    with pytest.raises(RuntimeError, match="CUDA device index 5 is out of bounds"):
+        validate_device_and_dtype("cuda:5", "svd-xt")
+
+
+def test_validate_device_and_dtype_cuda_device_strings_float16(monkeypatch):
+    """Verify that device strings like 'cuda:0' correctly resolve to float16 without falling back to float32."""
+    from scripts.train_svd_spatial_adapter import validate_device_and_dtype
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 4)
+
+    # Test cuda:0 on svd-xt
+    dev0, dt0 = validate_device_and_dtype("cuda:0", "svd-xt")
+    assert dev0 == torch.device("cuda:0")
+    assert dt0 == torch.float16, f"Expected float16 for 'cuda:0' on svd-xt, got {dt0}"
+
+    # Test bare cuda on svd-xt
+    dev_bare, dt_bare = validate_device_and_dtype("cuda", "svd-xt")
+    assert dev_bare == torch.device("cuda")
+    assert dt_bare == torch.float16
+
+    # Test cuda:2 on svd-xt
+    dev2, dt2 = validate_device_and_dtype("cuda:2", "svd-xt")
+    assert dev2 == torch.device("cuda:2")
+    assert dt2 == torch.float16
+
+    # Test mock backbone on cuda:0 (must stay float32)
+    dev_mock_cuda, dt_mock_cuda = validate_device_and_dtype("cuda:0", "mock")
+    assert dev_mock_cuda == torch.device("cuda:0")
+    assert dt_mock_cuda == torch.float32
+
+    # Test mock backbone on cpu (must stay float32)
+    dev_mock_cpu, dt_mock_cpu = validate_device_and_dtype("cpu", "mock")
+    assert dev_mock_cpu == torch.device("cpu")
+    assert dt_mock_cpu == torch.float32
+
+
+def test_train_pilot_adapter_updates_metadata_and_fresh_noise(tmp_path):
+    """Verify train_pilot_adapter records required optimizer updates and provenance metadata."""
+    import json
+    from scripts.train_svd_spatial_adapter import train_pilot_adapter
+
+    # Set up minimal mock data
+    latents_dir = tmp_path / "latents"
+    latents_dir.mkdir()
+    train_ids = ["0000400", "0000401"]
+    val_ids = ["0000406"]
+
+    b, t, c, h, w = 1, 25, 4, 72, 128
+    for sid in train_ids + val_ids:
+        torch.save(
+            {
+                "scenario_id": sid,
+                "target_latents": torch.randn(b, t, c, h, w),
+                "initial_latents": torch.randn(b, 1, c, h, w),
+            },
+            latents_dir / f"{sid}.pt",
+        )
+
+    traj_file = tmp_path / "trajectories.jsonl"
+    with open(traj_file, "w") as f:
+        for sid in train_ids + val_ids:
+            line = {
+                "scenario_id": sid,
+                "past": [[-float(i), 0.0] for i in range(10, 0, -1)],
+                "driving_instruction": "drive straight",
+                "scenario_type": "straight",
+                "expert_like": [[float(i), 0.0] for i in range(25)],
+            }
+            f.write(json.dumps(line) + "\n")
+
+    out_model = tmp_path / "model.pt"
+    out_report = tmp_path / "report.json"
+
+    report = train_pilot_adapter(
+        latents_dir=latents_dir,
+        data_path=traj_file,
+        output_model_path=out_model,
+        report_out_path=out_report,
+        backbone="mock",
+        conditioning_source="knn",
+        iterations=2,
+        lr=1e-4,
+        device="cpu",
+        train_ids=train_ids,
+        val_ids=val_ids,
+    )
+
+    # Verify provenance metadata
+    meta = report["metadata"]
+    assert meta["iterations"] == 2
+    assert meta["train_sequences_count"] == 2
+    assert meta["optimizer_updates_per_iteration"] == 2
+    assert meta["total_optimizer_updates"] == 4
+    assert meta["device"] == "cpu"
+    assert meta["dtype"] == "torch.float32"
+    assert meta["backbone"] == "mock"
+    assert meta["model_revision"] == "main"
+
+    # Verify saved checkpoint metadata matches
+    ckpt = torch.load(out_model, map_location="cpu")
+    ckpt_meta = ckpt["metadata"]
+    assert ckpt_meta["iterations"] == 2
+    assert ckpt_meta["train_sequences_count"] == 2
+    assert ckpt_meta["optimizer_updates_per_iteration"] == 2
+    assert ckpt_meta["total_optimizer_updates"] == 4
+    assert ckpt_meta["device"] == "cpu"
+    assert ckpt_meta["dtype"] == "torch.float32"
+    assert ckpt_meta["backbone"] == "mock"
+    assert ckpt_meta["model_revision"] == "main"
+    assert ckpt_meta["val_sigma_grid"] == [1.0, 15.0, 70.0]
+    assert ckpt_meta["val_noise_realizations"] == 2
+
+
+def test_smoke_test_svd_gpu_fails_loud_on_non_cuda(monkeypatch):
+    """Verify that smoke_test_svd_gpu strictly rejects CPU and MPS execution with expected RuntimeError."""
+    import pytest
+    from scripts.smoke_test_svd_gpu import (
+        CUDA_REQUIRED_ERROR_MSG,
+        main,
+        run_svd_gpu_smoke_test,
+        validate_cuda_device,
+    )
+
+    # 1. Direct device validation for CPU and MPS
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_cuda_device("cpu")
+    assert CUDA_REQUIRED_ERROR_MSG in str(exc_info.value)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_cuda_device("mps")
+    assert CUDA_REQUIRED_ERROR_MSG in str(exc_info.value)
+
+    # 2. When torch.cuda.is_available() is False, any device (including cuda:0) must fail loud
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
+    with pytest.raises(RuntimeError) as exc_info:
+        validate_cuda_device("cuda:0")
+    assert CUDA_REQUIRED_ERROR_MSG in str(exc_info.value)
+
+    # 3. Direct runner invocation on CPU/MPS must raise expected RuntimeError
+    with pytest.raises(RuntimeError) as exc_info:
+        run_svd_gpu_smoke_test(device="cpu")
+    assert CUDA_REQUIRED_ERROR_MSG in str(exc_info.value)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        run_svd_gpu_smoke_test(device="mps")
+    assert CUDA_REQUIRED_ERROR_MSG in str(exc_info.value)
+
+    # 4. CLI main() entrypoint with --device cpu and --device mps
+    with pytest.raises(RuntimeError) as exc_info:
+        main(["--device", "cpu"])
+    assert CUDA_REQUIRED_ERROR_MSG in str(exc_info.value)
+
+    with pytest.raises(RuntimeError) as exc_info:
+        main(["--device", "mps"])
+    assert CUDA_REQUIRED_ERROR_MSG in str(exc_info.value)
+
+    # 5. Device index validation when CUDA is available
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    with pytest.raises(ValueError, match="Invalid CUDA device index 5"):
+        validate_cuda_device("cuda:5")
+

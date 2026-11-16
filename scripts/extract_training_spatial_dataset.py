@@ -17,7 +17,6 @@ Performs rigorous partition verification: strictly asserts zero validation leaka
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 import time
 from pathlib import Path
@@ -111,7 +110,7 @@ def main():
         r["scenario_id"] for r in ds.records if 900 <= int(r["scenario_id"]) <= 999
     ]
     assert len(val_leaked) == 0, f"DATA LEAKAGE DETECTED: {val_leaked}"
-    print(f"[+] Partition Integrity: PASS (0 validation scenarios found in training split)")
+    print("[+] Partition Integrity: PASS (0 validation scenarios found in training split)")
 
     # 2. Inspect first record
     sample_0 = ds[0]
@@ -160,7 +159,7 @@ def main():
         future_vid_count += sum(batch["has_future_video"])
 
         if n_batches == 1:
-            print(f"[Batch 0 Shapes]")
+            print("[Batch 0 Shapes]")
             print(f"  - static_route_mask (Option A):             {batch['static_route_mask'].shape}")
             print(f"  - initial_frame_temporal_masks (Option B.1): {batch['initial_frame_temporal_masks'].shape}")
             print(f"  - future_camera_spatial_masks (Option B.2):  {batch['future_camera_spatial_masks'].shape}")
@@ -182,11 +181,11 @@ def main():
     print("\n" + "=" * 80)
     print("DATASET CONTRACT VERIFICATION SUMMARY:")
     print(f"  - Donors Loaded:                     {n_samples} (100% of training split)")
-    print(f"  - Validation Leakage:                0 (Strict partition verified)")
+    print("  - Validation Leakage:                0 (Strict partition verified)")
     print(f"  - Option A Static Tensor Shape:      ({args.batch_size}, 1, {spec.HEIGHT}, {spec.WIDTH})")
     print(f"  - Option B.1 Initial-Frame Shape:    ({args.batch_size}, {spec.FRAME_COUNT}, 1, {spec.HEIGHT}, {spec.WIDTH})")
     print(f"  - Option B.2 Future-Camera Shape:    ({args.batch_size}, {spec.FRAME_COUNT}, 1, {spec.HEIGHT}, {spec.WIDTH})")
-    print(f"  - Calibration Model:                 PROVISIONAL NOMINAL SENSOR RIG (HFOV=70°)")
+    print("  - Calibration Model:                 PROVISIONAL NOMINAL SENSOR RIG (HFOV=70°)")
     print(f"  - Future Video Target Availability:  {future_vid_count}/{total_samples} locally on disk")
     print("=" * 80)
     return 0
