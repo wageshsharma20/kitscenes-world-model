@@ -514,19 +514,38 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
             down_block_res_samples = (sample,)
             for downsample_block in self.down_blocks:
-                if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
-                    sample, res_samples = downsample_block(
-                        hidden_states=sample,
-                        temb=emb,
-                        encoder_hidden_states=encoder_hidden_states,
-                        image_only_indicator=image_only_indicator,
-                    )
+                if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", False):
+                    if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
+                        def _run_down(s, blk=downsample_block):
+                            return blk(
+                                hidden_states=s,
+                                temb=emb,
+                                encoder_hidden_states=encoder_hidden_states,
+                                image_only_indicator=image_only_indicator,
+                            )
+                        sample, res_samples = torch.utils.checkpoint.checkpoint(_run_down, sample, use_reentrant=False)
+                    else:
+                        def _run_down(s, blk=downsample_block):
+                            return blk(
+                                hidden_states=s,
+                                temb=emb,
+                                image_only_indicator=image_only_indicator,
+                            )
+                        sample, res_samples = torch.utils.checkpoint.checkpoint(_run_down, sample, use_reentrant=False)
                 else:
-                    sample, res_samples = downsample_block(
-                        hidden_states=sample,
-                        temb=emb,
-                        image_only_indicator=image_only_indicator,
-                    )
+                    if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
+                        sample, res_samples = downsample_block(
+                            hidden_states=sample,
+                            temb=emb,
+                            encoder_hidden_states=encoder_hidden_states,
+                            image_only_indicator=image_only_indicator,
+                        )
+                    else:
+                        sample, res_samples = downsample_block(
+                            hidden_states=sample,
+                            temb=emb,
+                            image_only_indicator=image_only_indicator,
+                        )
                 down_block_res_samples += res_samples
 
             if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", False):
@@ -785,15 +804,17 @@ def run_svd_gpu_smoke_test(
         torch.cuda.synchronize(parsed_device)
     t_fwd_start = time.perf_counter()
 
-    conditioned_latents = spatial_adapter.apply_to_latent(noisy_latents, spatial_masks)
-    unet_input = torch.cat([conditioned_latents, initial_image_latents], dim=2)
+    autocast_device = parsed_device.type if parsed_device.type in ["cuda", "cpu"] else "cpu"
+    with torch.autocast(device_type=autocast_device, dtype=dtype):
+        conditioned_latents = spatial_adapter.apply_to_latent(noisy_latents, spatial_masks)
+        unet_input = torch.cat([conditioned_latents, initial_image_latents], dim=2)
 
-    unet_out = unet(
-        sample=unet_input,
-        timestep=timesteps,
-        encoder_hidden_states=encoder_hidden_states,
-        added_time_ids=added_time_ids,
-    )
+        unet_out = unet(
+            sample=unet_input,
+            timestep=timesteps,
+            encoder_hidden_states=encoder_hidden_states,
+            added_time_ids=added_time_ids,
+        )
 
     if parsed_device.type == "cuda":
         torch.cuda.synchronize(parsed_device)
@@ -822,6 +843,7 @@ def run_svd_gpu_smoke_test(
     # 11. Execute exactly ONE backward pass
     print("\n[*] Executing backward pass (loss.backward())...")
     if parsed_device.type == "cuda":
+        torch.cuda.empty_cache()
         torch.cuda.synchronize(parsed_device)
     t_bwd_start = time.perf_counter()
 
