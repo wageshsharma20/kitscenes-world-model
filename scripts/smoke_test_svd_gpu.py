@@ -305,8 +305,8 @@ class BroadcastAttnProcessor2_0:
         if getattr(attn, "norm_k", None) is not None:
             key = attn.norm_k(key)
 
-        if is_cross and batch_size > 128:
-            chunk_size = 128
+        if is_cross and batch_size > 16:
+            chunk_size = 16
             out_chunks = []
             for i in range(0, batch_size, chunk_size):
                 q_c = query[i : i + chunk_size]
@@ -317,7 +317,7 @@ class BroadcastAttnProcessor2_0:
                 )
             hidden_states = torch.cat(out_chunks, dim=0)
         elif not is_cross and batch_size > 1:
-            chunk_size = 1 if sequence_length > 25 else 128
+            chunk_size = 1 if sequence_length > 25 else 16
             out_chunks = []
             for i in range(0, batch_size, chunk_size):
                 q_c = query[i : i + chunk_size]
@@ -748,7 +748,7 @@ def run_svd_gpu_smoke_test(
 
     noisy_latents = torch.randn(1, 25, 4, h_lat, w_lat, device=parsed_device, dtype=dtype)
     initial_image_latents_4d = torch.randn(1, 4, h_lat, w_lat, device=parsed_device, dtype=dtype)
-    initial_image_latents = initial_image_latents_4d.unsqueeze(1).repeat(1, 25, 1, 1, 1)
+    initial_image_latents = initial_image_latents_4d.unsqueeze(1).expand(1, 25, 4, h_lat, w_lat)
     spatial_masks = torch.rand(1, 25, 1, mask_h, mask_w, device=parsed_device, dtype=dtype)
     added_time_ids = torch.tensor([[4.0, 127.0, 0.02]], device=parsed_device, dtype=dtype)
     timesteps = torch.tensor([0.05], device=parsed_device, dtype=dtype)
@@ -797,6 +797,10 @@ def run_svd_gpu_smoke_test(
         else:
             conditioned_latents = spatial_adapter.apply_to_latent(noisy_latents, spatial_masks)
         unet_input = torch.cat([conditioned_latents, initial_image_latents], dim=2)
+        del initial_image_latents
+        if "initial_image_latents_4d" in locals():
+            del initial_image_latents_4d
+        del conditioned_latents
 
         unet_out = unet(
             sample=unet_input,
@@ -831,7 +835,8 @@ def run_svd_gpu_smoke_test(
     # Free large non-essential forward containers before backward pass
     del unet_out
     del sample_tensor
-    del initial_image_latents_4d
+    if "initial_image_latents_4d" in locals():
+        del initial_image_latents_4d
     if "cssc_out" in locals():
         del cssc_out
     if parsed_device.type == "cuda":
