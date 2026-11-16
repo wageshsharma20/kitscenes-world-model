@@ -99,22 +99,45 @@ def test_conditioning_source_knn_vs_oracle_distinction(tmp_path: Path):
         f.write(json.dumps(record) + "\n")
 
     # Oracle mode must return expert_like ground truth
-    oracle_traj, oracle_label = resolve_conditioning_trajectory(
+    oracle_traj, oracle_label, oracle_meta = resolve_conditioning_trajectory(
         scenario_id="0000406",
         trajectories_file=traj_file,
         conditioning_source="oracle",
     )
     assert "Oracle" in oracle_label
     assert np.allclose(oracle_traj, np.array(expert_like))
+    assert oracle_meta["fallback_used"] is False
+    assert oracle_meta["source"] == "oracle"
+    assert len(oracle_meta["trajectory_checksum"]) == 64
 
     # kNN mode must predict waypoints via planner (not oracle ground truth)
-    knn_traj, knn_label = resolve_conditioning_trajectory(
+    knn_traj, knn_label, knn_meta = resolve_conditioning_trajectory(
         scenario_id="0000406",
         trajectories_file=traj_file,
         conditioning_source="knn",
     )
     assert "kNN" in knn_label
     assert knn_traj.shape == (25, 2)
+    assert knn_meta["fallback_used"] is False
+    assert knn_meta["source"] == "knn"
+    assert knn_meta["donor_count"] >= 1
+    assert len(knn_meta["trajectory_checksum"]) == 64
+
+    # Fail-loud: Missing scenario in oracle mode must raise RuntimeError
+    with pytest.raises(RuntimeError, match="Fail-loud: Oracle trajectory"):
+        resolve_conditioning_trajectory(
+            scenario_id="nonexistent_scenario",
+            trajectories_file=traj_file,
+            conditioning_source="oracle",
+        )
+
+    # Fail-loud: Missing file must raise FileNotFoundError
+    with pytest.raises(FileNotFoundError):
+        resolve_conditioning_trajectory(
+            scenario_id="0000406",
+            trajectories_file=tmp_path / "nonexistent.jsonl",
+            conditioning_source="knn",
+        )
 
     # Invalid source must raise ValueError
     with pytest.raises(ValueError, match="conditioning_source must be 'knn' or 'oracle'"):
@@ -139,3 +162,26 @@ def test_proxy_metrics_relabeling_contract():
     assert isinstance(flow_a, float)
     assert sharp_a >= 0.0
     assert flow_a >= 0.0
+
+
+def test_temporal_vae_chunk_decoding():
+    """Verify temporal VAE decoding chunks temporal latents into chunks of 14 frames."""
+    from kitscenes.spatial_adapter import decode_latents_temporal
+    import torch
+
+    class MockVAE:
+        def __init__(self):
+            self.config = type("Config", (), {"scaling_factor": 0.18215})()
+            self.chunk_sizes = []
+
+        def decode(self, chunk, num_frames=None):
+            self.chunk_sizes.append(chunk.shape[0])
+            return type("Output", (), {"sample": torch.zeros(chunk.shape[0], 3, 16, 16)})()
+
+    mock_vae = MockVAE()
+    dummy_latents = torch.randn(1, 25, 4, 4, 4)
+
+    decoded = decode_latents_temporal(mock_vae, dummy_latents, num_frames=25, decode_chunk_size=14)
+
+    assert decoded.shape == (1, 25, 3, 16, 16)
+    assert mock_vae.chunk_sizes == [14, 11], f"Expected chunks [14, 11], got {mock_vae.chunk_sizes}"

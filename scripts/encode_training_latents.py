@@ -20,7 +20,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import torch
@@ -47,16 +47,29 @@ def encode_frame_to_latent(
     vae: AutoencoderKLTemporalDecoder,
     pil_img: Image.Image,
     device: str,
-    generator: torch.Generator,
+    generator: Optional[torch.Generator] = None,
+    use_mode: bool = False,
+    noise_aug_strength: float = 0.0,
 ) -> torch.Tensor:
-    """Pad, normalize, and encode a single frame to latent slice (1, 4, 72, 128)."""
+    """Pad, normalize, and encode a single frame to latent slice (1, 4, 72, 128).
+
+    If noise_aug_strength > 0, Gaussian noise is added to the normalized image tensor.
+    If use_mode is True, dist.mode() is used instead of dist.sample().
+    """
     padded_img, _ = adapt_aspect_ratio_to_svd(pil_img, target_width=1024, target_height=576)
     arr = np.array(padded_img, dtype=np.float32) / 127.5 - 1.0  # [-1, 1]
     tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device)  # (1, 3, 576, 1024)
 
+    if noise_aug_strength > 0.0:
+        noise = torch.randn_like(tensor, generator=generator) if generator is not None else torch.randn_like(tensor)
+        tensor = tensor + noise_aug_strength * noise
+
     with torch.no_grad():
         dist = vae.encode(tensor).latent_dist
-        latent = dist.sample(generator=generator) * vae.config.scaling_factor
+        if use_mode:
+            latent = dist.mode() * vae.config.scaling_factor
+        else:
+            latent = dist.sample(generator=generator) * vae.config.scaling_factor
     return latent  # (1, 4, 72, 128)
 
 
@@ -81,11 +94,13 @@ def encode_scenario(
     if not video_dir.exists():
         raise FileNotFoundError(f"Future frames directory missing: {video_dir}")
 
-    # 1. Encode Initial Frame (t=0)
+    # 1. Encode Initial Frame (t=0) with 0.02 noise augmentation and posterior mode()
     img_t0 = Image.open(t0_path).convert("RGB")
-    lat_init = encode_frame_to_latent(vae, img_t0, device, gen)  # (1, 4, 72, 128)
+    lat_init = encode_frame_to_latent(
+        vae, img_t0, device, gen, use_mode=True, noise_aug_strength=0.02
+    )  # (1, 4, 72, 128)
 
-    # 2. Encode 25 Future Video Frames
+    # 2. Encode 25 Future Video Frames (clean sample, no noise aug)
     frame_files = sorted(video_dir.glob("frame_*.jpg"))
     if len(frame_files) != spec.FRAME_COUNT:
         raise ValueError(f"Expected {spec.FRAME_COUNT} frames in {video_dir}, found {len(frame_files)}")
@@ -93,7 +108,7 @@ def encode_scenario(
     latent_slices: List[torch.Tensor] = []
     for f_idx, f_path in enumerate(frame_files):
         img_f = Image.open(f_path).convert("RGB")
-        lat_f = encode_frame_to_latent(vae, img_f, device, gen)
+        lat_f = encode_frame_to_latent(vae, img_f, device, gen, use_mode=False, noise_aug_strength=0.0)
         latent_slices.append(lat_f.cpu())
 
     # Stack along temporal dimension: (1, 25, 4, 72, 128)
@@ -114,6 +129,8 @@ def encode_scenario(
         "latent_shape": list(target_latents.shape),
         "initial_latent_shape": list(lat_init.shape),
         "scaling_factor": float(vae.config.scaling_factor),
+        "initial_latent_mode": "mode",
+        "initial_noise_aug_strength": 0.02,
         "t0_sha256": sha256_file(t0_path),
         "mp4_sha256": sha256_file(video_mp4) if video_mp4.exists() else None,
         "status": "ENCODED_GENUINE_VAE",

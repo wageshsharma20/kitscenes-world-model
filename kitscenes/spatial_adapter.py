@@ -402,7 +402,7 @@ class MockSVDUNet(nn.Module):
 
 
 def create_default_euler_scheduler() -> Any:
-    """Create standard EulerDiscreteScheduler matching SVD-XT schedule."""
+    """Create standard EulerDiscreteScheduler matching full official SVD-XT schedule."""
     try:
         from diffusers import EulerDiscreteScheduler
     except ImportError as exc:
@@ -424,7 +424,188 @@ def create_default_euler_scheduler() -> Any:
             timestep_spacing="leading",
             steps_offset=1,
             use_karras_sigmas=True,
+            timestep_type="continuous",
+            sigma_min=0.002,
+            sigma_max=700.0,
+            interpolation_type="linear",
+            clip_sample=False,
+            set_alpha_to_one=False,
+            skip_prk_steps=True,
+            final_sigmas_type="zero",
+            rescale_betas_zero_snr=False,
         )
+
+
+# ==============================================================================
+# SVD CONTINUOUS DIFFUSION MATHEMATICS
+# ==============================================================================
+
+
+def sigma_to_c_noise(sigma: torch.Tensor) -> torch.Tensor:
+    """Map diffusion noise level sigma to continuous SVD scheduler timestep c_noise.
+
+    Formula: c_noise = 0.25 * log(sigma)
+    """
+    return 0.25 * torch.log(sigma.clamp(min=1e-8))
+
+
+def c_noise_to_sigma(c_noise: torch.Tensor) -> torch.Tensor:
+    """Map continuous SVD scheduler timestep c_noise back to diffusion noise level sigma.
+
+    Formula: sigma = exp(4 * c_noise)
+    """
+    return torch.exp(4.0 * c_noise)
+
+
+def sample_training_noise_levels(
+    batch_size: int,
+    loc: float = 1.0,
+    scale: float = 1.6,
+    generator: Optional[torch.Generator] = None,
+    device: Optional[torch.device] = None,
+    dtype: Optional[torch.dtype] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Sample continuous training noise levels following SVD high-res image-to-video paper:
+
+    log(sigma) ~ Normal(loc=1.0, scale=1.6**2)
+    Returns:
+        (sigmas, c_noise)
+    """
+    dt = dtype or torch.float32
+    dev = device or torch.device("cpu")
+    log_sigma = torch.randn(batch_size, generator=generator, device=dev, dtype=dt) * scale + loc
+    sigmas = torch.exp(log_sigma)
+    c_noise = 0.25 * log_sigma
+    return sigmas, c_noise
+
+
+def compute_svd_noise_tensors(
+    clean_latents: torch.Tensor,
+    noise: torch.Tensor,
+    sigmas: torch.Tensor,
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Compute SVD noise parameters, scaled UNet input, velocity target, and recovery coefficients.
+
+    Equations:
+        z_sigma = z_0 + sigma * noise
+        model_input = z_sigma / sqrt(1 + sigma**2)
+        v_target = (noise - sigma * z_0) / sqrt(1 + sigma**2)
+        c_out = -sigma / sqrt(1 + sigma**2)
+        c_skip = 1 / (1 + sigma**2)
+    """
+    sig = sigmas
+    while len(sig.shape) < len(clean_latents.shape):
+        sig = sig.unsqueeze(-1)
+
+    z_sigma = clean_latents + sig * noise
+    denom = torch.sqrt(1.0 + sig**2)
+    model_input = z_sigma / denom
+    v_target = (noise - sig * clean_latents) / denom
+    c_out = -sig / denom
+    c_skip = 1.0 / (1.0 + sig**2)
+    return z_sigma, model_input, v_target, c_out, c_skip
+
+
+def decode_latents_temporal(
+    vae: Any,
+    latents: torch.Tensor,
+    num_frames: int = 25,
+    decode_chunk_size: int = 14,
+) -> torch.Tensor:
+    """Decode video latents using temporal VAE with temporal chunking (matching official SVD)."""
+    b, t, c, h, w = latents.shape
+    latents_flat = latents.flatten(0, 1)
+    scaling_factor = getattr(vae.config, "scaling_factor", 0.18215)
+    latents_flat = (1.0 / scaling_factor) * latents_flat
+
+    frames = []
+    for i in range(0, latents_flat.shape[0], decode_chunk_size):
+        chunk = latents_flat[i : i + decode_chunk_size]
+        num_frames_in = chunk.shape[0]
+        try:
+            frame = vae.decode(chunk, num_frames=num_frames_in).sample
+        except TypeError:
+            frame = vae.decode(chunk).sample
+        frames.append(frame)
+
+    frames = torch.cat(frames, dim=0)
+    frames = frames.reshape(b, t, *frames.shape[1:])
+    return frames.float()
+
+
+def prepare_clip_image(
+    image: Any,
+    feature_extractor: Any,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    """Prepare image for CLIP vision encoder matching official SVD antialiased pipeline."""
+    import numpy as np
+
+    if not isinstance(image, torch.Tensor):
+        img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
+        img_t = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0)  # [1, 3, H, W]
+        img_norm = img_t * 2.0 - 1.0
+        img_resized = F.interpolate(img_norm, size=(224, 224), mode="bicubic", align_corners=False, antialias=True)
+        image_input = (img_resized + 1.0) / 2.0
+    else:
+        image_input = image
+
+    pixel_values = feature_extractor(
+        images=image_input,
+        do_normalize=True,
+        do_center_crop=False,
+        do_resize=False,
+        do_rescale=False,
+        return_tensors="pt",
+    ).pixel_values
+
+    return pixel_values.to(device=device, dtype=dtype)
+
+
+def encode_conditioning_image_vae(
+    image: Any,
+    vae: Any,
+    device: torch.device,
+    dtype: torch.dtype,
+    noise_aug_strength: float = 0.02,
+    generator: Optional[torch.Generator] = None,
+) -> torch.Tensor:
+    """Encode initial conditioning frame using VAE with noise augmentation and posterior mode.
+
+    Matches official Diffusers StableVideoDiffusionPipeline:
+    1. Injects Gaussian noise: image = image + noise_aug_strength * randn
+    2. Encodes via VAE: latents = vae.encode(image).latent_dist.mode() * vae.config.scaling_factor
+    """
+    import numpy as np
+    from PIL import Image
+
+    if isinstance(image, Image.Image):
+        from scripts.run_kaggle_svd_single_camera import adapt_aspect_ratio_to_svd
+        padded_img, _ = adapt_aspect_ratio_to_svd(image, target_width=1024, target_height=576)
+        arr = np.array(padded_img, dtype=np.float32) / 127.5 - 1.0
+        img_t = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=dtype)
+    elif isinstance(image, np.ndarray):
+        img_t = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=dtype)
+    else:
+        img_t = image.to(device=device, dtype=dtype)
+
+    if noise_aug_strength > 0.0:
+        noise = torch.randn(img_t.shape, generator=generator, device=device, dtype=dtype)
+        img_t = img_t + noise_aug_strength * noise
+
+    with torch.no_grad():
+        dist = vae.encode(img_t).latent_dist
+        if hasattr(dist, "mode"):
+            latents = dist.mode()
+        elif hasattr(dist, "mean"):
+            latents = dist.mean
+        else:
+            latents = dist.sample(generator=generator)
+        scaling_factor = getattr(vae.config, "scaling_factor", 0.18215)
+        latents = latents * scaling_factor
+
+    return latents
 
 
 # ==============================================================================
@@ -464,11 +645,7 @@ class SpatialConditionedSVDModel(nn.Module):
         self.image_encoder = image_encoder
         self.scheduler = scheduler
 
-        # Scaled linear diffusion schedule alphas_cumprod for 1000 timesteps
-        betas = torch.linspace(0.00085**0.5, 0.012**0.5, 1000, dtype=torch.float32) ** 2
-        alphas = 1.0 - betas
-        alphas_cumprod = torch.cumprod(alphas, dim=0)
-        self.register_buffer("alphas_cumprod", alphas_cumprod)
+        # SVD-XT is a continuous noise-level (v-prediction) diffusion model
 
         if prediction_type is not None:
             self.prediction_type = prediction_type
@@ -515,32 +692,66 @@ class SpatialConditionedSVDModel(nn.Module):
             "adapter_budget_compliant": adapter_trainable < 10_000_000,
         }
 
+
+    def train(self, mode: bool = True) -> "SpatialConditionedSVDModel":
+        """Set model training mode.
+
+        CRITICAL AUTOGRAD & FREEZING CONTRACT:
+        - The spatial adapter enters the requested training mode (mode).
+        - The UNet, VAE, and Image Encoder backbones MUST strictly remain in eval() mode
+          with requires_grad=False.
+        - Backpropagation through the frozen UNet occurs dynamically during the backward pass
+          without accumulating gradients on any UNet parameters.
+        """
+        super().train(mode)
+        if self.unet is not None:
+            self.unet.eval()
+        if self.vae is not None:
+            self.vae.eval()
+        if self.image_encoder is not None:
+            self.image_encoder.eval()
+        if hasattr(self, "spatial_adapter"):
+            self.spatial_adapter.train(mode)
+        return self
+
     def compute_latent_loss(
         self,
         target_latents: torch.Tensor,
         initial_image_latents: torch.Tensor,
         spatial_masks: Optional[torch.Tensor] = None,
         timesteps: Optional[Union[int, float, torch.Tensor]] = None,
+        c_noise: Optional[torch.Tensor] = None,
+        sigmas: Optional[torch.Tensor] = None,
         noise: Optional[torch.Tensor] = None,
         encoder_hidden_states: Optional[torch.Tensor] = None,
         added_time_ids: Optional[torch.Tensor] = None,
-        loss_type: str = "latent_mse",
+        loss_type: str = "v_mse",
         scheduler: Optional[Any] = None,
         prediction_type: Optional[str] = None,
     ) -> Tuple[torch.Tensor, Dict[str, Any]]:
-        """Compute training loss between model output and target future latents.
+        """Compute training loss between model output and target future latents following SVD-XT math.
+
+        Equations:
+            z_sigma = z_0 + sigma * noise
+            model_input = z_sigma / sqrt(1 + sigma^2)
+            v_target = (noise - sigma * z_0) / sqrt(1 + sigma^2)
+            c_out = -sigma / sqrt(1 + sigma^2)
+            c_skip = 1 / (1 + sigma^2)
+            z_0_hat = v_pred * c_out + z_sigma * c_skip
 
         Args:
             target_latents: Clean ground-truth future latents [B, T, 4, H_lat, W_lat].
             initial_image_latents: t=0 image latents [B, 4, H_lat, W_lat] or [B, T, 4, H_lat, W_lat].
             spatial_masks: Optional conditioning masks [B, T, 1, H, W].
-            timesteps: Diffusion timesteps tensor, float, or int.
+            timesteps: Backwards-compatible alias for continuous timestep c_noise.
+            c_noise: Continuous SVD scheduler timestep (c_noise = 0.25 * log(sigma)).
+            sigmas: Direct diffusion noise level sigma tensor [B].
             noise: Injected Gaussian noise (sampled if None).
             encoder_hidden_states: Optional real CLIP image embedding tensor [B, 1, 1024].
-            added_time_ids: Optional micro-conditioning IDs [B, 3] ([fps - 1, motion_bucket_id, augmentation_level]).
-            loss_type: "latent_mse" (denoised latent vs target), "v_mse", or "noise_mse".
-            scheduler: Optional scheduler to resolve continuous timesteps or noise schedule.
-            prediction_type: "v_prediction" (native SVD-XT) or "epsilon".
+            added_time_ids: Optional micro-conditioning IDs [B, 3] ([fps - 1, motion_bucket_id, noise_aug_strength]).
+            loss_type: 'latent_mse' (denoised latent vs target), 'v_mse', or 'noise_mse'.
+            scheduler: Optional scheduler to resolve continuous timesteps.
+            prediction_type: 'v_prediction' (native SVD-XT) or 'epsilon'.
 
         Returns:
             Tuple of (loss_scalar_tensor, metrics_dict).
@@ -549,7 +760,6 @@ class SpatialConditionedSVDModel(nn.Module):
         device = target_latents.device
         dtype = target_latents.dtype
 
-        # Expand initial image latents across frames if [B, 4, H_lat, W_lat] or [B, 1, 4, H_lat, W_lat]
         if initial_image_latents.ndim == 4:
             cond_latents = initial_image_latents.unsqueeze(1).repeat(1, t, 1, 1, 1)
         elif initial_image_latents.shape[1] == 1 and t > 1:
@@ -557,124 +767,125 @@ class SpatialConditionedSVDModel(nn.Module):
         else:
             cond_latents = initial_image_latents
 
-        # Sample noise
         eps = noise if noise is not None else torch.randn_like(target_latents)
 
-        # Timesteps handling
-        if timesteps is None:
+        if sigmas is not None:
+            sig = sigmas.to(device=device, dtype=dtype)
+            c_n = sigma_to_c_noise(sig) if c_noise is None else c_noise.to(device=device, dtype=dtype)
+        elif c_noise is not None:
+            c_n = c_noise.to(device=device, dtype=dtype)
+            sig = c_noise_to_sigma(c_n)
+        elif timesteps is not None:
+            t_val = timesteps if isinstance(timesteps, torch.Tensor) else torch.tensor(timesteps, device=device, dtype=dtype)
+            if t_val.ndim == 0:
+                t_val = t_val.unsqueeze(0).repeat(b)
+            elif t_val.shape[0] == 1 and b > 1:
+                t_val = t_val.repeat(b)
+            t_val = t_val.to(device=device, dtype=dtype)
+
+            # Check if caller passed discrete timesteps (e.g. t in [0, 1000]) vs continuous c_noise (in [-2.0, 2.0])
+            if t_val.max() > 10.0:
+                # Map discrete timesteps t in [0, 1000] to SVD-XT continuous range [-1.55, 1.64]
+                t_norm = torch.clamp(t_val / 1000.0, 0.0, 1.0)
+                c_n = t_norm * 3.19 - 1.55
+                sig = c_noise_to_sigma(c_n)
+            else:
+                c_n = t_val
+                sig = c_noise_to_sigma(c_n)
+        else:
             if self.training:
-                t_steps = torch.randint(0, 1000, (b,), device=device, dtype=torch.long)
+                sig, c_n = sample_training_noise_levels(b, loc=1.0, scale=1.6, device=device, dtype=dtype)
             else:
-                t_steps = torch.full((b,), 500, device=device, dtype=torch.long)
-        elif isinstance(timesteps, (int, float)):
-            t_steps = torch.tensor([timesteps], device=device).repeat(b)
-        elif isinstance(timesteps, torch.Tensor):
-            if timesteps.ndim == 0:
-                t_steps = timesteps.unsqueeze(0).repeat(b).to(device=device)
-            elif timesteps.shape[0] == 1 and b > 1:
-                t_steps = timesteps.repeat(b).to(device=device)
-            else:
-                t_steps = timesteps.to(device=device)
-        else:
-            t_steps = torch.tensor(timesteps, device=device)
+                sig = torch.full((b,), 15.0, device=device, dtype=dtype)
+                c_n = sigma_to_c_noise(sig)
 
-        # Standard diffusion noise schedule computation
-        active_sched = scheduler or self.scheduler
-        if active_sched is not None and hasattr(active_sched, "alphas_cumprod"):
-            alphas_buf = active_sched.alphas_cumprod.to(device=device, dtype=dtype)
-        else:
-            alphas_buf = self.alphas_cumprod.to(device=device, dtype=dtype)
+        z_sigma, model_input, v_target, c_out, c_skip = compute_svd_noise_tensors(
+            clean_latents=target_latents,
+            noise=eps,
+            sigmas=sig,
+        )
 
-        if t_steps.is_floating_point():
-            if t_steps.min() >= 0.0 and t_steps.max() <= 1000.0:
-                t_clamped = t_steps.clamp(0.0, 999.0)
-                t_floor = t_clamped.long()
-                t_ceil = (t_floor + 1).clamp(max=999)
-                weight = (t_clamped - t_floor.float()).view(-1, 1, 1, 1, 1)
-                a_floor = alphas_buf[t_floor].view(-1, 1, 1, 1, 1)
-                a_ceil = alphas_buf[t_ceil].view(-1, 1, 1, 1, 1)
-                alpha_bar = (1.0 - weight) * a_floor + weight * a_ceil
-            elif active_sched is not None and hasattr(active_sched, "sigmas"):
-                sigmas_list = []
-                for tv in t_steps:
-                    idx = active_sched.index_for_timestep(tv, active_sched.timesteps) if hasattr(active_sched, "index_for_timestep") else 0
-                    sigmas_list.append(active_sched.sigmas[idx].item() if idx < len(active_sched.sigmas) else 1.0)
-                sigmas_tensor = torch.tensor(sigmas_list, device=device, dtype=dtype).view(-1, 1, 1, 1, 1)
-                alpha_bar = 1.0 / (sigmas_tensor**2 + 1.0)
-            else:
-                alpha_bar = torch.full((b, 1, 1, 1, 1), 0.5, device=device, dtype=dtype)
-        else:
-            t_idx = t_steps.clamp(0, 999).long()
-            alpha_bar = alphas_buf[t_idx].view(b, 1, 1, 1, 1)
-
-        sqrt_alpha = torch.sqrt(alpha_bar)
-        sqrt_one_minus_alpha = torch.sqrt(torch.clamp(1.0 - alpha_bar, min=1e-7))
-
-        # Forward diffusion process (noising)
-        noisy_latents = sqrt_alpha * target_latents + sqrt_one_minus_alpha * eps
-
-        # Inject spatial adapter conditioning if masks provided
         if spatial_masks is not None:
-            conditioned_noisy = self.spatial_adapter.apply_to_latent(noisy_latents, spatial_masks)
+            conditioned_model_input = self.spatial_adapter.apply_to_latent(model_input, spatial_masks)
         else:
-            conditioned_noisy = noisy_latents
+            conditioned_model_input = model_input
 
-        # Concatenate noisy latents and initial image conditioning -> [B, T, 8, H_lat, W_lat]
-        unet_input = torch.cat([conditioned_noisy, cond_latents], dim=2)
+        unet_input = torch.cat([conditioned_model_input, cond_latents], dim=2)
 
-        # UNet forward pass (supports both UNetSpatioTemporalConditionModel and MockSVDUNet)
         unet_kwargs = {}
         if encoder_hidden_states is not None:
-            unet_kwargs["encoder_hidden_states"] = encoder_hidden_states
-        elif hasattr(self.unet, "config") and getattr(self.unet.config, "cross_attention_dim", None):
-            cross_dim = getattr(self.unet.config, "cross_attention_dim", 1024)
-            unet_kwargs["encoder_hidden_states"] = torch.zeros(b, 1, cross_dim, device=device, dtype=unet_input.dtype)
-        elif getattr(self.unet, "cross_attention_dim", None):
-            unet_kwargs["encoder_hidden_states"] = torch.zeros(b, 1, self.unet.cross_attention_dim, device=device, dtype=unet_input.dtype)
+            unet_kwargs['encoder_hidden_states'] = encoder_hidden_states
+        elif hasattr(self.unet, 'config') and getattr(self.unet.config, 'cross_attention_dim', None):
+            cross_dim = getattr(self.unet.config, 'cross_attention_dim', 1024)
+            unet_kwargs['encoder_hidden_states'] = torch.zeros(b, 1, cross_dim, device=device, dtype=unet_input.dtype)
+        elif getattr(self.unet, 'cross_attention_dim', None):
+            unet_kwargs['encoder_hidden_states'] = torch.zeros(b, 1, self.unet.cross_attention_dim, device=device, dtype=unet_input.dtype)
 
         if added_time_ids is not None:
-            unet_kwargs["added_time_ids"] = added_time_ids
-        elif hasattr(self.unet, "config") and getattr(self.unet.config, "addition_time_embed_dim", None):
-            unet_kwargs["added_time_ids"] = torch.tensor([[4.0, 127.0, 0.0]], device=device, dtype=unet_input.dtype).repeat(b, 1)
+            unet_kwargs['added_time_ids'] = added_time_ids
+        elif hasattr(self.unet, 'config') and getattr(self.unet.config, 'addition_time_embed_dim', None):
+            unet_kwargs['added_time_ids'] = torch.tensor([[4.0, 127.0, 0.02]], device=device, dtype=unet_input.dtype).repeat(b, 1)
 
         try:
-            unet_out = self.unet(unet_input, timestep=t_steps, **unet_kwargs)
+            unet_out = self.unet(unet_input, timestep=c_n, **unet_kwargs)
         except TypeError:
-            # Fallback if UNet does not accept cross-attention / time IDs kwargs
-            unet_out = self.unet(unet_input, timestep=t_steps)
+            unet_out = self.unet(unet_input, timestep=c_n)
 
-        pred_noise = unet_out.sample if hasattr(unet_out, "sample") else unet_out
-        if isinstance(pred_noise, tuple):
-            pred_noise = pred_noise[0]
+        pred_v = unet_out.sample if hasattr(unet_out, 'sample') else unet_out
+        if isinstance(pred_v, tuple):
+            pred_v = pred_v[0]
 
-        pred_mode = prediction_type or getattr(self, "prediction_type", "v_prediction")
-        target_v = sqrt_alpha * eps - sqrt_one_minus_alpha * target_latents
+        pred_mode = prediction_type or getattr(self, 'prediction_type', 'v_prediction')
 
-        if pred_mode == "v_prediction":
-            # Model predicts v = sqrt(alpha) * eps - sqrt(1-alpha) * x_0
-            denoised_latents = sqrt_alpha * conditioned_noisy - sqrt_one_minus_alpha * pred_noise
-            pred_eps = sqrt_alpha * pred_noise + sqrt_one_minus_alpha * conditioned_noisy
+        if pred_mode == 'v_prediction':
+            denoised_latents = pred_v * c_out + z_sigma * c_skip
+            sig_reshaped = sig
+            while len(sig_reshaped.shape) < len(target_latents.shape):
+                sig_reshaped = sig_reshaped.unsqueeze(-1)
+            pred_eps = pred_v / torch.sqrt(1.0 + sig_reshaped**2) + z_sigma * (sig_reshaped / (1.0 + sig_reshaped**2))
         else:
-            # Model predicts epsilon
-            denoised_latents = (conditioned_noisy - sqrt_one_minus_alpha * pred_noise) / sqrt_alpha.clamp(min=1e-4)
-            pred_eps = pred_noise
+            pred_eps = pred_v
+            sig_reshaped = sig
+            while len(sig_reshaped.shape) < len(target_latents.shape):
+                sig_reshaped = sig_reshaped.unsqueeze(-1)
+            denoised_latents = z_sigma - sig_reshaped * pred_eps
+
+        v_loss = F.mse_loss(pred_v, v_target)
+        unweighted_latent_loss = F.mse_loss(denoised_latents, target_latents)
+
+        # SNR weighting: w(sigma) = (1 + sigma^2) / sigma^2
+        # Mathematically w(sigma) * ||z_0_hat - z_0||^2 == ||v_pred - v_target||^2
+        sig_reshaped_sq = sig_reshaped**2
+        sig_weight = (1.0 + sig_reshaped_sq) / (sig_reshaped_sq + 1e-7)
+        weighted_latent_loss = torch.mean(sig_weight * (denoised_latents - target_latents) ** 2)
 
         if loss_type == "v_mse":
-            loss = F.mse_loss(pred_noise, target_v)
+            loss = v_loss
+        elif loss_type == "weighted_latent_mse":
+            loss = weighted_latent_loss
         elif loss_type in ("noise_mse", "eps_mse"):
             loss = F.mse_loss(pred_eps, eps)
-        else:  # "latent_mse"
-            loss = F.mse_loss(denoised_latents, target_latents)
+        elif loss_type == "latent_mse":
+            loss = unweighted_latent_loss
+        else:
+            loss = v_loss
 
         metrics = {
             "loss": float(loss.item()),
+            "loss_v": float(v_loss.item()),
+            "weighted_latent_mse": float(weighted_latent_loss.item()),
+            "unweighted_latent_mse": float(unweighted_latent_loss.item()),
             "loss_type": loss_type,
             "prediction_type": pred_mode,
             "target_std": float(target_latents.std().item()),
-            "pred_noise_norm": float(pred_noise.norm().item()),
+            "pred_v_norm": float(pred_v.norm().item()),
+            "sigmas_mean": float(sig.mean().item()),
+            "c_noise_mean": float(c_n.mean().item()),
             "denoised_latents": denoised_latents.detach(),
-            "pred_noise": pred_noise.detach(),
-            "timesteps": t_steps.detach() if isinstance(t_steps, torch.Tensor) else t_steps,
+            "pred_v": pred_v.detach(),
+            "sigmas": sig.detach(),
+            "c_noise": c_n.detach(),
+            "timesteps": c_n.detach(),
         }
 
         return loss, metrics
@@ -687,6 +898,8 @@ class SpatialConditionedSVDModel(nn.Module):
         num_inference_steps: int = 25,
         num_frames: int = 25,
         latent_shape: Optional[Tuple[int, int]] = None,
+        min_guidance_scale: float = 1.0,
+        max_guidance_scale: float = 3.0,
         generator: Optional[torch.Generator] = None,
         noise: Optional[torch.Tensor] = None,
         encoder_hidden_states: Optional[torch.Tensor] = None,
@@ -696,8 +909,9 @@ class SpatialConditionedSVDModel(nn.Module):
     ) -> torch.Tensor:
         """Run genuine multi-step iterative diffusion generation starting from pure noise z_T ~ N(0, I).
 
-        Completely decoupled from ground-truth future latents. Iterates through the scheduler
-        timesteps, injecting spatial adapter conditioning and predicting noise at each step.
+        Supports official SVD-XT frame-wise Classifier-Free Guidance (CFG):
+            guidance_scale = linspace(min_guidance_scale, max_guidance_scale, num_frames)
+            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_cond - noise_pred_uncond)
 
         Args:
             initial_image_latents: Initial observed conditioning frame latents [B, 4, H_lat, W_lat]
@@ -707,10 +921,12 @@ class SpatialConditionedSVDModel(nn.Module):
             num_inference_steps: Number of denoising diffusion steps (e.g. 25).
             num_frames: Video frame count (e.g. 25).
             latent_shape: Optional (H_lat, W_lat) resolution override.
+            min_guidance_scale: SVD-XT CFG start scale at t=0 frame (default: 1.0).
+            max_guidance_scale: SVD-XT CFG peak scale at future frames (default: 3.0; set <=1.0 to disable CFG).
             generator: Optional torch.Generator for deterministic noise generation.
             noise: Optional pre-sampled random noise z_T [B, T, 4, H_lat, W_lat].
             encoder_hidden_states: Real CLIP vision encoder embeddings [B, 1, 1024].
-            added_time_ids: Real micro-conditioning IDs [B, 3] ([fps - 1, motion_bucket_id, augmentation_level]).
+            added_time_ids: Real micro-conditioning IDs [B, 3] ([fps - 1, motion_bucket_id, noise_aug_strength]).
             device: Computation device.
             dtype: Tensor dtype.
 
@@ -725,7 +941,6 @@ class SpatialConditionedSVDModel(nn.Module):
         w_lat = latent_shape[1] if latent_shape else initial_image_latents.shape[-1]
         latents_shape = (b, num_frames, 4, h_lat, w_lat)
 
-        # Conditioning frame latents expanded across T frames -> [B, T, 4, H_lat, W_lat]
         if initial_image_latents.ndim == 4:
             cond_latents = initial_image_latents.unsqueeze(1).repeat(1, num_frames, 1, 1, 1).to(device=dev, dtype=dt)
         elif initial_image_latents.shape[1] == 1 and num_frames > 1:
@@ -733,62 +948,98 @@ class SpatialConditionedSVDModel(nn.Module):
         else:
             cond_latents = initial_image_latents.to(device=dev, dtype=dt)
 
-        # Scheduler preparation
         active_sched = scheduler or self.scheduler
         if active_sched is None:
             active_sched = create_default_euler_scheduler()
 
         active_sched.set_timesteps(num_inference_steps, device=dev)
 
-        # 1. Start from pure Gaussian random noise z_T ~ N(0, I)
         if noise is not None:
             latents = noise.clone().to(device=dev, dtype=dt)
         else:
             latents = torch.randn(latents_shape, generator=generator, device=dev, dtype=dt)
 
-        if hasattr(active_sched, "init_noise_sigma"):
+        if hasattr(active_sched, 'init_noise_sigma'):
             latents = latents * active_sched.init_noise_sigma
 
-        # 2. Build UNet conditioning kwargs
+        do_cfg = max_guidance_scale > 1.0
+        if do_cfg:
+            guidance_scale = torch.linspace(min_guidance_scale, max_guidance_scale, num_frames, device=dev, dtype=dt)
+            guidance_scale = guidance_scale.view(1, num_frames, 1, 1, 1).repeat(b, 1, 1, 1, 1)
+
         unet_kwargs = {}
         if encoder_hidden_states is not None:
-            unet_kwargs["encoder_hidden_states"] = encoder_hidden_states.to(device=dev, dtype=dt)
-        elif hasattr(self.unet, "config") and getattr(self.unet.config, "cross_attention_dim", None):
-            cross_dim = getattr(self.unet.config, "cross_attention_dim", 1024)
-            unet_kwargs["encoder_hidden_states"] = torch.zeros(b, 1, cross_dim, device=dev, dtype=dt)
-        elif getattr(self.unet, "cross_attention_dim", None):
-            unet_kwargs["encoder_hidden_states"] = torch.zeros(b, 1, self.unet.cross_attention_dim, device=dev, dtype=dt)
+            enc_states = encoder_hidden_states.to(device=dev, dtype=dt)
+        elif hasattr(self.unet, 'config') and getattr(self.unet.config, 'cross_attention_dim', None):
+            cross_dim = getattr(self.unet.config, 'cross_attention_dim', 1024)
+            enc_states = torch.zeros(b, 1, cross_dim, device=dev, dtype=dt)
+        elif getattr(self.unet, 'cross_attention_dim', None):
+            enc_states = torch.zeros(b, 1, self.unet.cross_attention_dim, device=dev, dtype=dt)
+        else:
+            enc_states = None
+
+        if enc_states is not None:
+            if do_cfg:
+                uncond_enc = torch.zeros_like(enc_states)
+                unet_kwargs['encoder_hidden_states'] = torch.cat([uncond_enc, enc_states], dim=0)
+            else:
+                unet_kwargs['encoder_hidden_states'] = enc_states
 
         if added_time_ids is not None:
-            unet_kwargs["added_time_ids"] = added_time_ids.to(device=dev, dtype=dt)
-        elif hasattr(self.unet, "config") and getattr(self.unet.config, "addition_time_embed_dim", None):
-            unet_kwargs["added_time_ids"] = torch.tensor([[4.0, 127.0, 0.0]], device=dev, dtype=dt).repeat(b, 1)
+            time_ids = added_time_ids.to(device=dev, dtype=dt)
+        elif hasattr(self.unet, 'config') and getattr(self.unet.config, 'addition_time_embed_dim', None):
+            time_ids = torch.tensor([[4.0, 127.0, 0.02]], device=dev, dtype=dt).repeat(b, 1)
+        else:
+            time_ids = None
 
-        # 3. Iterative Denoising Loop
+        if time_ids is not None:
+            if do_cfg:
+                unet_kwargs['added_time_ids'] = torch.cat([time_ids, time_ids], dim=0)
+            else:
+                unet_kwargs['added_time_ids'] = time_ids
+
+        cond_latents_batch = torch.cat([torch.zeros_like(cond_latents), cond_latents], dim=0) if do_cfg else cond_latents
+
+        # Precompute spatial conditioning features once before diffusion loop
+        spatial_cond_features = None
+        if spatial_masks is not None:
+            masks_dev = spatial_masks.to(device=dev, dtype=dt)
+            target_shape = (h_lat, w_lat)
+            spatial_cond_features = self.spatial_adapter(
+                masks_dev,
+                target_latent_shape=target_shape,
+                num_frames=num_frames,
+            ).latent_conditioning
+
         for t in active_sched.timesteps:
-            # Scale model input per scheduler formulation
-            latent_model_input = active_sched.scale_model_input(latents, t)
+            latent_model_input = torch.cat([latents, latents], dim=0) if do_cfg else latents
+            latent_model_input = active_sched.scale_model_input(latent_model_input, t)
 
-            # Apply spatial adapter conditioning if masks provided
-            if spatial_masks is not None:
-                masks_dev = spatial_masks.to(device=dev, dtype=dt)
-                latent_model_input = self.spatial_adapter.apply_to_latent(latent_model_input, masks_dev)
+            if spatial_cond_features is not None:
+                if do_cfg:
+                    latent_uncond, latent_cond = latent_model_input.chunk(2, dim=0)
+                    latent_cond = latent_cond + spatial_cond_features
+                    latent_model_input = torch.cat([latent_uncond, latent_cond], dim=0)
+                else:
+                    latent_model_input = latent_model_input + spatial_cond_features
 
-            # Concatenate conditioning frame latents -> [B, T, 8, H_lat, W_lat]
-            unet_input = torch.cat([latent_model_input, cond_latents], dim=2)
+            unet_input = torch.cat([latent_model_input, cond_latents_batch], dim=2)
 
-            t_batch = t.repeat(b) if isinstance(t, torch.Tensor) and t.ndim == 0 else t
+            t_batch = t.repeat(2 * b if do_cfg else b) if (isinstance(t, torch.Tensor) and t.ndim == 0) else t
             try:
                 unet_out = self.unet(unet_input, timestep=t_batch, **unet_kwargs)
             except TypeError:
                 unet_out = self.unet(unet_input, timestep=t_batch)
 
-            pred_noise = unet_out.sample if hasattr(unet_out, "sample") else unet_out
-            if isinstance(pred_noise, tuple):
-                pred_noise = pred_noise[0]
+            pred_v = unet_out.sample if hasattr(unet_out, 'sample') else unet_out
+            if isinstance(pred_v, tuple):
+                pred_v = pred_v[0]
 
-            # Step scheduler to update x_t -> x_{t-1}
-            latents = active_sched.step(pred_noise, t, latents).prev_sample
+            if do_cfg:
+                pred_uncond, pred_cond = pred_v.chunk(2, dim=0)
+                pred_v = pred_uncond + guidance_scale * (pred_cond - pred_uncond)
+
+            latents = active_sched.step(pred_v, t, latents).prev_sample
 
         return latents
 

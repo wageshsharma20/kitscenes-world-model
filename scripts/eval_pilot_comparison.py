@@ -27,6 +27,7 @@ Exports:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -50,6 +51,7 @@ from kitscenes.spatial_adapter import (
     SpatialAdapterConfig,
     SpatialConditionedSVDModel,
     create_default_euler_scheduler,
+    decode_latents_temporal,
 )
 from scripts.run_kaggle_svd_single_camera import (
     adapt_aspect_ratio_to_svd,
@@ -144,8 +146,10 @@ def resolve_conditioning_trajectory(
     scenario_id: str,
     trajectories_file: Path,
     conditioning_source: str = "knn",
-) -> Tuple[np.ndarray, str]:
+) -> Tuple[np.ndarray, str, Dict[str, Any]]:
     """Resolve waypoints from kNN predicted trajectory or oracle ground-truth.
+
+    Strictly fail-loud: NEVER silently fall back to straight line or kinematic extrapolation.
 
     Args:
         scenario_id: Target scenario identifier.
@@ -153,59 +157,86 @@ def resolve_conditioning_trajectory(
         conditioning_source: 'knn' (retrieval-based prediction) or 'oracle' (ground-truth).
 
     Returns:
-        Tuple of (waypoints_ego [25, 2], label_string).
+        Tuple of (waypoints_ego [25, 2], label_string, metadata_dict).
     """
     if conditioning_source not in ("knn", "oracle"):
         raise ValueError(f"conditioning_source must be 'knn' or 'oracle', got '{conditioning_source}'")
+
+    if not trajectories_file.exists():
+        raise FileNotFoundError(f"Required trajectories file does not exist: {trajectories_file}")
 
     gt_traj = None
     past_pts = None
     instruction = "drive straight"
     stype = "unknown"
 
-    if trajectories_file.exists():
-        with open(trajectories_file, "r", encoding="utf-8") as f:
-            for line in f:
-                if not line.strip():
-                    continue
-                item = json.loads(line)
-                if item.get("scenario_id") == scenario_id:
-                    if "past" in item:
-                        past_pts = np.asarray(item["past"], dtype=float)
-                    instruction = item.get("driving_instruction", instruction)
-                    stype = item.get("scenario_type", stype)
-                    pts = np.asarray(item.get("expert_like", []), dtype=float)
-                    if len(pts) >= spec.FRAME_COUNT:
-                        gt_traj = pts[:spec.FRAME_COUNT]
-                    break
+    with open(trajectories_file, "r", encoding="utf-8") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            item = json.loads(line)
+            if item.get("scenario_id") == scenario_id:
+                if "past" in item:
+                    past_pts = np.asarray(item["past"], dtype=float)
+                instruction = item.get("driving_instruction", instruction)
+                stype = item.get("scenario_type", stype)
+                pts = np.asarray(item.get("expert_like", []), dtype=float)
+                if len(pts) >= spec.FRAME_COUNT:
+                    gt_traj = pts[:spec.FRAME_COUNT]
+                break
 
     if conditioning_source == "oracle":
         if gt_traj is None:
-            gt_traj = np.column_stack([np.linspace(1.5, 30.0, spec.FRAME_COUNT), np.zeros(spec.FRAME_COUNT)])
-        return gt_traj, "Oracle Ground Truth (expert_like waypoints)"
+            raise RuntimeError(
+                f"Fail-loud: Oracle trajectory for scenario '{scenario_id}' not found in {trajectories_file}. "
+                "Silent fallback is prohibited."
+            )
+        traj_bytes = gt_traj.astype(np.float64).tobytes()
+        checksum = hashlib.sha256(traj_bytes).hexdigest()
+        meta = {
+            "source": "oracle",
+            "scenario_id": scenario_id,
+            "trajectory_checksum": checksum,
+            "donor_count": None,
+            "fallback_used": False,
+        }
+        return gt_traj, "Oracle Ground Truth (expert_like waypoints)", meta
 
     # 'knn' conditioning source
     from kitscenes import knn_trajectory
 
-    try:
-        donor_path = trajectories_file if trajectories_file.exists() else None
-        planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=donor_path)
-        if past_pts is None or len(past_pts) < 2:
-            past_pts = np.column_stack([np.linspace(-10.0, 0.0, 10), np.zeros(10)])
-
-        planned = planner.plan(
-            scenario_id=scenario_id,
-            past_trajectory=past_pts,
-            driving_instruction=instruction,
-            scenario_type=stype,
+    if past_pts is None or len(past_pts) < 2:
+        raise RuntimeError(
+            f"Fail-loud: Observed past trajectory for scenario '{scenario_id}' missing or has < 2 points in {trajectories_file}."
         )
-        planned = np.asarray(planned, dtype=float)
-        if len(planned) >= spec.FRAME_COUNT:
-            planned = planned[:spec.FRAME_COUNT]
-        return planned, f"kNN Trajectory Retrieval ({len(planner.donors)} training donors)"
-    except Exception as exc:
-        fallback = np.column_stack([np.linspace(1.5, 30.0, spec.FRAME_COUNT), np.zeros(spec.FRAME_COUNT)])
-        return fallback, f"kNN Fallback (Kinematic Extrapolation: {exc})"
+
+    planner = knn_trajectory.KNNTrajectoryPlanner(donor_path=trajectories_file)
+    if len(planner.donors) == 0:
+        raise RuntimeError(f"Fail-loud: No kNN donors available in {trajectories_file}.")
+
+    planned = planner.plan(
+        scenario_id=scenario_id,
+        past_trajectory=past_pts,
+        driving_instruction=instruction,
+        scenario_type=stype,
+    )
+    planned = np.asarray(planned, dtype=float)
+    if len(planned) < spec.FRAME_COUNT:
+        raise RuntimeError(
+            f"Fail-loud: kNN planner returned {len(planned)} waypoints for '{scenario_id}', expected >= {spec.FRAME_COUNT}."
+        )
+    planned = planned[:spec.FRAME_COUNT]
+
+    traj_bytes = planned.astype(np.float64).tobytes()
+    checksum = hashlib.sha256(traj_bytes).hexdigest()
+    meta = {
+        "source": "knn",
+        "scenario_id": scenario_id,
+        "trajectory_checksum": checksum,
+        "donor_count": len(planner.donors),
+        "fallback_used": False,
+    }
+    return planned, f"kNN Trajectory Retrieval ({len(planner.donors)} training donors)", meta
 
 
 def evaluate_scenario_pair(
@@ -221,6 +252,8 @@ def evaluate_scenario_pair(
     output_renders_dir: Path,
     conditioning_source: str = "knn",
     steps: int = 25,
+    min_guidance_scale: float = 1.0,
+    max_guidance_scale: float = 3.0,
     device: str = "cpu",
     seed: int = 42,
     encoder_hidden_states: Optional[torch.Tensor] = None,
@@ -241,7 +274,7 @@ def evaluate_scenario_pair(
     gt_frames = np.stack([np.array(Image.open(f).convert("RGB")) for f in frame_files], axis=0)
 
     # 2. Resolve Conditioning Trajectory (kNN or Oracle)
-    cond_traj, cond_label = resolve_conditioning_trajectory(
+    cond_traj, cond_label, traj_meta = resolve_conditioning_trajectory(
         scenario_id=scenario_id,
         trajectories_file=trajectories_file,
         conditioning_source=conditioning_source,
@@ -281,6 +314,8 @@ def evaluate_scenario_pair(
             scheduler=scheduler,
             num_inference_steps=steps,
             num_frames=spec.FRAME_COUNT,
+            min_guidance_scale=min_guidance_scale,
+            max_guidance_scale=max_guidance_scale,
             noise=noise_zT.clone(),
             encoder_hidden_states=encoder_hidden_states,
             added_time_ids=added_time_ids,
@@ -296,6 +331,8 @@ def evaluate_scenario_pair(
             scheduler=scheduler,
             num_inference_steps=steps,
             num_frames=spec.FRAME_COUNT,
+            min_guidance_scale=min_guidance_scale,
+            max_guidance_scale=max_guidance_scale,
             noise=noise_zT.clone(),
             encoder_hidden_states=encoder_hidden_states,
             added_time_ids=added_time_ids,
@@ -308,33 +345,15 @@ def evaluate_scenario_pair(
     frames_base_list = []
     frames_cond_list = []
 
-    lat_base_unscaled = gen_latents_baseline / vae.config.scaling_factor
-    lat_cond_unscaled = gen_latents_cond / vae.config.scaling_factor
-
     with torch.no_grad():
-        for t_idx in range(spec.FRAME_COUNT):
-            rec_base = vae.decode(lat_base_unscaled[:, t_idx], num_frames=1).sample
-            rec_cond = vae.decode(lat_cond_unscaled[:, t_idx], num_frames=1).sample
+        dec_base = decode_latents_temporal(vae, gen_latents_baseline, num_frames=spec.FRAME_COUNT, decode_chunk_size=14)
+        dec_cond = decode_latents_temporal(vae, gen_latents_cond, num_frames=spec.FRAME_COUNT, decode_chunk_size=14)
 
-            arr_base = (
-                ((rec_base.clamp(-1.0, 1.0) + 1.0) * 127.5)
-                .squeeze(0)
-                .permute(1, 2, 0)
-                .cpu()
-                .numpy()
-                .astype(np.uint8)
-            )
-            arr_cond = (
-                ((rec_cond.clamp(-1.0, 1.0) + 1.0) * 127.5)
-                .squeeze(0)
-                .permute(1, 2, 0)
-                .cpu()
-                .numpy()
-                .astype(np.uint8)
-            )
+    arr_base = ((dec_base[0].clamp(-1.0, 1.0) + 1.0) * 127.5).permute(0, 2, 3, 1).cpu().numpy().astype(np.uint8)
+    arr_cond = ((dec_cond[0].clamp(-1.0, 1.0) + 1.0) * 127.5).permute(0, 2, 3, 1).cpu().numpy().astype(np.uint8)
 
-            frames_base_list.append(Image.fromarray(arr_base))
-            frames_cond_list.append(Image.fromarray(arr_cond))
+    frames_base_list = [Image.fromarray(f) for f in arr_base]
+    frames_cond_list = [Image.fromarray(f) for f in arr_cond]
 
     frames_baseline = unpad_and_resize_frames(frames_base_list, crop_box)
     frames_conditioned = unpad_and_resize_frames(frames_cond_list, crop_box)
@@ -372,6 +391,7 @@ def evaluate_scenario_pair(
         "scenario_id": scenario_id,
         "conditioning_source": conditioning_source,
         "conditioning_label": cond_label,
+        "trajectory_metadata": traj_meta,
         "generation_method": "iterative_diffusion_from_pure_noise",
         "num_inference_steps": steps,
         "metrics": {
@@ -439,6 +459,9 @@ def run_pilot_evaluation(
     backbone: str = "mock",
     conditioning_source: str = "knn",
     steps: int = 25,
+    fresh_adapter: bool = False,
+    min_guidance_scale: float = 1.0,
+    max_guidance_scale: float = 3.0,
     device: str = "mps" if torch.backends.mps.is_available() else "cpu",
 ) -> Dict[str, Any]:
     """Execute complete comparative pilot evaluation on held-out sequences."""
@@ -447,6 +470,24 @@ def run_pilot_evaluation(
     print(f"Backbone: {backbone} | Conditioning Source: {conditioning_source}")
     print(f"Steps: {steps} | Device: {device} | Checkpoint: {model_checkpoint}")
     print("=" * 80)
+
+    # 0. Check checkpoint compatibility upfront before allocating any heavy models
+    loaded_state_dict = None
+    ckpt_backbone = None
+    if fresh_adapter:
+        print("[Adapter] --fresh-adapter set: Running with fresh zero-initialized spatial adapter (identity verification).")
+    elif model_checkpoint.exists():
+        ckpt = torch.load(model_checkpoint, map_location="cpu")
+        ckpt_meta = ckpt.get("metadata", {})
+        ckpt_backbone = ckpt_meta.get("backbone")
+        if ckpt_backbone is not None and ckpt_backbone != backbone:
+            raise ValueError(
+                f"Checkpoint backbone mismatch! Checkpoint '{model_checkpoint}' was trained on '{ckpt_backbone}', "
+                f"but evaluation requested backbone '{backbone}'. Mismatched evaluation is rejected."
+            )
+        loaded_state_dict = ckpt.get("spatial_adapter_state_dict", ckpt)
+    else:
+        print(f"Warning: Checkpoint {model_checkpoint} not found. Running with initialized adapter.")
 
     # 1. Load VAE
     t0 = time.time()
@@ -513,13 +554,9 @@ def run_pilot_evaluation(
     model.to(device=device, dtype=dtype)
 
     # Load adapter checkpoint weights if available
-    if model_checkpoint.exists():
-        ckpt = torch.load(model_checkpoint, map_location=device)
-        state_dict = ckpt.get("spatial_adapter_state_dict", ckpt)
-        model.spatial_adapter.load_state_dict(state_dict)
-        print(f"Trained adapter weights successfully loaded from {model_checkpoint}")
-    else:
-        print(f"Warning: Checkpoint {model_checkpoint} not found. Running with initialized adapter.")
+    if loaded_state_dict is not None:
+        model.spatial_adapter.load_state_dict(loaded_state_dict)
+        print(f"Trained adapter weights successfully loaded from {model_checkpoint} (backbone: {ckpt_backbone or 'unknown'})")
 
     model.freeze_backbone()
 
@@ -554,6 +591,8 @@ def run_pilot_evaluation(
             output_renders_dir=output_renders_dir,
             conditioning_source=conditioning_source,
             steps=steps,
+            min_guidance_scale=min_guidance_scale,
+            max_guidance_scale=max_guidance_scale,
             device=device,
             encoder_hidden_states=enc_hidden,
         )
@@ -588,6 +627,12 @@ def run_pilot_evaluation(
         "generation_method": "iterative_diffusion_from_pure_noise",
         "num_inference_steps": steps,
         "held_out_scenarios": held_out_scenarios,
+        "metrics_disclaimer": "These metrics are offline local validation proxies (pixel MSE/PSNR, SSIM, lateral motion CoM drift, Laplacian sharpness proxy, optical flow proxy). They are NOT the competition PQ/EMC/MMS metrics.",
+        "guidance": {
+            "min_guidance_scale": min_guidance_scale,
+            "max_guidance_scale": max_guidance_scale,
+            "frame_wise_linear_cfg": bool(max_guidance_scale > 1.0),
+        },
         "aggregate_summary": {
             "mean_psnr_gain_db": avg_psnr_gain,
             "mean_ssim_gain": avg_ssim_gain,
@@ -655,6 +700,23 @@ def main() -> None:
         default=25,
         help="Number of iterative diffusion denoising steps (default: 25).",
     )
+    parser.add_argument(
+        "--fresh-adapter",
+        action="store_true",
+        help="Run evaluation with fresh zero-initialized adapter without loading checkpoint weights.",
+    )
+    parser.add_argument(
+        "--min-guidance-scale",
+        type=float,
+        default=1.0,
+        help="SVD-XT CFG start scale at t=0 frame (default: 1.0).",
+    )
+    parser.add_argument(
+        "--max-guidance-scale",
+        type=float,
+        default=3.0,
+        help="SVD-XT CFG peak scale at future frames (default: 3.0; set <=1.0 to disable CFG).",
+    )
     parser.add_argument("--model-checkpoint", type=Path, default=Path("models/svd_spatial_adapter_front_b1.pt"))
     parser.add_argument("--latents-dir", type=Path, default=Path("data/train_latents"))
     parser.add_argument("--observed-t0-dir", type=Path, default=Path("data/train_observed_t0"))
@@ -676,6 +738,9 @@ def main() -> None:
         backbone=args.backbone,
         conditioning_source=args.conditioning_source,
         steps=args.steps,
+        fresh_adapter=args.fresh_adapter,
+        min_guidance_scale=args.min_guidance_scale,
+        max_guidance_scale=args.max_guidance_scale,
         device=args.device,
     )
 
