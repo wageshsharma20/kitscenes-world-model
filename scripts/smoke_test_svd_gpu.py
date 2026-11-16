@@ -248,6 +248,83 @@ def generate_markdown_report(metrics: Dict[str, Any]) -> str:
     return md
 
 
+class BroadcastAttnProcessor2_0:
+    """
+    Memory-efficient cross-attention processor supporting broadcast encoder_hidden_states.
+    Prevents allocating [9216, 27, 1024] (486 MiB) tensor duplicates by projecting the
+    compact [1, 27, 1024] token bank directly and leveraging PyTorch SDPA native batch broadcasting.
+    """
+
+    def __call__(
+        self,
+        attn: torch.nn.Module,
+        hidden_states: torch.Tensor,
+        encoder_hidden_states: torch.Tensor | None = None,
+        attention_mask: torch.Tensor | None = None,
+        temb: torch.Tensor | None = None,
+        *args,
+        **kwargs,
+    ) -> torch.Tensor:
+        import torch.nn.functional as F
+
+        residual = hidden_states
+        if getattr(attn, "spatial_norm", None) is not None:
+            hidden_states = attn.spatial_norm(hidden_states, temb)
+
+        input_ndim = hidden_states.ndim
+        if input_ndim == 4:
+            batch_size, channel, height, width = hidden_states.shape
+            hidden_states = hidden_states.view(batch_size, channel, height * width).transpose(1, 2)
+
+        batch_size, sequence_length, _ = hidden_states.shape
+
+        if getattr(attn, "group_norm", None) is not None:
+            hidden_states = attn.group_norm(hidden_states.transpose(1, 2)).transpose(1, 2)
+
+        query = attn.to_q(hidden_states)
+
+        is_cross = encoder_hidden_states is not None
+        if not is_cross:
+            encoder_hidden_states = hidden_states
+        elif getattr(attn, "norm_cross", False):
+            encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+
+        enc_batch = encoder_hidden_states.shape[0]
+        key = attn.to_k(encoder_hidden_states)
+        value = attn.to_v(encoder_hidden_states)
+
+        inner_dim = key.shape[-1]
+        head_dim = inner_dim // attn.heads
+
+        query = query.view(batch_size, -1, attn.heads, head_dim).transpose(1, 2)
+        key = key.view(enc_batch, -1, attn.heads, head_dim).transpose(1, 2)
+        value = value.view(enc_batch, -1, attn.heads, head_dim).transpose(1, 2)
+
+        if getattr(attn, "norm_q", None) is not None:
+            query = attn.norm_q(query)
+        if getattr(attn, "norm_k", None) is not None:
+            key = attn.norm_k(key)
+
+        hidden_states = F.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        )
+
+        hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
+        hidden_states = hidden_states.to(query.dtype)
+
+        hidden_states = attn.to_out[0](hidden_states)
+        hidden_states = attn.to_out[1](hidden_states)
+
+        if input_ndim == 4:
+            hidden_states = hidden_states.transpose(-1, -2).reshape(batch_size, channel, height, width)
+
+        if getattr(attn, "residual_connection", False):
+            hidden_states = hidden_states + residual
+
+        hidden_states = hidden_states / attn.rescale_output_factor
+        return hidden_states
+
+
 def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
     """
     Enables deep gradient checkpointing across UNetSpatioTemporalConditionModel,
@@ -265,6 +342,14 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
         module.gradient_checkpointing = True
 
     try:
+        from diffusers.models.attention import Attention
+
+        # Install broadcast attention processor to eliminate ~800MB/layer duplicate projection memory
+        for m in unet.modules():
+            if isinstance(m, Attention):
+                m.set_processor(BroadcastAttnProcessor2_0())
+        print("[✓] BroadcastAttnProcessor2_0 installed on all attention modules")
+
         from diffusers.models.unets.unet_3d_blocks import (
             CrossAttnDownBlockSpatioTemporal,
             CrossAttnUpBlockSpatioTemporal,
@@ -392,74 +477,6 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
         UNetMidBlockSpatioTemporal.forward = custom_mid_forward
 
-        from diffusers.models.attention import TemporalBasicTransformerBlock, _chunked_feed_forward
-
-        def custom_temporal_block_forward(
-            self,
-            hidden_states: torch.Tensor,
-            num_frames: int,
-            encoder_hidden_states=None,
-        ):
-            batch_frames, seq_length, channels = hidden_states.shape
-            batch_size = batch_frames // num_frames
-
-            hidden_states = hidden_states[None, :].reshape(batch_size, num_frames, seq_length, channels)
-            hidden_states = hidden_states.permute(0, 2, 1, 3)
-            hidden_states = hidden_states.reshape(batch_size * seq_length, num_frames, channels)
-
-            residual = hidden_states
-            hidden_states = self.norm_in(hidden_states)
-            if self._chunk_size is not None:
-                hidden_states = _chunked_feed_forward(self.ff_in, hidden_states, self._chunk_dim, self._chunk_size)
-            else:
-                hidden_states = self.ff_in(hidden_states)
-            if self.is_res:
-                hidden_states = hidden_states + residual
-
-            if torch.is_grad_enabled():
-                def _run_attn(h):
-                    n_h = self.norm1(h)
-                    out = self.attn1(n_h, encoder_hidden_states=None)
-                    h_out = out + h
-                    if self.attn2 is not None:
-                        n2 = self.norm2(h_out)
-                        out2 = self.attn2(n2, encoder_hidden_states=encoder_hidden_states)
-                        h_out = out2 + h_out
-                    return h_out
-
-                hidden_states = torch.utils.checkpoint.checkpoint(_run_attn, hidden_states, use_reentrant=False)
-
-                def _run_ff(h):
-                    n_h = self.norm3(h)
-                    if self._chunk_size is not None:
-                        ff_out = _chunked_feed_forward(self.ff, n_h, self._chunk_dim, self._chunk_size)
-                    else:
-                        ff_out = self.ff(n_h)
-                    return ff_out + h if self.is_res else ff_out
-
-                hidden_states = torch.utils.checkpoint.checkpoint(_run_ff, hidden_states, use_reentrant=False)
-            else:
-                norm_hidden_states = self.norm1(hidden_states)
-                attn_output = self.attn1(norm_hidden_states, encoder_hidden_states=None)
-                hidden_states = attn_output + hidden_states
-                if self.attn2 is not None:
-                    norm_hidden_states = self.norm2(hidden_states)
-                    attn_output = self.attn2(norm_hidden_states, encoder_hidden_states=encoder_hidden_states)
-                    hidden_states = attn_output + hidden_states
-                norm_hidden_states = self.norm3(hidden_states)
-                if self._chunk_size is not None:
-                    ff_output = _chunked_feed_forward(self.ff, norm_hidden_states, self._chunk_dim, self._chunk_size)
-                else:
-                    ff_output = self.ff(norm_hidden_states)
-                hidden_states = ff_output + hidden_states if self.is_res else ff_output
-
-            hidden_states = hidden_states[None, :].reshape(batch_size, seq_length, num_frames, channels)
-            hidden_states = hidden_states.permute(0, 2, 1, 3)
-            hidden_states = hidden_states.reshape(batch_size * num_frames, seq_length, channels)
-            return hidden_states
-
-        TemporalBasicTransformerBlock.forward = custom_temporal_block_forward
-
         from diffusers.models.transformers.transformer_temporal import (
             TransformerSpatioTemporalModel,
             TransformerTemporalModelOutput,
@@ -476,14 +493,13 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             num_frames = image_only_indicator.shape[-1]
             batch_size = batch_frames // num_frames
 
+            # Pass compact [batch_size, 27, 1024] directly to avoid allocating ~486 MiB duplicate tensor
             time_context = encoder_hidden_states
-            time_context_first_timestep = time_context[None, :].reshape(
-                batch_size, num_frames, -1, time_context.shape[-1]
-            )[:, 0]
-            time_context = time_context_first_timestep[:, None].broadcast_to(
-                batch_size, height * width, time_context.shape[-2], time_context.shape[-1]
-            )
-            time_context = time_context.reshape(batch_size * height * width, -1, time_context.shape[-1])
+            if time_context is not None:
+                time_context_first_timestep = time_context[None, :].reshape(
+                    batch_size, num_frames, -1, time_context.shape[-1]
+                )[:, 0]
+                time_context = time_context_first_timestep
 
             residual = hidden_states
             hidden_states = self.norm(hidden_states)
@@ -506,10 +522,15 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                         _run_spatio_step, hidden_states, use_reentrant=False
                     )
 
-                    h_temp = temporal_block(
-                        h_spat + emb,
-                        num_frames=num_frames,
-                        encoder_hidden_states=time_context,
+                    def _run_temporal_step(hs, tb=temporal_block):
+                        return tb(
+                            hs + emb,
+                            num_frames=num_frames,
+                            encoder_hidden_states=time_context,
+                        )
+
+                    h_temp = torch.utils.checkpoint.checkpoint(
+                        _run_temporal_step, h_spat, use_reentrant=False
                     )
 
                     hidden_states = self.time_mixer(
@@ -543,168 +564,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
         TransformerSpatioTemporalModel.forward = custom_spatio_temporal_forward
         print("[✓] Deep spatio-temporal transformer gradient checkpointing active")
-
-        from diffusers.models.unets.unet_spatio_temporal_condition import (
-            UNetSpatioTemporalConditionModel,
-            UNetSpatioTemporalConditionOutput,
-        )
-
-        def custom_unet_forward(
-            self,
-            sample: torch.Tensor,
-            timestep,
-            encoder_hidden_states: torch.Tensor,
-            added_time_ids: torch.Tensor,
-            return_dict: bool = True,
-        ):
-            default_overall_up_factor = 2**self.num_upsamplers
-            forward_upsample_size = False
-            upsample_size = None
-            if any(s % default_overall_up_factor != 0 for s in sample.shape[-2:]):
-                forward_upsample_size = True
-
-            timesteps = timestep
-            if not torch.is_tensor(timesteps):
-                timesteps = torch.tensor([timesteps], dtype=torch.float32, device=sample.device)
-            elif len(timesteps.shape) == 0:
-                timesteps = timesteps[None].to(sample.device)
-
-            batch_size, num_frames = sample.shape[:2]
-            timesteps = timesteps.expand(batch_size)
-            t_emb = self.time_proj(timesteps).to(dtype=sample.dtype)
-            emb = self.time_embedding(t_emb)
-
-            time_embeds = self.add_time_proj(added_time_ids.flatten()).reshape((batch_size, -1)).to(emb.dtype)
-            aug_emb = self.add_embedding(time_embeds)
-            emb = emb + aug_emb
-
-            sample = sample.flatten(0, 1)
-            emb = emb.repeat_interleave(num_frames, dim=0, output_size=emb.shape[0] * num_frames)
-            encoder_hidden_states = encoder_hidden_states.repeat_interleave(
-                num_frames, dim=0, output_size=encoder_hidden_states.shape[0] * num_frames
-            )
-
-            sample = self.conv_in(sample)
-            image_only_indicator = torch.zeros(batch_size, num_frames, dtype=sample.dtype, device=sample.device)
-
-            use_gc = torch.is_grad_enabled() and (
-                getattr(self, "gradient_checkpointing", False)
-                or getattr(self, "_gradient_checkpointing", False)
-                or any(getattr(b, "gradient_checkpointing", False) for b in self.down_blocks)
-            )
-
-            down_block_res_samples = (sample,)
-            for downsample_block in self.down_blocks:
-                if use_gc:
-                    if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
-                        def _run_down(s, blk=downsample_block):
-                            return blk(
-                                hidden_states=s,
-                                temb=emb,
-                                encoder_hidden_states=encoder_hidden_states,
-                                image_only_indicator=image_only_indicator,
-                            )
-                        sample, res_samples = torch.utils.checkpoint.checkpoint(_run_down, sample, use_reentrant=False)
-                    else:
-                        def _run_down(s, blk=downsample_block):
-                            return blk(
-                                hidden_states=s,
-                                temb=emb,
-                                image_only_indicator=image_only_indicator,
-                            )
-                        sample, res_samples = torch.utils.checkpoint.checkpoint(_run_down, sample, use_reentrant=False)
-                else:
-                    if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
-                        sample, res_samples = downsample_block(
-                            hidden_states=sample,
-                            temb=emb,
-                            encoder_hidden_states=encoder_hidden_states,
-                            image_only_indicator=image_only_indicator,
-                        )
-                    else:
-                        sample, res_samples = downsample_block(
-                            hidden_states=sample,
-                            temb=emb,
-                            image_only_indicator=image_only_indicator,
-                        )
-                down_block_res_samples += res_samples
-
-            if use_gc:
-                def _run_mid(s):
-                    return self.mid_block(
-                        hidden_states=s,
-                        temb=emb,
-                        encoder_hidden_states=encoder_hidden_states,
-                        image_only_indicator=image_only_indicator,
-                    )
-                sample = torch.utils.checkpoint.checkpoint(_run_mid, sample, use_reentrant=False)
-            else:
-                sample = self.mid_block(
-                    hidden_states=sample,
-                    temb=emb,
-                    encoder_hidden_states=encoder_hidden_states,
-                    image_only_indicator=image_only_indicator,
-                )
-
-            for i, upsample_block in enumerate(self.up_blocks):
-                is_final_block = i == len(self.up_blocks) - 1
-                res_samples = down_block_res_samples[-len(upsample_block.resnets):]
-                down_block_res_samples = down_block_res_samples[:-len(upsample_block.resnets)]
-
-                if not is_final_block and forward_upsample_size:
-                    upsample_size = down_block_res_samples[-1].shape[2:]
-
-                if use_gc:
-                    def _run_up(s, r_tuple, blk=upsample_block, u_sz=upsample_size):
-                        if hasattr(blk, "has_cross_attention") and blk.has_cross_attention:
-                            return blk(
-                                hidden_states=s,
-                                temb=emb,
-                                res_hidden_states_tuple=r_tuple,
-                                encoder_hidden_states=encoder_hidden_states,
-                                upsample_size=u_sz,
-                                image_only_indicator=image_only_indicator,
-                            )
-                        else:
-                            return blk(
-                                hidden_states=s,
-                                temb=emb,
-                                res_hidden_states_tuple=r_tuple,
-                                upsample_size=u_sz,
-                                image_only_indicator=image_only_indicator,
-                            )
-                    sample = torch.utils.checkpoint.checkpoint(_run_up, sample, res_samples, use_reentrant=False)
-                else:
-                    if hasattr(upsample_block, "has_cross_attention") and upsample_block.has_cross_attention:
-                        sample = upsample_block(
-                            hidden_states=sample,
-                            temb=emb,
-                            res_hidden_states_tuple=res_samples,
-                            encoder_hidden_states=encoder_hidden_states,
-                            upsample_size=upsample_size,
-                            image_only_indicator=image_only_indicator,
-                        )
-                    else:
-                        sample = upsample_block(
-                            hidden_states=sample,
-                            temb=emb,
-                            res_hidden_states_tuple=res_samples,
-                            upsample_size=upsample_size,
-                            image_only_indicator=image_only_indicator,
-                        )
-
-            sample = self.conv_norm_out(sample)
-            sample = self.conv_act(sample)
-            sample = self.conv_out(sample)
-            sample = sample.reshape(batch_size, num_frames, *sample.shape[1:])
-
-            if not return_dict:
-                return (sample,)
-            return UNetSpatioTemporalConditionOutput(sample=sample)
-
-        UNetSpatioTemporalConditionModel.forward = custom_unet_forward
         print("[✓] Deep UNet block-level gradient checkpointing active")
-        print("[✓] Deep attention & cross-attention gradient checkpointing active")
     except Exception as e:
         print(f"[!] Note: Deep attention checkpointing patch skipped ({e})")
 
