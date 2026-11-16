@@ -1,6 +1,6 @@
 # SVD-XT GPU Smoke Test & Preflight Audit Report
 
-- **Date/Time (UTC):** 2026-11-16 19:21:52 UTC
+- **Date/Time (UTC):** 2026-11-16 19:27:10 UTC
 - **Host / Device:** Mock CPU Surrogate (`cpu`)
 - **Total GPU VRAM:** 0.00 GB
 - **CUDA Compute Capability:** N/A
@@ -15,9 +15,9 @@
 | **Peak Reserved VRAM** | **N/A (Mock CPU)** | `< 15.00 GB` | ⚠️ NOT MEASURED (Mock CPU) |
 | **Peak Allocated VRAM** | **N/A (Mock CPU)** | `< 14.00 GB` | ⚠️ NOT MEASURED (Mock CPU) |
 | **Baseline UNet + Adapter VRAM** | `0.00 GB` (Allocated) | `< 5.00 GB` | N/A |
-| **Forward Pass Latency** | `0.199 s` | Single batch forward | ✅ Complete |
-| **Backward Pass Latency** | `0.144 s` | Single batch autograd | ✅ Complete |
-| **Total Step Latency** | `0.342 s` | Preflight forward+backward | ✅ Complete |
+| **Forward Pass Latency** | `0.200 s` | Single batch forward | ✅ Complete |
+| **Backward Pass Latency** | `0.146 s` | Single batch autograd | ✅ Complete |
+| **Total Step Latency** | `0.347 s` | Preflight forward+backward | ✅ Complete |
 | **Backbone Parameters Frozen** | `True` (100% frozen) | `all(p.grad is None)` | ✅ PASS |
 | **Adapter Gradients Active** | `True` (Active) | `any(p.grad.norm() > 0)` | ✅ PASS |
 | **CSSC MultiViewConditioner** | `44,777,728` parameters | 27-token bank active | ✅ PASS |

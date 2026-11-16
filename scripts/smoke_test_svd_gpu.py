@@ -468,6 +468,142 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
         TransformerSpatioTemporalModel.forward = custom_spatio_temporal_forward
         print("[✓] Deep spatio-temporal transformer gradient checkpointing active")
+
+        from diffusers.models.unets.unet_spatio_temporal_condition import (
+            UNetSpatioTemporalConditionModel,
+            UNetSpatioTemporalConditionOutput,
+        )
+
+        def custom_unet_forward(
+            self,
+            sample: torch.Tensor,
+            timestep,
+            encoder_hidden_states: torch.Tensor,
+            added_time_ids: torch.Tensor,
+            return_dict: bool = True,
+        ):
+            default_overall_up_factor = 2**self.num_upsamplers
+            forward_upsample_size = False
+            upsample_size = None
+            if any(s % default_overall_up_factor != 0 for s in sample.shape[-2:]):
+                forward_upsample_size = True
+
+            timesteps = timestep
+            if not torch.is_tensor(timesteps):
+                timesteps = torch.tensor([timesteps], dtype=torch.float32, device=sample.device)
+            elif len(timesteps.shape) == 0:
+                timesteps = timesteps[None].to(sample.device)
+
+            batch_size, num_frames = sample.shape[:2]
+            timesteps = timesteps.expand(batch_size)
+            t_emb = self.time_proj(timesteps).to(dtype=sample.dtype)
+            emb = self.time_embedding(t_emb)
+
+            time_embeds = self.add_time_proj(added_time_ids.flatten()).reshape((batch_size, -1)).to(emb.dtype)
+            aug_emb = self.add_embedding(time_embeds)
+            emb = emb + aug_emb
+
+            sample = sample.flatten(0, 1)
+            emb = emb.repeat_interleave(num_frames, dim=0, output_size=emb.shape[0] * num_frames)
+            encoder_hidden_states = encoder_hidden_states.repeat_interleave(
+                num_frames, dim=0, output_size=encoder_hidden_states.shape[0] * num_frames
+            )
+
+            sample = self.conv_in(sample)
+            image_only_indicator = torch.zeros(batch_size, num_frames, dtype=sample.dtype, device=sample.device)
+
+            down_block_res_samples = (sample,)
+            for downsample_block in self.down_blocks:
+                if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
+                    sample, res_samples = downsample_block(
+                        hidden_states=sample,
+                        temb=emb,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                    )
+                else:
+                    sample, res_samples = downsample_block(
+                        hidden_states=sample,
+                        temb=emb,
+                        image_only_indicator=image_only_indicator,
+                    )
+                down_block_res_samples += res_samples
+
+            if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", False):
+                def _run_mid(s):
+                    return self.mid_block(
+                        hidden_states=s,
+                        temb=emb,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                    )
+                sample = torch.utils.checkpoint.checkpoint(_run_mid, sample, use_reentrant=False)
+            else:
+                sample = self.mid_block(
+                    hidden_states=sample,
+                    temb=emb,
+                    encoder_hidden_states=encoder_hidden_states,
+                    image_only_indicator=image_only_indicator,
+                )
+
+            for i, upsample_block in enumerate(self.up_blocks):
+                is_final_block = i == len(self.up_blocks) - 1
+                res_samples = down_block_res_samples[-len(upsample_block.resnets):]
+                down_block_res_samples = down_block_res_samples[:-len(upsample_block.resnets)]
+
+                if not is_final_block and forward_upsample_size:
+                    upsample_size = down_block_res_samples[-1].shape[2:]
+
+                if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", False):
+                    def _run_up(s, r_tuple, blk=upsample_block, u_sz=upsample_size):
+                        if hasattr(blk, "has_cross_attention") and blk.has_cross_attention:
+                            return blk(
+                                hidden_states=s,
+                                temb=emb,
+                                res_hidden_states_tuple=r_tuple,
+                                encoder_hidden_states=encoder_hidden_states,
+                                upsample_size=u_sz,
+                                image_only_indicator=image_only_indicator,
+                            )
+                        else:
+                            return blk(
+                                hidden_states=s,
+                                temb=emb,
+                                res_hidden_states_tuple=r_tuple,
+                                upsample_size=u_sz,
+                                image_only_indicator=image_only_indicator,
+                            )
+                    sample = torch.utils.checkpoint.checkpoint(_run_up, sample, res_samples, use_reentrant=False)
+                else:
+                    if hasattr(upsample_block, "has_cross_attention") and upsample_block.has_cross_attention:
+                        sample = upsample_block(
+                            hidden_states=sample,
+                            temb=emb,
+                            res_hidden_states_tuple=res_samples,
+                            encoder_hidden_states=encoder_hidden_states,
+                            upsample_size=upsample_size,
+                            image_only_indicator=image_only_indicator,
+                        )
+                    else:
+                        sample = upsample_block(
+                            hidden_states=sample,
+                            temb=emb,
+                            res_hidden_states_tuple=res_samples,
+                            upsample_size=upsample_size,
+                            image_only_indicator=image_only_indicator,
+                        )
+
+            sample = self.conv_norm_out(sample)
+            sample = self.conv_act(sample)
+            sample = self.conv_out(sample)
+            sample = sample.reshape(batch_size, num_frames, *sample.shape[1:])
+
+            if not return_dict:
+                return (sample,)
+            return UNetSpatioTemporalConditionOutput(sample=sample)
+
+        UNetSpatioTemporalConditionModel.forward = custom_unet_forward
+        print("[✓] Deep UNet block-level gradient checkpointing active")
         print("[✓] Deep attention & cross-attention gradient checkpointing active")
     except Exception as e:
         print(f"[!] Note: Deep attention checkpointing patch skipped ({e})")
