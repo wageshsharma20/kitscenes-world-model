@@ -305,24 +305,13 @@ class BroadcastAttnProcessor2_0:
         if getattr(attn, "norm_k", None) is not None:
             key = attn.norm_k(key)
 
-        if is_cross and batch_size > 16:
-            chunk_size = 16
-            out_chunks = []
-            for i in range(0, batch_size, chunk_size):
-                q_c = query[i : i + chunk_size]
-                out_chunks.append(
-                    F.scaled_dot_product_attention(
-                        q_c, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
-                    )
-                )
-            hidden_states = torch.cat(out_chunks, dim=0)
-        elif not is_cross and batch_size > 1:
+        if batch_size > 1:
             chunk_size = 1 if sequence_length > 25 else 16
             out_chunks = []
             for i in range(0, batch_size, chunk_size):
                 q_c = query[i : i + chunk_size]
-                k_c = key[i : i + chunk_size]
-                v_c = value[i : i + chunk_size]
+                k_c = key[i : i + chunk_size] if key.shape[0] == batch_size else key
+                v_c = value[i : i + chunk_size] if value.shape[0] == batch_size else value
                 mask_c = (
                     attention_mask[i : i + chunk_size]
                     if (attention_mask is not None and attention_mask.shape[0] == batch_size)
