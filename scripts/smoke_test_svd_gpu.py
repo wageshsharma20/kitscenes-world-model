@@ -386,6 +386,88 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             return hidden_states
 
         UNetMidBlockSpatioTemporal.forward = custom_mid_forward
+
+        from diffusers.models.transformers.transformer_temporal import (
+            TransformerSpatioTemporalModel,
+            TransformerTemporalModelOutput,
+        )
+
+        def custom_spatio_temporal_forward(
+            self,
+            hidden_states: torch.Tensor,
+            encoder_hidden_states=None,
+            image_only_indicator=None,
+            return_dict: bool = True,
+        ):
+            batch_frames, _, height, width = hidden_states.shape
+            num_frames = image_only_indicator.shape[-1]
+            batch_size = batch_frames // num_frames
+
+            time_context = encoder_hidden_states
+            time_context_first_timestep = time_context[None, :].reshape(
+                batch_size, num_frames, -1, time_context.shape[-1]
+            )[:, 0]
+            time_context = time_context_first_timestep[:, None].broadcast_to(
+                batch_size, height * width, time_context.shape[-2], time_context.shape[-1]
+            )
+            time_context = time_context.reshape(batch_size * height * width, -1, time_context.shape[-1])
+
+            residual = hidden_states
+            hidden_states = self.norm(hidden_states)
+            inner_dim = hidden_states.shape[1]
+            hidden_states = hidden_states.permute(0, 2, 3, 1).reshape(batch_frames, height * width, inner_dim)
+            hidden_states = self.proj_in(hidden_states)
+
+            num_frames_emb = torch.arange(num_frames, device=hidden_states.device)
+            num_frames_emb = num_frames_emb.repeat(batch_size, 1)
+            num_frames_emb = num_frames_emb.reshape(-1)
+            t_emb = self.time_proj(num_frames_emb).to(dtype=hidden_states.dtype)
+            emb = self.time_pos_embed(t_emb)[:, None, :]
+
+            for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
+                if torch.is_grad_enabled() and self.gradient_checkpointing:
+                    def _run_spatio_temporal_step(h, b=block, tb=temporal_block):
+                        h_spat = b(h, encoder_hidden_states=encoder_hidden_states)
+                        h_temp = tb(
+                            h_spat + emb,
+                            num_frames=num_frames,
+                            encoder_hidden_states=time_context,
+                        )
+                        return self.time_mixer(
+                            x_spatial=h_spat,
+                            x_temporal=h_temp,
+                            image_only_indicator=image_only_indicator,
+                        )
+
+                    hidden_states = torch.utils.checkpoint.checkpoint(
+                        _run_spatio_temporal_step, hidden_states, use_reentrant=False
+                    )
+                else:
+                    h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
+                    h_temp = temporal_block(
+                        h_spat + emb,
+                        num_frames=num_frames,
+                        encoder_hidden_states=time_context,
+                    )
+                    hidden_states = self.time_mixer(
+                        x_spatial=h_spat,
+                        x_temporal=h_temp,
+                        image_only_indicator=image_only_indicator,
+                    )
+
+            hidden_states = self.proj_out(hidden_states)
+            hidden_states = (
+                hidden_states.reshape(batch_frames, height, width, inner_dim)
+                .permute(0, 3, 1, 2)
+                .contiguous()
+            )
+            output = hidden_states + residual
+            if not return_dict:
+                return (output,)
+            return TransformerTemporalModelOutput(sample=output)
+
+        TransformerSpatioTemporalModel.forward = custom_spatio_temporal_forward
+        print("[✓] Deep spatio-temporal transformer gradient checkpointing active")
         print("[✓] Deep attention & cross-attention gradient checkpointing active")
     except Exception as e:
         print(f"[!] Note: Deep attention checkpointing patch skipped ({e})")
