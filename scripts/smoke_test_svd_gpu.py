@@ -259,6 +259,11 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
         unet.enable_gradient_checkpointing()
         print("[✓] Diffusers UNet activation gradient checkpointing enabled")
 
+    # Explicitly ensure unet and all submodules have gradient_checkpointing set to True
+    unet.gradient_checkpointing = True
+    for module in unet.modules():
+        module.gradient_checkpointing = True
+
     try:
         from diffusers.models.unets.unet_3d_blocks import (
             CrossAttnDownBlockSpatioTemporal,
@@ -582,9 +587,15 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             sample = self.conv_in(sample)
             image_only_indicator = torch.zeros(batch_size, num_frames, dtype=sample.dtype, device=sample.device)
 
+            use_gc = torch.is_grad_enabled() and (
+                getattr(self, "gradient_checkpointing", False)
+                or getattr(self, "_gradient_checkpointing", False)
+                or any(getattr(b, "gradient_checkpointing", False) for b in self.down_blocks)
+            )
+
             down_block_res_samples = (sample,)
             for downsample_block in self.down_blocks:
-                if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", False):
+                if use_gc:
                     if hasattr(downsample_block, "has_cross_attention") and downsample_block.has_cross_attention:
                         def _run_down(s, blk=downsample_block):
                             return blk(
@@ -618,7 +629,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                         )
                 down_block_res_samples += res_samples
 
-            if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", False):
+            if use_gc:
                 def _run_mid(s):
                     return self.mid_block(
                         hidden_states=s,
@@ -643,7 +654,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 if not is_final_block and forward_upsample_size:
                     upsample_size = down_block_res_samples[-1].shape[2:]
 
-                if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", False):
+                if use_gc:
                     def _run_up(s, r_tuple, blk=upsample_block, u_sz=upsample_size):
                         if hasattr(blk, "has_cross_attention") and blk.has_cross_attention:
                             return blk(
@@ -908,6 +919,7 @@ def run_svd_gpu_smoke_test(
         sample_tensor = sample_tensor[0]
     loss = sample_tensor.mean()
     loss_val = float(loss.item())
+    del unet_out
     print(f"[*] Computed dummy scalar loss: {loss_val:.6f}")
 
     # 11. Execute exactly ONE backward pass
