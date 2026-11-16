@@ -248,6 +248,156 @@ def generate_markdown_report(metrics: Dict[str, Any]) -> str:
     return md
 
 
+def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
+    """
+    Enables deep gradient checkpointing across UNetSpatioTemporalConditionModel,
+    including both standard ResNet checkpointing and transformer attention blocks.
+    In vanilla Diffusers, CrossAttnDown/UpBlock only checkpoints ResNet modules,
+    leaving multi-head spatial/temporal attention activation maps uncheckpointed.
+    """
+    if hasattr(unet, "enable_gradient_checkpointing"):
+        unet.enable_gradient_checkpointing()
+        print("[✓] Diffusers UNet activation gradient checkpointing enabled")
+
+    try:
+        from diffusers.models.unets.unet_3d_blocks import (
+            CrossAttnDownBlockSpatioTemporal,
+            CrossAttnUpBlockSpatioTemporal,
+            UNetMidBlockSpatioTemporal,
+        )
+
+        def custom_down_forward(
+            self,
+            hidden_states: torch.Tensor,
+            temb=None,
+            encoder_hidden_states=None,
+            image_only_indicator=None,
+        ):
+            output_states = ()
+            blocks = list(zip(self.resnets, self.attentions))
+            for resnet, attn in blocks:
+                if torch.is_grad_enabled() and self.gradient_checkpointing:
+                    def _forward_block(h, m_resnet=resnet, m_attn=attn):
+                        h_res = m_resnet(h, temb, image_only_indicator=image_only_indicator)
+                        return m_attn(
+                            h_res,
+                            encoder_hidden_states=encoder_hidden_states,
+                            image_only_indicator=image_only_indicator,
+                            return_dict=False,
+                        )[0]
+
+                    hidden_states = torch.utils.checkpoint.checkpoint(
+                        _forward_block, hidden_states, use_reentrant=False
+                    )
+                else:
+                    hidden_states = resnet(hidden_states, temb, image_only_indicator=image_only_indicator)
+                    hidden_states = attn(
+                        hidden_states,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                        return_dict=False,
+                    )[0]
+                output_states = output_states + (hidden_states,)
+
+            if self.downsamplers is not None:
+                for downsampler in self.downsamplers:
+                    hidden_states = downsampler(hidden_states)
+                output_states = output_states + (hidden_states,)
+            return hidden_states, output_states
+
+        CrossAttnDownBlockSpatioTemporal.forward = custom_down_forward
+
+        def custom_up_forward(
+            self,
+            hidden_states: torch.Tensor,
+            res_hidden_states_tuple,
+            temb=None,
+            encoder_hidden_states=None,
+            image_only_indicator=None,
+            upsample_size=None,
+        ):
+            for resnet, attn in zip(self.resnets, self.attentions):
+                res_hidden_states = res_hidden_states_tuple[-1]
+                res_hidden_states_tuple = res_hidden_states_tuple[:-1]
+
+                if torch.is_grad_enabled() and self.gradient_checkpointing:
+                    def _forward_up_block(h, r_h, m_resnet=resnet, m_attn=attn):
+                        cat_h = torch.cat([h, r_h], dim=1)
+                        res_out = m_resnet(cat_h, temb, image_only_indicator=image_only_indicator)
+                        return m_attn(
+                            res_out,
+                            encoder_hidden_states=encoder_hidden_states,
+                            image_only_indicator=image_only_indicator,
+                            return_dict=False,
+                        )[0]
+
+                    hidden_states = torch.utils.checkpoint.checkpoint(
+                        _forward_up_block, hidden_states, res_hidden_states, use_reentrant=False
+                    )
+                else:
+                    hidden_states = torch.cat([hidden_states, res_hidden_states], dim=1)
+                    hidden_states = resnet(hidden_states, temb, image_only_indicator=image_only_indicator)
+                    hidden_states = attn(
+                        hidden_states,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                        return_dict=False,
+                    )[0]
+
+            if self.upsamplers is not None:
+                for upsampler in self.upsamplers:
+                    hidden_states = upsampler(hidden_states, upsample_size)
+            return hidden_states
+
+        CrossAttnUpBlockSpatioTemporal.forward = custom_up_forward
+
+        def custom_mid_forward(
+            self,
+            hidden_states: torch.Tensor,
+            temb=None,
+            encoder_hidden_states=None,
+            image_only_indicator=None,
+        ):
+            hidden_states = self.resnets[0](
+                hidden_states, temb, image_only_indicator=image_only_indicator
+            )
+            for attn, resnet in zip(self.attentions, self.resnets[1:]):
+                if torch.is_grad_enabled() and self.gradient_checkpointing:
+                    def _forward_mid_block(h, m_attn=attn, m_resnet=resnet):
+                        attn_out = m_attn(
+                            h,
+                            encoder_hidden_states=encoder_hidden_states,
+                            image_only_indicator=image_only_indicator,
+                            return_dict=False,
+                        )[0]
+                        return m_resnet(attn_out, temb, image_only_indicator=image_only_indicator)
+
+                    hidden_states = torch.utils.checkpoint.checkpoint(
+                        _forward_mid_block, hidden_states, use_reentrant=False
+                    )
+                else:
+                    hidden_states = attn(
+                        hidden_states,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                        return_dict=False,
+                    )[0]
+                    hidden_states = resnet(hidden_states, temb, image_only_indicator=image_only_indicator)
+            return hidden_states
+
+        UNetMidBlockSpatioTemporal.forward = custom_mid_forward
+        print("[✓] Deep attention & cross-attention gradient checkpointing active")
+    except Exception as e:
+        print(f"[!] Note: Deep attention checkpointing patch skipped ({e})")
+
+    if hasattr(unet, "enable_forward_chunking"):
+        try:
+            unet.enable_forward_chunking(chunk_size=1, dim=0)
+            print("[✓] UNet feed-forward chunking enabled (chunk_size=1)")
+        except Exception as e:
+            print(f"[!] Note: Forward chunking skipped ({e})")
+
+
 def run_svd_gpu_smoke_test(
     model_id: str = "stabilityai/stable-video-diffusion-img2vid-xt",
     device: Union[str, torch.device] = "cuda:0",
@@ -269,7 +419,9 @@ def run_svd_gpu_smoke_test(
     Returns:
         Dictionary containing all measured metrics, latencies, and audit verification flags.
     """
-    output_json_path = Path(output_json)
+    output_json_path = (
+        PROJECT_ROOT / output_json if not Path(output_json).is_absolute() else Path(output_json)
+    )
     output_md_path = output_json_path.with_suffix(".md")
 
     # 1. Device validation and mode selection
@@ -366,9 +518,8 @@ def run_svd_gpu_smoke_test(
         print(f"[✓] MultiViewConditioner instantiated: {conditioner_parameter_count:,} trainable parameters (requires_grad = True)")
 
     # 6. Apply gradient checkpointing if requested
-    if enable_gradient_checkpointing and hasattr(unet, "enable_gradient_checkpointing"):
-        unet.enable_gradient_checkpointing()
-        print("[✓] UNet activation gradient checkpointing enabled")
+    if enable_gradient_checkpointing:
+        apply_deep_gradient_checkpointing(unet)
 
     # 7. Measure baseline VRAM
     if parsed_device.type == "cuda":
