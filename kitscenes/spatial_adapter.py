@@ -387,6 +387,22 @@ class MockSVDUNet(nn.Module):
         b, t, c, h, w = sample.shape
         x = sample.reshape(b * t, c, h, w)
         h_feat = self.conv_in(x)
+
+        if encoder_hidden_states is not None:
+            # Replicate UNet cross-attention autograd dependency
+            ctx = encoder_hidden_states.mean(dim=1)  # [B, D] or [B*T, D]
+            if ctx.shape[0] == b:
+                ctx = ctx.unsqueeze(1).repeat(1, t, 1).reshape(b * t, -1)
+            elif ctx.shape[0] != b * t:
+                ctx = ctx.reshape(b * t, -1)
+            d = ctx.shape[-1]
+            if d >= 32:
+                ctx_32 = ctx[:, :32]
+            else:
+                repeats = (32 + d - 1) // d
+                ctx_32 = ctx.repeat(1, repeats)[:, :32]
+            h_feat = h_feat + 0.01 * ctx_32.unsqueeze(-1).unsqueeze(-1)
+
         h_feat = self.mid_block(h_feat)
         out = self.conv_out(h_feat)
         pred = out.reshape(b, t, self.out_channels, h, w)

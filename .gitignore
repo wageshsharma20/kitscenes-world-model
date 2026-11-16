@@ -14,7 +14,13 @@ models/
 *.parquet
 *.zip
 *.jsonl
-reports/
+reports/*
+!reports/visual_calibration_audit.md
+!reports/visual_calibration_audit.json
+!reports/visual_calibration_audit/
+!reports/visual_calibration_audit/**
+!reports/svd_gpu_smoke_test.md
+!reports/svd_gpu_smoke_test.json
 .DS_Store
 .env
 .env.*

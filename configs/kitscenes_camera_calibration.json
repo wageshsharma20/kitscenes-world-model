@@ -2,21 +2,33 @@
   "source": "KITScenes-LongTail Dataset (KIT-MRT / Wagner et al., arXiv:2603.23607, 2026)",
   "dataset_url": "https://huggingface.co/datasets/KIT-MRT/KITScenes-LongTail",
   "provenance": "Extracted directly from official HuggingFace dataset card (pinhole camera model)",
+  "vehicle_platform": {
+    "model": "BMW 7 Series",
+    "wheelbase_m": 3.21,
+    "track_width_m": 1.61,
+    "turning_circle_diameter_m": 12.9,
+    "turning_radius_virtual_bicycle_m": 4.79,
+    "max_steering_angle_deg": 33.83,
+    "nominal_roof_height_m": 1.48,
+    "sensor_mount_height_above_roof_m": 0.16
+  },
   "coordinate_system": {
-    "vehicle_ego_body": {
+    "reference_frame": "Primary Roof Sensor Frame (t=0 LiDAR Scanning Center)",
+    "description": "Origin (0,0,0) is located at the center of the primary roof LiDAR sensor at t=0.0s. All camera extrinsics (R, t) and KISS-ICP LiDAR odometry trajectories are registered in this frame.",
+    "axes": {
       "x": "forward (+X)",
       "y": "left (+Y)",
       "z": "up (+Z)",
-      "origin": "rear axle center at ground projection",
       "units": "meters"
     },
-    "camera_optical_frame": {
-      "x": "right (+X)",
-      "y": "down (+Y)",
-      "z": "forward along optical axis (+Z)",
-      "units": "meters"
+    "sensor_geometry": {
+      "camera_mounting_plane_z_m": -0.1863,
+      "camera_ring_radius_m": 0.207,
+      "camera_height_above_road_m": 1.414,
+      "nominal_ground_z_m": -1.60,
+      "ground_height_provenance": "Nominal empirical road elevation relative to roof LiDAR on BMW 7 Series test vehicle. The road surface is approximately 1.60 m below the roof LiDAR sensor, placing the camera optical centers at ~1.41 m above the pavement."
     },
-    "transformation": "P_camera = R @ P_ego + t"
+    "transformation": "P_camera = R @ P_ref + t = R @ (P_ref - C) where C = -R.T @ t"
   },
   "source_image_dimensions": {
     "width": 3488,
@@ -30,6 +42,7 @@
     "scale_y": 0.25
   },
   "nominal_ground_z_ego": -1.60,
+  "nominal_ground_z_sensor_frame": -1.60,
   "cameras": {
     "front": {
       "K_source": [
@@ -43,6 +56,7 @@
         [0.99983937, 0.01712452, 0.00529009]
       ],
       "t": [-0.01833970, -0.18646863, -0.20817565],
+      "optical_center_C_m": [0.20946, -0.01585, -0.18525],
       "nominal_yaw_deg": 0.0,
       "description": "Front-facing wide camera"
     },
@@ -58,6 +72,7 @@
         [0.48427144, 0.87489861, -0.00579713]
       ],
       "t": [-0.00990917, -0.18619818, -0.19092926],
+      "optical_center_C_m": [0.10226, 0.16091, -0.18683],
       "nominal_yaw_deg": 60.0,
       "description": "Front-left surround camera"
     },
@@ -73,6 +88,7 @@
         [0.523692486, -0.851902824, 0.00278755405]
       ],
       "t": [-0.00863543, -0.18592461, -0.22478478],
+      "optical_center_C_m": [0.11054, -0.19694, -0.18487],
       "nominal_yaw_deg": -60.0,
       "description": "Front-right surround camera"
     },
@@ -88,6 +104,7 @@
         [-0.999729168, -0.0232452442, 0.00111409296]
       ],
       "t": [0.01893959, -0.18635925, -0.20259226],
+      "optical_center_C_m": [-0.20178, -0.02492, -0.18625],
       "nominal_yaw_deg": 180.0,
       "description": "Rear-facing surround camera"
     },
@@ -103,6 +120,7 @@
         [-0.52206244, 0.85284141, -0.01059972]
       ],
       "t": [0.00806251, -0.18614501, -0.18860823],
+      "optical_center_C_m": [-0.10374, 0.15545, -0.18841],
       "nominal_yaw_deg": 120.0,
       "description": "Rear-left surround camera"
     },
@@ -118,6 +136,7 @@
         [-0.472820592, -0.881158694, -0.000214095393]
       ],
       "t": [0.01272224, -0.18561945, -0.22249366],
+      "optical_center_C_m": [-0.09459, -0.20235, -0.18641],
       "nominal_yaw_deg": -120.0,
       "description": "Rear-right surround camera"
     }

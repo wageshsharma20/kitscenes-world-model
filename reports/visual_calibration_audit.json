@@ -1,0 +1,699 @@
+{
+  "calibration_provenance": {
+    "source": "KITScenes-LongTail Dataset (KIT-MRT / Wagner et al., arXiv:2603.23607, 2026)",
+    "config_file": "configs/kitscenes_camera_calibration.json",
+    "is_calibrated": true,
+    "nominal_ground_z_ego": -1.6,
+    "cameras_audited": [
+      "front",
+      "front_left",
+      "front_right",
+      "rear",
+      "rear_left",
+      "rear_right"
+    ]
+  },
+  "scenario_count": 10,
+  "total_views_audited": 60,
+  "views": {
+    "0000900": {
+      "instruction": "drive straight on",
+      "scenario_type": "6 snow & wintry mix",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 25,
+          "total_waypoints": 25,
+          "u_range": [
+            418.5143225209491,
+            448.52478978325826
+          ],
+          "v_range": [
+            298.5606393420047,
+            553.7814942789764
+          ],
+          "depth_range_m": [
+            2.4427616845582953,
+            57.296452028658294
+          ],
+          "fg_pixel_count": 3733
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000900_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000901": {
+      "instruction": "use right lane",
+      "scenario_type": "3 overtake or lane change",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 25,
+          "total_waypoints": 25,
+          "u_range": [
+            436.57901996176383,
+            448.93522040747126
+          ],
+          "v_range": [
+            291.4279350761463,
+            393.10680286292353
+          ],
+          "depth_range_m": [
+            6.145249767158294,
+            154.08648796415832
+          ],
+          "fg_pixel_count": 911
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000901_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000902": {
+      "instruction": "turn right",
+      "scenario_type": "4 intersection",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 15,
+          "total_waypoints": 25,
+          "u_range": [
+            436.156009093592,
+            439.01357428480634
+          ],
+          "v_range": [
+            331.7542513127598,
+            566.1561002967837
+          ],
+          "depth_range_m": [
+            2.333806825058295,
+            14.598173573658295
+          ],
+          "fg_pixel_count": 3758
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000902_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000903": {
+      "instruction": "drive straight on",
+      "scenario_type": "1 heavy rain",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 25,
+          "total_waypoints": 25,
+          "u_range": [
+            395.781680361226,
+            437.2090801660676
+          ],
+          "v_range": [
+            293.42218978359466,
+            459.6751879229775
+          ],
+          "depth_range_m": [
+            3.7742604986582955,
+            99.95193843215829
+          ],
+          "fg_pixel_count": 1879
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000903_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000904": {
+      "instruction": "drive straight on",
+      "scenario_type": "2 construction zone",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 24,
+          "total_waypoints": 25,
+          "u_range": [
+            430.90570350321684,
+            437.2859973209242
+          ],
+          "v_range": [
+            298.96025196598754,
+            434.2492843066269
+          ],
+          "depth_range_m": [
+            4.425526050758294,
+            55.13255676045829
+          ],
+          "fg_pixel_count": 3783
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000904_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000905": {
+      "instruction": "turn right",
+      "scenario_type": "0 specifically selected",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 5,
+          "total_waypoints": 25,
+          "u_range": [
+            536.2263400448828,
+            603.03958391952
+          ],
+          "v_range": [
+            429.17676389241535,
+            556.2587280056027
+          ],
+          "depth_range_m": [
+            2.424886011658295,
+            4.616207782958295
+          ],
+          "fg_pixel_count": 2953
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 1,
+          "total_waypoints": 25,
+          "u_range": [
+            12.245619909830168,
+            12.245619909830168
+          ],
+          "v_range": [
+            465.44895193844764,
+            465.44895193844764
+          ],
+          "depth_range_m": [
+            3.6278309618868736,
+            3.6278309618868736
+          ],
+          "fg_pixel_count": 396
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000905_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000906": {
+      "instruction": "use left lane",
+      "scenario_type": "5 nighttime",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 25,
+          "total_waypoints": 25,
+          "u_range": [
+            445.5887862159682,
+            448.9538235327612
+          ],
+          "v_range": [
+            291.4927860185142,
+            393.5410215705422
+          ],
+          "depth_range_m": [
+            6.123198037358294,
+            151.80514174855833
+          ],
+          "fg_pixel_count": 913
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000906_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000911": {
+      "instruction": "turn left",
+      "scenario_type": "0 specifically selected",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 12,
+          "total_waypoints": 25,
+          "u_range": [
+            424.52159234761734,
+            561.6653686969507
+          ],
+          "v_range": [
+            349.9603412176475,
+            567.162702146828
+          ],
+          "depth_range_m": [
+            2.3248359025582954,
+            10.488308397458294
+          ],
+          "fg_pixel_count": 4253
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000911_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000919": {
+      "instruction": "overtake truck driving on the right",
+      "scenario_type": "3 overtake or lane change",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 24,
+          "total_waypoints": 25,
+          "u_range": [
+            433.6575190545287,
+            492.73637242456505
+          ],
+          "v_range": [
+            298.7395297215497,
+            447.31893412320744
+          ],
+          "depth_range_m": [
+            4.064898896758295,
+            57.794978492258295
+          ],
+          "fg_pixel_count": 4155
+        },
+        "front_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000919_6cam_calibration_contact_sheet.jpg"
+    },
+    "0000984": {
+      "instruction": "u-turn",
+      "scenario_type": "4 intersection",
+      "cameras": {
+        "front": {
+          "visible_waypoints": 9,
+          "total_waypoints": 25,
+          "u_range": [
+            38.966247974617545,
+            335.90234090349014
+          ],
+          "v_range": [
+            399.90176487275846,
+            546.6877423519236
+          ],
+          "depth_range_m": [
+            2.5031996102582954,
+            5.658395248258294
+          ],
+          "fg_pixel_count": 6680
+        },
+        "front_left": {
+          "visible_waypoints": 19,
+          "total_waypoints": 25,
+          "u_range": [
+            185.411444983838,
+            827.7658444675799
+          ],
+          "v_range": [
+            336.0702158871586,
+            469.3419128482054
+          ],
+          "depth_range_m": [
+            3.494901692276537,
+            11.340520649376536
+          ],
+          "fg_pixel_count": 9041
+        },
+        "front_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        },
+        "rear_left": {
+          "visible_waypoints": 3,
+          "total_waypoints": 25,
+          "u_range": [
+            736.4110347216208,
+            836.4370550076933
+          ],
+          "v_range": [
+            339.8016345974531,
+            349.64361042830643
+          ],
+          "depth_range_m": [
+            9.300437587746433,
+            10.796768926546433
+          ],
+          "fg_pixel_count": 1587
+        },
+        "rear_right": {
+          "visible_waypoints": 0,
+          "total_waypoints": 25,
+          "u_range": null,
+          "v_range": null,
+          "depth_range_m": null,
+          "fg_pixel_count": 0
+        }
+      },
+      "contact_sheet": "reports/visual_calibration_audit/0000984_6cam_calibration_contact_sheet.jpg"
+    }
+  },
+  "summary": {
+    "front_camera_visibility_rate": 0.756,
+    "all_cameras_visibility_counts": {
+      "front": 189,
+      "front_left": 19,
+      "front_right": 1,
+      "rear": 0,
+      "rear_left": 3,
+      "rear_right": 0
+    },
+    "total_masks_generated": 60
+  }
+}

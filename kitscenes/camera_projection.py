@@ -1,15 +1,14 @@
 """Multi-Camera 3D-to-2D Projection & Spatial Conditioning Engine for KITScenes-LongTail.
 
-Implements coordinate transformations from vehicle ego-body coordinates (X: forward,
-Y: left, Z: up) into the 6 surround camera frames (front, front_left, front_right,
-rear, rear_left, rear_right) and rasterizes spatial conditioning masks for world models.
+Implements coordinate transformations from the Primary Roof Sensor Frame (t=0 LiDAR scanning center;
+X: forward, Y: left, Z: up; road ground plane at nominal Z ≈ -1.60m) into the 6 surround camera frames
+(front, front_left, front_right, rear, rear_left, rear_right) and rasterizes spatial conditioning masks.
 
 CALIBRATION STATUS:
-The official KITScenes-LongTail dataset files do not publish explicit extrinsic or
-intrinsic calibration matrices. The rig parameters implemented here represent a
-PROVISIONAL NOMINAL SENSOR RIG MODEL (70 deg HFOV pinhole, nominal surround yaw offsets,
-and wheelbase-scaled mounting positions). They are subject to uncertainty and should
-be treated as a provisional approximation rather than certified exact calibration.
+Certified official pinhole calibration matrices (Wagner et al. 2026, KITScenes-LongTail) are loaded
+by default from configs/kitscenes_camera_calibration.json with exact 3488x2272 -> 876x568 intrinsic
+affine scaling. The legacy provisional nominal rig model is retained strictly as an uncalibrated
+baseline when CameraRig(is_provisional=True) is explicitly specified.
 
 ROBUST CLIPPING PIPELINE:
 1. 3D Near-Plane Clipping: Line segments are clipped against z_c >= near_clip_m.

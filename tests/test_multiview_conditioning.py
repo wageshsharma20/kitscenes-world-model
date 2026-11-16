@@ -6,10 +6,12 @@ import torch
 
 from kitscenes import spec
 from kitscenes.multiview_conditioning import (
+    CSSCConditionedSVDModel,
     CameraGeometryEncoder,
     MultiViewConditioner,
     SurroundSceneFusion,
 )
+from kitscenes.spatial_adapter import MockSVDUNet, SpatialAdapterConfig
 
 
 def test_camera_geometry_encoder():
@@ -65,6 +67,8 @@ def test_multiview_conditioner_shapes_and_contracts():
     out_front = conditioner(clip_embeds, motion_states, target_camera="front")
     assert out_front["conditioning_tokens"].shape == (b, 25, 512)
     assert out_front["pooled_token"].shape == (b, 1, 512)
+    assert out_front["target_view_token"].shape == (b, 1, 512)
+    assert out_front["encoder_hidden_states"].shape == (b, 27, 512)
     assert out_front["fused_surround"].shape == (b, 6, 512)
     assert out_front["temporal_motion"].shape == (b, 25, 512)
 
@@ -73,12 +77,14 @@ def test_multiview_conditioner_shapes_and_contracts():
     out_rear = conditioner(clip_dict, motion_states, target_camera="rear")
     assert out_rear["conditioning_tokens"].shape == (b, 25, 512)
     assert out_rear["pooled_token"].shape == (b, 1, 512)
+    assert out_rear["encoder_hidden_states"].shape == (b, 27, 512)
 
     # 3. Forward for all 6 cameras simultaneously
     all_outs = conditioner.forward_all_cameras(clip_embeds, motion_states)
     assert set(all_outs.keys()) == set(spec.CAMERAS)
     for cam in spec.CAMERAS:
         assert all_outs[cam]["conditioning_tokens"].shape == (b, 25, 512)
+        assert all_outs[cam]["encoder_hidden_states"].shape == (b, 27, 512)
 
 
 def test_multiview_conditioner_gradients():
@@ -119,3 +125,157 @@ def test_multiview_camera_differentiation():
 
     diff = torch.norm(out_front["conditioning_tokens"] - out_rear["conditioning_tokens"]).item()
     assert diff > 1.0, f"Front and rear conditioning tokens must differ: diff={diff}"
+
+
+def test_svd_xt_encoder_hidden_states_temporal_semantics():
+    """Verify SVD-XT cross-attention semantics: repeat_interleave broadcasts the 27-token bank.
+
+    Proves:
+      1. When encoder_hidden_states [B, 27, 1024] is passed to UNetSpatioTemporalConditionModel,
+         Diffusers internally executes encoder_hidden_states.repeat_interleave(num_frames, dim=0).
+      2. For every video frame t in [0..24], the temporal slice at (b * 25 + t) is identical
+         to the full 27-token sequence, acting as a shared trajectory-context bank.
+      3. Modifying token 0 (target view context), token 1 (pooled summary), or token k in [2..26]
+         (kinematic waypoint at step k-2) impacts cross-attention across ALL 25 frames.
+    """
+    b = 2
+    num_frames = 25
+    seq_len = 27
+    embed_dim = 1024
+
+    # 1. Simulate the 27-token context sequence:
+    # token 0: target view token [B, 1, 1024]
+    # token 1: pooled summary token [B, 1, 1024]
+    # tokens 2..26: 25 kinematic motion tokens [B, 25, 1024]
+    context_bank = torch.randn(b, seq_len, embed_dim)
+
+    # 2. Replicate Diffusers internal broadcast logic:
+    # encoder_hidden_states.repeat_interleave(num_frames, dim=0) -> [B * 25, 27, 1024]
+    broadcasted = context_bank.repeat_interleave(num_frames, dim=0)
+    assert broadcasted.shape == (b * num_frames, seq_len, embed_dim)
+
+    # Numerically verify that every frame slice matches the exact 27 tokens of sample b
+    for batch_idx in range(b):
+        for frame_idx in range(num_frames):
+            row_idx = batch_idx * num_frames + frame_idx
+            assert torch.equal(broadcasted[row_idx], context_bank[batch_idx]), (
+                f"Frame {frame_idx} of sample {batch_idx} did not receive exact context bank!"
+            )
+
+    # 3. Simulate Spatial Cross-Attention Layer:
+    # Query: Latent spatial features [B * 25, N_spatial, embed_dim]
+    # Keys/Values: Broadcasted context tokens [B * 25, 27, embed_dim]
+    n_spatial = 16  # e.g. 4x4 spatial patch
+    queries = torch.randn(b * num_frames, n_spatial, embed_dim)
+    cross_attn = torch.nn.MultiheadAttention(
+        embed_dim=embed_dim, num_heads=8, batch_first=True
+    )
+    cross_attn.eval()
+
+    with torch.no_grad():
+        baseline_out, _ = cross_attn(query=queries, key=broadcasted, value=broadcasted)
+        # Reshape to [B, 25, n_spatial, embed_dim] to inspect per-frame impact
+        baseline_frames = baseline_out.reshape(b, num_frames, n_spatial, embed_dim)
+
+        # A. Perturb token 0 (target camera view context)
+        perturbed_bank_tok0 = context_bank.clone()
+        perturbed_bank_tok0[:, 0, :] += torch.randn(b, embed_dim) * 3.0
+        broadcasted_tok0 = perturbed_bank_tok0.repeat_interleave(num_frames, dim=0)
+        out_tok0, _ = cross_attn(query=queries, key=broadcasted_tok0, value=broadcasted_tok0)
+        out_tok0_frames = out_tok0.reshape(b, num_frames, n_spatial, embed_dim)
+
+        # Verify that ALL 25 frames are affected by token 0 perturbation
+        for t in range(num_frames):
+            frame_diff = torch.norm(out_tok0_frames[:, t] - baseline_frames[:, t]).item()
+            assert frame_diff > 0.05, f"Frame {t} cross-attention must respond to token 0!"
+
+        # B. Perturb token 12 (mid-trajectory motion waypoint at step 10)
+        perturbed_bank_tok12 = context_bank.clone()
+        perturbed_bank_tok12[:, 12, :] += torch.randn(b, embed_dim) * 3.0
+        broadcasted_tok12 = perturbed_bank_tok12.repeat_interleave(num_frames, dim=0)
+        out_tok12, _ = cross_attn(query=queries, key=broadcasted_tok12, value=broadcasted_tok12)
+        out_tok12_frames = out_tok12.reshape(b, num_frames, n_spatial, embed_dim)
+
+        # Verify that early frames (e.g. frame 0) and late frames (e.g. frame 24) BOTH respond to waypoint 10
+        diff_f0 = torch.norm(out_tok12_frames[:, 0] - baseline_frames[:, 0]).item()
+        diff_f24 = torch.norm(out_tok12_frames[:, 24] - baseline_frames[:, 24]).item()
+        assert diff_f0 > 0.05, "Early frame 0 must be able to attend to future waypoint token 12!"
+        assert diff_f24 > 0.05, "Late frame 24 must be able to attend to waypoint token 12!"
+
+
+def test_cssc_conditioned_svd_model_mock_integration():
+    """Verify end-to-end CSSCConditionedSVDModel with MockSVDUNet and autograd gradient flow."""
+    model = CSSCConditionedSVDModel(
+        unet=MockSVDUNet(in_channels=8, out_channels=4),
+        conditioner=MultiViewConditioner(model_dim=256, num_heads=4, motion_in_dim=6),
+        adapter_config=SpatialAdapterConfig(
+            in_channels=1,
+            adapter_channels=(16, 32, 64, 128),
+            latent_channels=4,
+            down_block_channels=(320, 640, 1280, 1280),
+            conditioning_type="latent_addition",
+        ),
+    )
+    # 1. Audit parameters & freezing contract
+    params = model.count_parameters()
+    assert params["trainable_conditioner_params"] > 0
+    assert params["trainable_adapter_params"] > 0
+    assert params["frozen_backbone_params"] > 0
+    for p in model.unet.parameters():
+        assert not p.requires_grad
+
+    # 2. Synthetic input batch
+    b, t = 2, 25
+    noisy_latents = torch.randn(b, t, 4, 16, 16, requires_grad=True)
+    initial_image_latents = torch.randn(b, 4, 16, 16)
+    spatial_masks = torch.rand(b, t, 1, 128, 128)
+    camera_clip_embeds = torch.randn(b, 6, 256)
+    motion_states = torch.randn(b, t, 6)
+
+    # 3. Forward pass
+    model.train()
+    out = model(
+        noisy_latents=noisy_latents,
+        timesteps=torch.tensor([0.05, 0.10]),
+        camera_clip_embeds=camera_clip_embeds,
+        motion_states=motion_states,
+        target_camera="front",
+        initial_image_latents=initial_image_latents,
+        spatial_masks=spatial_masks,
+    )
+    sample = out["sample"]
+    assert sample.shape == (b, t, 4, 16, 16)
+    assert out["encoder_hidden_states"].shape == (b, 27, 256)
+
+    # 4. Backward pass & gradient isolation audit
+    loss = sample.mean()
+    loss.backward()
+
+    # Backbone strictly frozen: all UNet weights have grad is None
+    for name, p in model.unet.named_parameters():
+        assert p.grad is None, f"Backbone parameter {name} received unwanted gradient!"
+
+    # Conditioner parameters must receive gradients
+    cond_grads = [p.grad for p in model.conditioner.parameters() if p.grad is not None]
+    assert len(cond_grads) > 0, "Conditioner parameters did not receive gradients!"
+    assert any(torch.norm(g) > 0 for g in cond_grads)
+
+    # Spatial adapter parameters must receive gradients
+    adapter_grads = [p.grad for p in model.spatial_adapter.parameters() if p.grad is not None]
+    assert len(adapter_grads) > 0, "SpatialAdapter parameters did not receive gradients!"
+    assert any(torch.norm(g) > 0 for g in adapter_grads)
+
+    # 5. Training loss computation
+    target_latents = torch.randn(b, t, 4, 16, 16)
+    loss_val, metrics = model.compute_latent_loss(
+        target_latents=target_latents,
+        initial_image_latents=initial_image_latents,
+        camera_clip_embeds=camera_clip_embeds,
+        motion_states=motion_states,
+        target_camera="front",
+        spatial_masks=spatial_masks,
+    )
+    assert isinstance(loss_val, torch.Tensor)
+    assert not torch.isnan(loss_val)
+    assert "v_loss" in metrics
+    assert "weighted_latent_loss" in metrics

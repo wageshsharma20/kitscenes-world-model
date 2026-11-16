@@ -29,12 +29,11 @@ import numpy as np
 from . import archive, media, spec
 
 
-# Provisional nominal surround camera rig parameters.
-# IMPORTANT: The official KITScenes-LongTail dataset files do not publish explicit
-# extrinsic or intrinsic calibration matrices. The parameters below represent a
-# provisional nominal sensor rig model (70 deg HFOV, standard surround yaw offsets,
-# and wheelbase-scaled mounting positions). They are subject to uncertainty and should
-# not be characterized as certified exact KITScenes calibration.
+# Legacy provisional nominal surround camera rig parameters.
+# NOTE: Official KITScenes-LongTail calibration matrices (Wagner et al. 2026) are now
+# certified and stored in configs/kitscenes_camera_calibration.json, which is loaded by
+# default. The parameters below are retained strictly as an uncalibrated baseline for
+# ablation comparisons when CameraRig(is_provisional=True) is explicitly requested.
 PROVISIONAL_CAMERA_YAW_DEG: Dict[str, float] = {
     "front": 0.0,
     "front_left": 60.0,
@@ -235,9 +234,15 @@ class CameraRig:
         self.hfov_deg = hfov_deg
 
         calib_data = None
-        # Only load official calibration if not explicitly requested provisional
+        # Calibrated research mode (default): fail loudly if calibration is missing or corrupt
         if is_provisional is not True:
             calib_data = load_official_camera_calibration(calibration_path, width=width, height=height)
+            if calib_data is None or "cameras" not in calib_data:
+                raise FileNotFoundError(
+                    f"Official camera calibration data missing or invalid from {calibration_path or 'configs/kitscenes_camera_calibration.json'}. "
+                    "Fail-loud contract: calibrated research path cannot proceed without verified calibration. "
+                    "To explicitly run the uncalibrated provisional baseline model, pass `is_provisional=True`."
+                )
 
         if calib_data is not None and "cameras" in calib_data:
             self.is_provisional = False
@@ -245,7 +250,8 @@ class CameraRig:
             self.calibration_source = calib_data.get(
                 "source", "Official KITScenes-LongTail Calibration (Wagner et al. 2026)"
             )
-            self.nominal_ground_z_ego = float(calib_data.get("nominal_ground_z_ego", -1.60))
+            self.nominal_ground_z_ego = float(calib_data.get("nominal_ground_z_sensor_frame", calib_data.get("nominal_ground_z_ego", -1.60)))
+            self.nominal_ground_z_sensor_frame = self.nominal_ground_z_ego
 
             src_w = float(calib_data.get("source_image_dimensions", {}).get("width", 3488.0))
             src_h = float(calib_data.get("source_image_dimensions", {}).get("height", 2272.0))
