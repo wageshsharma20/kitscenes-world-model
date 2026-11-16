@@ -426,21 +426,28 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
             for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
                 if torch.is_grad_enabled() and self.gradient_checkpointing:
-                    def _run_spatio_temporal_step(h, b=block, tb=temporal_block):
-                        h_spat = b(h, encoder_hidden_states=encoder_hidden_states)
-                        h_temp = tb(
-                            h_spat + emb,
+                    def _run_spatio_step(h, b=block):
+                        return b(h, encoder_hidden_states=encoder_hidden_states)
+
+                    h_spat = torch.utils.checkpoint.checkpoint(
+                        _run_spatio_step, hidden_states, use_reentrant=False
+                    )
+
+                    def _run_temporal_step(hs, tb=temporal_block):
+                        return tb(
+                            hs + emb,
                             num_frames=num_frames,
                             encoder_hidden_states=time_context,
                         )
-                        return self.time_mixer(
-                            x_spatial=h_spat,
-                            x_temporal=h_temp,
-                            image_only_indicator=image_only_indicator,
-                        )
 
-                    hidden_states = torch.utils.checkpoint.checkpoint(
-                        _run_spatio_temporal_step, hidden_states, use_reentrant=False
+                    h_temp = torch.utils.checkpoint.checkpoint(
+                        _run_temporal_step, h_spat, use_reentrant=False
+                    )
+
+                    hidden_states = self.time_mixer(
+                        x_spatial=h_spat,
+                        x_temporal=h_temp,
+                        image_only_indicator=image_only_indicator,
                     )
                 else:
                     h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
