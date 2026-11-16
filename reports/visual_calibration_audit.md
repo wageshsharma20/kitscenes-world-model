@@ -5,21 +5,45 @@
 **Reference Coordinate Frame:** Primary Roof Sensor Frame (t=0 LiDAR scanning center; +X forward, +Y left, +Z up; nominal road plane Z ≈ -1.60m)
 **Scenarios Audited:** 10 scenarios (0000900, 0000901, 0000902, 0000903, 0000904, 0000905, 0000906, 0000911, 0000919, 0000984)
 **Total Multi-Camera Views:** 60 views
-**Front Camera Waypoint Field-of-View Coverage:** 75.60%
+**Front Camera Waypoint Field-of-View Coverage:** 189 / 250 waypoints (75.60%)
+**Total 6-Camera Surround Field-of-View Coverage:** 212 / 1,500 waypoint opportunities (14.13%)
+
+---
+
+## Provenance Classification: Documented Facts vs. Inferred Working Conventions
+
+To maintain strict scientific and engineering rigor, calibration and trajectory modeling parameters are classified into documented ground truth versus inferred conventions:
+
+### Documented Facts (From KIT-MRT Dataset & Paper arXiv:2603.23607)
+1. **Vehicle Platform:** BMW 7 Series sedan with physical dimensions (wheelbase: 3.21 m, track width: 1.61 m, turning circle: 12.9 m).
+2. **Camera Sensor Geometry:** 6 surround cameras producing 3488x2272 pinhole images, downscaled to 876x568 for the competition.
+3. **Calibrated Parameters:** Pinhole intrinsic matrices $K$ and extrinsic matrices $(R, t)$ for all 6 cameras are published directly in the official dataset card.
+4. **Trajectory Odometry:** Ground truth trajectories originate from KISS-ICP LiDAR odometry registering sequential point clouds, projected to 2D BEV $(x, y, \psi)$ and smoothed with an Extended Kalman Filter (EKF).
+
+### Inferred Working Conventions (Empirical Assumptions)
+1. **Origin Co-Location:** The KISS-ICP odometry origin $(x=0, y=0, \psi=0\text{ at } t=0.0\text{ s})$ is assumed co-located with the roof sensor reference frame origin for extrinsic 3D-to-2D projection.
+2. **Nominal Road Elevation:** $Z_{\text{road}} = -1.60\text{ m}$ is an empirical working estimate based on the BMW 7 Series roof-to-ground height (~1.48 m vehicle roof + ~0.16 m roof rig mount = ~1.64 m); the dataset does not publish per-frame road surface elevation maps.
+
+---
 
 > [!IMPORTANT]
-> **Metric Distinction:** The waypoint visibility rate measures the percentage of 3D future waypoints that project inside the camera's image canvas boundaries `[0, W-1] x [0, H-1]` with positive optical depth $z_c > 0.5\text{ m}$. It quantifies geometric camera field-of-view coverage, NOT a photogrammetric 2D-3D reprojection residual. Distant horizon points (> 60m) or sharp lateral turns that exit the front canvas enter the side surround cameras (`front_left`/`front_right`).
+> **Geometric FOV Visibility vs. Photogrammetric Accuracy:**
+> The waypoint visibility metric measures the fraction of 3D future waypoints along the vehicle's planned trajectory that fall within a camera's canvas boundaries $[0, W-1] \times [0, H-1]$ with positive optical depth $z_c > 0.5\text{ m}$.
+> - **This is geometric camera frustum coverage, NOT a photogrammetric 2D-3D reprojection residual.**
+> - Total surround visibility is **14.13% (212 / 1,500)** across all 6 cameras because vehicles predominantly drive **forward**.
+> - Future trajectory points lie almost entirely within the forward camera frustum (**75.60%** front visibility). Rear and side cameras correctly have ~0% coverage during straight driving, but dynamically capture turning maneuvers (e.g. U-turn scenario `0000984` where `front_left` captures 19 points and `rear_left` captures 3 points).
 
 ## Camera Projection Verification Summary
 
-| Camera Name | Nominal Yaw | Calibrated Optical Center (cx, cy) | Total Visible Waypoints Across 10 Scenarios |
-|---|---|---|---|
-| `front` | +0.0° | (443.27, 284.75) | 189 / 250 waypoints |
-| `front_left` | +60.0° | (443.02, 282.75) | 19 / 250 waypoints |
-| `front_right` | -60.0° | (439.26, 284.50) | 1 / 250 waypoints |
-| `rear` | +180.0° | (443.27, 283.75) | 0 / 250 waypoints |
-| `rear_left` | +120.0° | (444.28, 284.00) | 3 / 250 waypoints |
-| `rear_right` | -120.0° | (441.01, 287.00) | 0 / 250 waypoints |
+| Camera Name | Nominal Yaw | Calibrated Optical Center (cx, cy) | Visible Waypoints Across 10 Scenarios | FOV Coverage (%) |
+|---|---|---|---|---|
+| `front` | +0.0° | (443.27, 284.75) | 189 / 250 waypoints | 75.60% |
+| `front_left` | +60.0° | (443.02, 282.75) | 19 / 250 waypoints | 7.60% |
+| `front_right` | -60.0° | (439.26, 284.50) | 1 / 250 waypoints | 0.40% |
+| `rear` | +180.0° | (443.27, 283.75) | 0 / 250 waypoints | 0.00% |
+| `rear_left` | +120.0° | (444.28, 284.00) | 3 / 250 waypoints | 1.20% |
+| `rear_right` | -120.0° | (441.01, 287.00) | 0 / 250 waypoints | 0.00% |
+| **Total Surround** | — | — | **212 / 1,500 waypoints** | **14.13%** |
 
 ## Scenario Breakdown & Visual Overlays
 

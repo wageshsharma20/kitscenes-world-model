@@ -1,10 +1,10 @@
 # SVD-XT GPU Smoke Test & Preflight Audit Report
 
-- **Date/Time (UTC):** 2026-11-16 13:08:32 UTC
+- **Date/Time (UTC):** 2026-11-16 13:42:12 UTC
 - **Host / Device:** Mock CPU Surrogate (`cpu`)
 - **Total GPU VRAM:** 0.00 GB
 - **CUDA Compute Capability:** N/A
-- **Overall Status:** `PASSED` — **FIT: PASSES** (< 15.0 GB)
+- **Overall Status:** `MOCK_ONLY` — **NOT MEASURED (Mock CPU Surrogate)**
 
 ---
 
@@ -12,19 +12,19 @@
 
 | Metric | Measured Value | Kaggle 16GB T4 Budget / Target | Compliance Status |
 | :--- | :--- | :--- | :--- |
-| **Peak Reserved VRAM** | **`0.00 GB`** | `< 15.00 GB` | ✅ PASS |
-| **Peak Allocated VRAM** | **`0.00 GB`** | `< 14.00 GB` | ✅ PASS |
-| **Baseline UNet + Adapter VRAM** | `0.00 GB` (Allocated) | `< 5.00 GB` | ✅ PASS |
-| **Forward Pass Latency** | `0.228 s` | Single batch forward | ✅ Complete |
-| **Backward Pass Latency** | `0.145 s` | Single batch autograd | ✅ Complete |
-| **Total Step Latency** | `0.373 s` | Preflight forward+backward | ✅ Complete |
+| **Peak Reserved VRAM** | **N/A (Mock CPU)** | `< 15.00 GB` | ⚠️ NOT MEASURED (Mock CPU) |
+| **Peak Allocated VRAM** | **N/A (Mock CPU)** | `< 14.00 GB` | ⚠️ NOT MEASURED (Mock CPU) |
+| **Baseline UNet + Adapter VRAM** | `0.00 GB` (Allocated) | `< 5.00 GB` | N/A |
+| **Forward Pass Latency** | `0.188 s` | Single batch forward | ✅ Complete |
+| **Backward Pass Latency** | `0.164 s` | Single batch autograd | ✅ Complete |
+| **Total Step Latency** | `0.352 s` | Preflight forward+backward | ✅ Complete |
 | **Backbone Parameters Frozen** | `True` (100% frozen) | `all(p.grad is None)` | ✅ PASS |
 | **Adapter Gradients Active** | `True` (Active) | `any(p.grad.norm() > 0)` | ✅ PASS |
 | **CSSC MultiViewConditioner** | `44,777,728` parameters | 27-token bank active | ✅ PASS |
 | **CSSC Gradients Active** | `True` (Active) | `any(p.grad.norm() > 0)` | ✅ PASS |
 
 > [!NOTE]
-> **Safe Memory Headroom**: Peak VRAM remains well within safe margins for Kaggle 16GB T4.
+> **Mock Surrogate Mode**: This execution evaluated autograd graph connectivity and parameter freezing contracts on synthetic CPU tensors. GPU memory usage was **not measured** and must not be used to infer Kaggle 16GB T4 hardware compatibility.
 
 ---
 
@@ -60,6 +60,6 @@
 
 ## 5. Preflight Conclusion & Deployment Guidance
 
-1. **Kaggle T4 Suitability:** Fits within single 16GB T4 instance.
-2. **Gradient Checkpointing Recommendation:** Optional (memory headroom is sufficient).
+1. **Kaggle T4 Suitability:** NOT MEASURED (Executed on CPU mock surrogate; requires genuine NVIDIA T4 hardware).
+2. **Gradient Checkpointing Recommendation:** NOT MEASURED (Requires actual GPU memory profiling on Kaggle T4).
 3. **Execution Ready:** Model architecture and autograd computation graphs are verified and ready for training.

@@ -132,26 +132,51 @@ def build_parser() -> argparse.ArgumentParser:
 
 def generate_markdown_report(metrics: Dict[str, Any]) -> str:
     """Render a human-readable Markdown preflight audit report."""
+    is_mock = metrics.get("mock", False)
     gc_status = "Enabled" if metrics["gradient_checkpointing"] else "Disabled"
-    fit_badge = "**FIT: PASSES** (< 15.0 GB)" if metrics["fits_16gb_t4"] else "**FIT: EXCEEDS LIMIT** (>= 15.0 GB)"
 
-    rec_lines = []
-    if metrics["recommend_gradient_checkpointing"]:
-        rec_lines.append(
-            "> [!WARNING]\n"
-            "> **High Peak VRAM Detected**: Peak memory exceeds 13.5 GB threshold. "
-            "Enabling `--enable-gradient-checkpointing` is strongly recommended for training "
-            "to prevent CUDA OOM on Kaggle 16GB T4 instances."
-        )
-    else:
-        rec_lines.append(
+    if is_mock:
+        fit_badge = "**NOT MEASURED (Mock CPU Surrogate)**"
+        rec_lines = [
             "> [!NOTE]\n"
-            "> **Safe Memory Headroom**: Peak VRAM remains well within safe margins for Kaggle 16GB T4."
-        )
+            "> **Mock Surrogate Mode**: This execution evaluated autograd graph connectivity and parameter freezing "
+            "contracts on synthetic CPU tensors. GPU memory usage was **not measured** and must not be used to infer "
+            "Kaggle 16GB T4 hardware compatibility."
+        ]
+        reserved_val = "N/A (Mock CPU)"
+        allocated_val = "N/A (Mock CPU)"
+        vram_status = "⚠️ NOT MEASURED (Mock CPU)"
+        t4_suitability_str = "NOT MEASURED (Executed on CPU mock surrogate; requires genuine NVIDIA T4 hardware)."
+        gc_rec_str = "NOT MEASURED (Requires actual GPU memory profiling on Kaggle T4)."
+    else:
+        fit_badge = "**FIT: PASSES** (< 15.0 GB)" if metrics["fits_16gb_t4"] else "**FIT: EXCEEDS LIMIT** (>= 15.0 GB)"
+        rec_lines = []
+        if metrics["recommend_gradient_checkpointing"]:
+            rec_lines.append(
+                "> [!WARNING]\n"
+                "> **High Peak VRAM Detected**: Peak memory exceeds 13.5 GB threshold. "
+                "Enabling `--enable-gradient-checkpointing` is strongly recommended for training "
+                "to prevent CUDA OOM on Kaggle 16GB T4 instances."
+            )
+        else:
+            rec_lines.append(
+                "> [!NOTE]\n"
+                "> **Safe Memory Headroom**: Peak VRAM remains well within safe margins for Kaggle 16GB T4."
+            )
+        reserved_val = f"`{metrics['peak_reserved_gb']:.2f} GB`"
+        allocated_val = f"`{metrics['peak_allocated_gb']:.2f} GB`"
+        vram_status = "✅ PASS" if metrics["fits_16gb_t4"] else "❌ FAIL"
+        t4_suitability_str = "Fits within single 16GB T4 instance." if metrics["fits_16gb_t4"] else "Exceeds 15.0 GB safety budget. Gradient checkpointing mandatory."
+        gc_rec_str = "Recommended" if metrics["recommend_gradient_checkpointing"] else "Optional (memory headroom is sufficient)"
 
     cssc_row = ""
     if metrics.get("test_cssc"):
-        cssc_row = f"\n| **CSSC MultiViewConditioner** | `{metrics.get('conditioner_parameter_count', 0):,}` parameters | 27-token bank active | ✅ PASS |\n| **CSSC Gradients Active** | `{metrics.get('conditioner_gradients_verified')}` (Active) | `any(p.grad.norm() > 0)` | ✅ PASS |"
+        cssc_row = (
+            f"\n| **CSSC MultiViewConditioner** | `{metrics.get('conditioner_parameter_count', 0):,}` parameters "
+            f"| 27-token bank active | ✅ PASS |\n"
+            f"| **CSSC Gradients Active** | `{metrics.get('conditioner_gradients_verified')}` (Active) "
+            f"| `any(p.grad.norm() > 0)` | ✅ PASS |"
+        )
 
     md = f"""# SVD-XT GPU Smoke Test & Preflight Audit Report
 
@@ -167,9 +192,9 @@ def generate_markdown_report(metrics: Dict[str, Any]) -> str:
 
 | Metric | Measured Value | Kaggle 16GB T4 Budget / Target | Compliance Status |
 | :--- | :--- | :--- | :--- |
-| **Peak Reserved VRAM** | **`{metrics["peak_reserved_gb"]:.2f} GB`** | `< 15.00 GB` | {"✅ PASS" if metrics["fits_16gb_t4"] else "❌ FAIL"} |
-| **Peak Allocated VRAM** | **`{metrics["peak_allocated_gb"]:.2f} GB`** | `< 14.00 GB` | {"✅ PASS" if metrics["peak_allocated_gb"] < 14.0 else "⚠️ WARN"} |
-| **Baseline UNet + Adapter VRAM** | `{metrics["baseline_allocated_gb"]:.2f} GB` (Allocated) | `< 5.00 GB` | ✅ PASS |
+| **Peak Reserved VRAM** | **{reserved_val}** | `< 15.00 GB` | {vram_status} |
+| **Peak Allocated VRAM** | **{allocated_val}** | `< 14.00 GB` | {vram_status} |
+| **Baseline UNet + Adapter VRAM** | `{metrics["baseline_allocated_gb"]:.2f} GB` (Allocated) | `< 5.00 GB` | {"✅ PASS" if not is_mock else "N/A"} |
 | **Forward Pass Latency** | `{metrics["forward_time_s"]:.3f} s` | Single batch forward | ✅ Complete |
 | **Backward Pass Latency** | `{metrics["backward_time_s"]:.3f} s` | Single batch autograd | ✅ Complete |
 | **Total Step Latency** | `{metrics["total_step_time_s"]:.3f} s` | Preflight forward+backward | ✅ Complete |
@@ -216,8 +241,8 @@ def generate_markdown_report(metrics: Dict[str, Any]) -> str:
 
 ## 5. Preflight Conclusion & Deployment Guidance
 
-1. **Kaggle T4 Suitability:** {"Fits within single 16GB T4 instance." if metrics["fits_16gb_t4"] else "Exceeds 15.0 GB safety budget. Gradient checkpointing mandatory."}
-2. **Gradient Checkpointing Recommendation:** {"Recommended" if metrics["recommend_gradient_checkpointing"] else "Optional (memory headroom is sufficient)"}.
+1. **Kaggle T4 Suitability:** {t4_suitability_str}
+2. **Gradient Checkpointing Recommendation:** {gc_rec_str}
 3. **Execution Ready:** Model architecture and autograd computation graphs are verified and ready for training.
 """
     return md
@@ -501,9 +526,18 @@ def run_svd_gpu_smoke_test(
             print("[✓] Peak VRAM is well within 16GB capacity.")
 
     # 14. Save JSON and Markdown Reports
+    if mock:
+        status_val = "MOCK_ONLY"
+        fits_val: Any = "NOT_MEASURED"
+        rec_gc_val: Any = "NOT_MEASURED"
+    else:
+        status_val = "REAL_GPU_PASSED" if fits_16gb_t4 else "REAL_GPU_FAILED"
+        fits_val = fits_16gb_t4
+        rec_gc_val = recommend_gradient_checkpointing
+
     metrics: Dict[str, Any] = {
         "timestamp": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-        "status": "PASSED" if fits_16gb_t4 else "EXCEEDS_15GB",
+        "status": status_val,
         "model_id": model_id if not mock else "mock-svd-unet",
         "mock": mock,
         "test_cssc": test_cssc,
@@ -525,8 +559,8 @@ def run_svd_gpu_smoke_test(
         "total_step_time_s": round(total_step_time_s, 4),
         "peak_allocated_gb": round(peak_allocated_gb, 3),
         "peak_reserved_gb": round(peak_reserved_gb, 3),
-        "fits_16gb_t4": fits_16gb_t4,
-        "recommend_gradient_checkpointing": recommend_gradient_checkpointing,
+        "fits_16gb_t4": fits_val,
+        "recommend_gradient_checkpointing": rec_gc_val,
         "unet_frozen_verified": unet_frozen_verified,
         "adapter_gradients_verified": adapter_gradients_verified,
         "conditioner_gradients_verified": conditioner_gradients_verified,

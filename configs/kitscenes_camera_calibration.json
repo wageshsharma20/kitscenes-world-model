@@ -2,6 +2,18 @@
   "source": "KITScenes-LongTail Dataset (KIT-MRT / Wagner et al., arXiv:2603.23607, 2026)",
   "dataset_url": "https://huggingface.co/datasets/KIT-MRT/KITScenes-LongTail",
   "provenance": "Extracted directly from official HuggingFace dataset card (pinhole camera model)",
+  "provenance_classification": {
+    "documented_facts": [
+      "Vehicle platform is a BMW 7 Series sedan (Wagner et al., arXiv:2603.23607).",
+      "Source cameras produce 3488x2272 pinhole format images, downscaled to 876x568 for the competition.",
+      "Camera intrinsic matrices K and extrinsic matrices (R, t) for all 6 surround cameras are published directly in the official dataset card.",
+      "Ego-vehicle trajectory coordinates originate from KISS-ICP LiDAR odometry aligned across point clouds, projected to 2D BEV (x, y, yaw), and smoothed via an Extended Kalman Filter (EKF)."
+    ],
+    "inferred_working_conventions": [
+      "LiDAR origin co-location: KISS-ICP odometry origin (x=0, y=0, yaw=0 at t=0) is assumed co-located with the roof sensor reference frame origin for extrinsic transformations.",
+      "Nominal road elevation: Z_road = -1.60 m is an empirical estimate based on the BMW 7 Series roof-to-ground height (~1.48 m vehicle roof + ~0.16 m mount); the paper does not publish per-scenario ground-plane height maps."
+    ]
+  },
   "vehicle_platform": {
     "model": "BMW 7 Series",
     "wheelbase_m": 3.21,

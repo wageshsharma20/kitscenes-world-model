@@ -279,3 +279,86 @@ def test_cssc_conditioned_svd_model_mock_integration():
     assert not torch.isnan(loss_val)
     assert "v_loss" in metrics
     assert "weighted_latent_loss" in metrics
+
+
+def test_all_six_target_cameras_cssc_conditioned_model():
+    """Verify all 6 surround target cameras independently produce valid 27-token banks and gradients.
+
+    Covers:
+      1. Every camera in spec.CAMERAS ('front', 'front_left', 'front_right', 'rear', 'rear_left', 'rear_right').
+      2. Token bank composition: token 0 (target_view), token 1 (pooled_token), tokens 2..26 (conditioning).
+      3. Cross-camera token distinctness: different cameras produce unique conditioning banks.
+      4. Autograd safety: UNet parameters remain strictly frozen (grad is None) across all camera passes.
+    """
+    model = CSSCConditionedSVDModel(
+        unet=MockSVDUNet(in_channels=8, out_channels=4),
+        conditioner=MultiViewConditioner(model_dim=256, num_heads=4, motion_in_dim=6),
+        adapter_config=SpatialAdapterConfig(
+            in_channels=1,
+            adapter_channels=(16, 32, 64, 128),
+            latent_channels=4,
+            down_block_channels=(320, 640, 1280, 1280),
+            conditioning_type="latent_addition",
+        ),
+    )
+    model.train()
+
+    b, t = 1, 25
+    noisy_latents = torch.randn(b, t, 4, 16, 16)
+    initial_image_latents = torch.randn(b, 4, 16, 16)
+    spatial_masks = torch.rand(b, t, 1, 128, 128)
+    camera_clip_embeds = torch.randn(b, 6, 256)
+    motion_states = torch.randn(b, t, 6)
+    timesteps = torch.tensor([0.05])
+
+    camera_token_banks = {}
+
+    for cam_name in spec.CAMERAS:
+        # Zero any accumulated gradients before each camera pass
+        model.zero_grad()
+
+        out = model(
+            noisy_latents=noisy_latents,
+            timesteps=timesteps,
+            camera_clip_embeds=camera_clip_embeds,
+            motion_states=motion_states,
+            target_camera=cam_name,
+            initial_image_latents=initial_image_latents,
+            spatial_masks=spatial_masks,
+        )
+
+        sample = out["sample"]
+        assert sample.shape == (b, t, 4, 16, 16), f"Sample shape incorrect for {cam_name}"
+        encoder_hidden_states = out["encoder_hidden_states"]
+        assert encoder_hidden_states.shape == (b, 27, 256), f"Token bank shape incorrect for {cam_name}"
+
+        # Verify token bank structure
+        cond_dict = out["cssc_out"]
+        assert torch.allclose(encoder_hidden_states[:, 0:1, :], cond_dict["target_view_token"], atol=1e-6)
+        assert torch.allclose(encoder_hidden_states[:, 1:2, :], cond_dict["pooled_token"], atol=1e-6)
+        assert torch.allclose(encoder_hidden_states[:, 2:27, :], cond_dict["conditioning_tokens"], atol=1e-6)
+
+        # Execute backward pass and verify parameter isolation
+        loss = sample.mean()
+        loss.backward()
+
+        # Strict frozen UNet contract
+        for name, p in model.unet.named_parameters():
+            assert p.grad is None, f"UNet parameter {name} leaked gradients during {cam_name} forward pass!"
+
+        # Trainable parameters receive active gradients
+        cond_grad_active = any(p.grad is not None and p.grad.norm() > 0 for p in model.conditioner.parameters())
+        adapter_grad_active = any(p.grad is not None and p.grad.norm() > 0 for p in model.spatial_adapter.parameters())
+        assert cond_grad_active, f"MultiViewConditioner gradients inactive for {cam_name}!"
+        assert adapter_grad_active, f"SpatialAdapter gradients inactive for {cam_name}!"
+
+        camera_token_banks[cam_name] = encoder_hidden_states.detach()
+
+    # Verify that different target cameras generate distinct conditioning banks
+    camera_list = list(spec.CAMERAS)
+    for i in range(len(camera_list)):
+        for j in range(i + 1, len(camera_list)):
+            c1, c2 = camera_list[i], camera_list[j]
+            diff = torch.norm(camera_token_banks[c1] - camera_token_banks[c2]).item()
+            assert diff > 0.1, f"Token banks for cameras {c1} and {c2} must differ: diff={diff:.4f}"
+
