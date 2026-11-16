@@ -387,6 +387,74 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
         UNetMidBlockSpatioTemporal.forward = custom_mid_forward
 
+        from diffusers.models.attention import TemporalBasicTransformerBlock, _chunked_feed_forward
+
+        def custom_temporal_block_forward(
+            self,
+            hidden_states: torch.Tensor,
+            num_frames: int,
+            encoder_hidden_states=None,
+        ):
+            batch_frames, seq_length, channels = hidden_states.shape
+            batch_size = batch_frames // num_frames
+
+            hidden_states = hidden_states[None, :].reshape(batch_size, num_frames, seq_length, channels)
+            hidden_states = hidden_states.permute(0, 2, 1, 3)
+            hidden_states = hidden_states.reshape(batch_size * seq_length, num_frames, channels)
+
+            residual = hidden_states
+            hidden_states = self.norm_in(hidden_states)
+            if self._chunk_size is not None:
+                hidden_states = _chunked_feed_forward(self.ff_in, hidden_states, self._chunk_dim, self._chunk_size)
+            else:
+                hidden_states = self.ff_in(hidden_states)
+            if self.is_res:
+                hidden_states = hidden_states + residual
+
+            if torch.is_grad_enabled():
+                def _run_attn(h):
+                    n_h = self.norm1(h)
+                    out = self.attn1(n_h, encoder_hidden_states=None)
+                    h_out = out + h
+                    if self.attn2 is not None:
+                        n2 = self.norm2(h_out)
+                        out2 = self.attn2(n2, encoder_hidden_states=encoder_hidden_states)
+                        h_out = out2 + h_out
+                    return h_out
+
+                hidden_states = torch.utils.checkpoint.checkpoint(_run_attn, hidden_states, use_reentrant=False)
+
+                def _run_ff(h):
+                    n_h = self.norm3(h)
+                    if self._chunk_size is not None:
+                        ff_out = _chunked_feed_forward(self.ff, n_h, self._chunk_dim, self._chunk_size)
+                    else:
+                        ff_out = self.ff(n_h)
+                    return ff_out + h if self.is_res else ff_out
+
+                hidden_states = torch.utils.checkpoint.checkpoint(_run_ff, hidden_states, use_reentrant=False)
+            else:
+                norm_hidden_states = self.norm1(hidden_states)
+                attn_output = self.attn1(norm_hidden_states, encoder_hidden_states=None)
+                hidden_states = attn_output + hidden_states
+                if self.attn2 is not None:
+                    norm_hidden_states = self.norm2(hidden_states)
+                    attn_output = self.attn2(norm_hidden_states, encoder_hidden_states=encoder_hidden_states)
+                    hidden_states = attn_output + hidden_states
+                norm_hidden_states = self.norm3(hidden_states)
+                if self._chunk_size is not None:
+                    ff_output = _chunked_feed_forward(self.ff, norm_hidden_states, self._chunk_dim, self._chunk_size)
+                else:
+                    ff_output = self.ff(norm_hidden_states)
+                hidden_states = ff_output + hidden_states if self.is_res else ff_output
+
+            hidden_states = hidden_states[None, :].reshape(batch_size, seq_length, num_frames, channels)
+            hidden_states = hidden_states.permute(0, 2, 1, 3)
+            hidden_states = hidden_states.reshape(batch_size * num_frames, seq_length, channels)
+            return hidden_states
+
+        TemporalBasicTransformerBlock.forward = custom_temporal_block_forward
+
         from diffusers.models.transformers.transformer_temporal import (
             TransformerSpatioTemporalModel,
             TransformerTemporalModelOutput,
@@ -433,15 +501,10 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                         _run_spatio_step, hidden_states, use_reentrant=False
                     )
 
-                    def _run_temporal_step(hs, tb=temporal_block):
-                        return tb(
-                            hs + emb,
-                            num_frames=num_frames,
-                            encoder_hidden_states=time_context,
-                        )
-
-                    h_temp = torch.utils.checkpoint.checkpoint(
-                        _run_temporal_step, h_spat, use_reentrant=False
+                    h_temp = temporal_block(
+                        h_spat + emb,
+                        num_frames=num_frames,
+                        encoder_hidden_states=time_context,
                     )
 
                     hidden_states = self.time_mixer(
