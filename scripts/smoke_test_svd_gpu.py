@@ -529,11 +529,27 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
             for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
                 h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
-                h_temp = temporal_block(
-                    h_spat + emb,
-                    num_frames=num_frames,
-                    encoder_hidden_states=time_context,
-                )
+                h_in = h_spat + emb
+                seq_len = h_in.shape[1]
+                t_chunk_size = 2304
+                if seq_len > t_chunk_size:
+                    t_chunks = []
+                    for i in range(0, seq_len, t_chunk_size):
+                        h_slice = h_in[:, i : i + t_chunk_size, :]
+                        t_chunks.append(
+                            temporal_block(
+                                h_slice,
+                                num_frames=num_frames,
+                                encoder_hidden_states=time_context,
+                            )
+                        )
+                    h_temp = torch.cat(t_chunks, dim=1)
+                else:
+                    h_temp = temporal_block(
+                        h_in,
+                        num_frames=num_frames,
+                        encoder_hidden_states=time_context,
+                    )
                 hidden_states = self.time_mixer(
                     x_spatial=h_spat,
                     x_temporal=h_temp,
