@@ -401,12 +401,31 @@ def run_phase5_2_multicamera_pilot(
                     i_lat = encode_frame_to_latent(vae, pil_obs, parsed_device, gen, use_mode=True, noise_aug_strength=0.02, dtype=dtype).cpu()
 
                     cam_frame_dir = PROJECT_ROOT / "data" / fut_dir / sid / cam
-                    frame_paths = sorted(cam_frame_dir.glob("frame_*.jpg"))
+                    frame_paths = sorted(cam_frame_dir.glob("frame_*.jpg")) if cam_frame_dir.exists() else []
+                    frames_to_encode = []
+                    if frame_paths:
+                        for f_p in frame_paths:
+                            frames_to_encode.append(Image.open(f_p).convert("RGB"))
+                    else:
+                        cam_mp4 = PROJECT_ROOT / "data" / fut_dir / sid / f"{cam}.mp4"
+                        if cam_mp4.exists():
+                            import cv2
+                            cap = cv2.VideoCapture(str(cam_mp4))
+                            while True:
+                                ret, f = cap.read()
+                                if not ret:
+                                    break
+                                rgb = cv2.cvtColor(f, cv2.COLOR_BGR2RGB)
+                                frames_to_encode.append(Image.fromarray(rgb))
+                            cap.release()
+                        else:
+                            raise FileNotFoundError(f"Neither frames in {cam_frame_dir} nor video at {cam_mp4} found!")
+
                     slices = []
-                    for f_p in frame_paths:
-                        f_img = Image.open(f_p).convert("RGB")
+                    for f_img in frames_to_encode[:25]:
                         s = encode_frame_to_latent(vae, f_img, parsed_device, gen, use_mode=False, dtype=dtype).cpu()
                         slices.append(s)
+                    assert len(slices) == 25, f"Expected 25 frames for {sid}/{cam}, got {len(slices)}"
                     t_lat = torch.stack(slices, dim=1).squeeze(2)  # [1, 25, 4, 72, 128]
 
                     torch.save(
@@ -705,14 +724,25 @@ def run_phase5_2_multicamera_pilot(
     for cam in CANONICAL_CAMERAS:
         # Load ground truth video frames
         gt_frame_dir = PROJECT_ROOT / "data" / "val_future_videos" / val_sid / cam
+        val_mp4 = PROJECT_ROOT / "data" / "val_future_videos" / val_sid / f"{cam}.mp4"
         gt_frames_list = []
-        for f_idx in range(25):
-            f_p = gt_frame_dir / f"frame_{f_idx:02d}.jpg"
-            if f_p.exists():
-                gt_frames_list.append(np.array(Image.open(f_p).convert("RGB")))
-            else:
-                gt_frames_list.append(np.zeros((568, 876, 3), dtype=np.uint8))
-        gt_frames = np.stack(gt_frames_list, axis=0)  # [25, 568, 876, 3]
+        if val_mp4.exists():
+            import cv2
+            cap = cv2.VideoCapture(str(val_mp4))
+            while True:
+                ret, f = cap.read()
+                if not ret:
+                    break
+                gt_frames_list.append(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
+            cap.release()
+        elif gt_frame_dir.exists():
+            for f_idx in range(25):
+                f_p = gt_frame_dir / f"frame_{f_idx:02d}.jpg"
+                if f_p.exists():
+                    gt_frames_list.append(np.array(Image.open(f_p).convert("RGB")))
+        while len(gt_frames_list) < 25:
+            gt_frames_list.append(np.zeros((568, 876, 3), dtype=np.uint8))
+        gt_frames = np.stack(gt_frames_list[:25], axis=0)  # [25, 568, 876, 3]
 
         # Generate / Decode Conditioned Video Preview
         cond_preview_mp4 = preview_dir / f"{val_sid}_{cam}_conditioned.mp4"
