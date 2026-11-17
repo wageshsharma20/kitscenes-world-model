@@ -308,7 +308,7 @@ class BroadcastAttnProcessor2_0:
         if batch_size > 1:
             chunk_size = 1
             hidden_states = torch.empty(
-                batch_size, attn.heads, sequence_length, head_dim, device=query.device, dtype=query.dtype
+                batch_size, sequence_length, attn.heads * head_dim, device=query.device, dtype=query.dtype
             )
             for i in range(0, batch_size, chunk_size):
                 q_c = query[i : i + chunk_size]
@@ -319,15 +319,18 @@ class BroadcastAttnProcessor2_0:
                     if (attention_mask is not None and attention_mask.shape[0] == batch_size)
                     else attention_mask
                 )
-                hidden_states[i : i + chunk_size] = F.scaled_dot_product_attention(
+                out_c = F.scaled_dot_product_attention(
                     q_c, k_c, v_c, attn_mask=mask_c, dropout_p=0.0, is_causal=False
+                )
+                hidden_states[i : i + chunk_size] = out_c.transpose(1, 2).reshape(
+                    chunk_size, sequence_length, attn.heads * head_dim
                 )
         else:
             hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
             )
+            hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
 
-        hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(query.dtype)
 
         hidden_states = attn.to_out[0](hidden_states)
