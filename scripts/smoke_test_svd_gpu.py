@@ -329,6 +329,9 @@ class BroadcastAttnProcessor2_0:
                 out_c = out_c.to(query.dtype)
                 out_c = attn.to_out[0](out_c)
                 out_c = attn.to_out[1](out_c)
+                rescale_factor = getattr(attn, "rescale_output_factor", 1.0)
+                if rescale_factor != 1.0:
+                    out_c = out_c / rescale_factor
                 hidden_states[i : i + chunk_size] = out_c
         else:
             hidden_states = F.scaled_dot_product_attention(
@@ -338,6 +341,9 @@ class BroadcastAttnProcessor2_0:
             hidden_states = hidden_states.to(query.dtype)
             hidden_states = attn.to_out[0](hidden_states)
             hidden_states = attn.to_out[1](hidden_states)
+            rescale_factor = getattr(attn, "rescale_output_factor", 1.0)
+            if rescale_factor != 1.0:
+                hidden_states = hidden_states / rescale_factor
 
         if input_ndim == 4:
             hidden_states = hidden_states.transpose(-1, -2).reshape(batch_size, channel, height, width)
@@ -345,7 +351,6 @@ class BroadcastAttnProcessor2_0:
         if getattr(attn, "residual_connection", False):
             hidden_states = hidden_states + residual
 
-        hidden_states = hidden_states / attn.rescale_output_factor
         return hidden_states
 
 
