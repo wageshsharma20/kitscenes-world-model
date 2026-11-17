@@ -305,10 +305,11 @@ class BroadcastAttnProcessor2_0:
         if getattr(attn, "norm_k", None) is not None:
             key = attn.norm_k(key)
 
+        out_dim = getattr(attn.to_out[0], "out_features", attn.heads * head_dim)
         if batch_size > 1:
             chunk_size = 1
             hidden_states = torch.empty(
-                batch_size, sequence_length, attn.heads * head_dim, device=query.device, dtype=query.dtype
+                batch_size, sequence_length, out_dim, device=query.device, dtype=query.dtype
             )
             for i in range(0, batch_size, chunk_size):
                 q_c = query[i : i + chunk_size]
@@ -322,19 +323,21 @@ class BroadcastAttnProcessor2_0:
                 out_c = F.scaled_dot_product_attention(
                     q_c, k_c, v_c, attn_mask=mask_c, dropout_p=0.0, is_causal=False
                 )
-                hidden_states[i : i + chunk_size] = out_c.transpose(1, 2).reshape(
+                out_c = out_c.transpose(1, 2).reshape(
                     chunk_size, sequence_length, attn.heads * head_dim
                 )
+                out_c = out_c.to(query.dtype)
+                out_c = attn.to_out[0](out_c)
+                out_c = attn.to_out[1](out_c)
+                hidden_states[i : i + chunk_size] = out_c
         else:
             hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
             )
             hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
-
-        hidden_states = hidden_states.to(query.dtype)
-
-        hidden_states = attn.to_out[0](hidden_states)
-        hidden_states = attn.to_out[1](hidden_states)
+            hidden_states = hidden_states.to(query.dtype)
+            hidden_states = attn.to_out[0](hidden_states)
+            hidden_states = attn.to_out[1](hidden_states)
 
         if input_ndim == 4:
             hidden_states = hidden_states.transpose(-1, -2).reshape(batch_size, channel, height, width)
