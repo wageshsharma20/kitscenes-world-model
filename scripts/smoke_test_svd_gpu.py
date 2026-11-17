@@ -371,7 +371,11 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
         module.gradient_checkpointing = True
 
     try:
-        from diffusers.models.attention import Attention, BasicTransformerBlock
+        from diffusers.models.attention import (
+            Attention,
+            BasicTransformerBlock,
+            TemporalBasicTransformerBlock,
+        )
 
         # Install broadcast attention processor to eliminate ~800MB/layer duplicate projection memory
         for m in unet.modules():
@@ -470,6 +474,95 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
         BasicTransformerBlock.forward = custom_basic_forward
         print("[✓] Micro-chunked feed-forward and norm3 installed on BasicTransformerBlock")
+
+        orig_temporal_forward = TemporalBasicTransformerBlock.forward
+
+        def custom_temporal_forward(
+            self,
+            hidden_states: torch.Tensor,
+            num_frames: int,
+            encoder_hidden_states=None,
+        ) -> torch.Tensor:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            batch_frames, seq_length, channels = hidden_states.shape
+            batch_size = batch_frames // num_frames
+
+            hidden_states = hidden_states[None, :].reshape(batch_size, num_frames, seq_length, channels)
+            hidden_states = hidden_states.permute(0, 2, 1, 3)
+            hidden_states = hidden_states.reshape(batch_size * seq_length, num_frames, channels)
+
+            M = hidden_states.shape[0]
+            chunk_size = 32
+
+            # 0. Input Norm & FeedForward
+            residual = hidden_states
+            if M > chunk_size:
+                ff_in_out = torch.empty_like(hidden_states)
+                for i in range(0, M, chunk_size):
+                    ff_in_out[i : i + chunk_size] = self.ff_in(self.norm_in(hidden_states[i : i + chunk_size]))
+            else:
+                ff_in_out = self.ff_in(self.norm_in(hidden_states))
+
+            if self.is_res:
+                hidden_states = residual + ff_in_out
+            else:
+                hidden_states = ff_in_out
+
+            # 1. Self-Attention
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            if M > chunk_size:
+                norm_hidden_states = torch.empty_like(hidden_states)
+                for i in range(0, M, chunk_size):
+                    norm_hidden_states[i : i + chunk_size] = self.norm1(hidden_states[i : i + chunk_size])
+            else:
+                norm_hidden_states = self.norm1(hidden_states)
+
+            attn_output = self.attn1(norm_hidden_states, encoder_hidden_states=None)
+            hidden_states = attn_output + hidden_states
+
+            # 2. Cross-Attention
+            if self.attn2 is not None:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+                if M > chunk_size:
+                    norm_hidden_states = torch.empty_like(hidden_states)
+                    for i in range(0, M, chunk_size):
+                        norm_hidden_states[i : i + chunk_size] = self.norm2(hidden_states[i : i + chunk_size])
+                else:
+                    norm_hidden_states = self.norm2(hidden_states)
+
+                attn_output = self.attn2(norm_hidden_states, encoder_hidden_states=encoder_hidden_states)
+                hidden_states = attn_output + hidden_states
+
+            # 3. Feed-forward (Micro-chunked along M dim to eliminate 282MB norm3 + 1.1GB ff peak)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            if M > chunk_size:
+                ff_out = torch.empty_like(hidden_states)
+                for i in range(0, M, chunk_size):
+                    ff_out[i : i + chunk_size] = self.ff(self.norm3(hidden_states[i : i + chunk_size]))
+            else:
+                ff_out = self.ff(self.norm3(hidden_states))
+
+            if self.is_res:
+                hidden_states = hidden_states + ff_out
+            else:
+                hidden_states = ff_out
+
+            cur_channels = hidden_states.shape[-1]
+            hidden_states = hidden_states[None, :].reshape(batch_size, seq_length, num_frames, cur_channels)
+            hidden_states = hidden_states.permute(0, 2, 1, 3)
+            hidden_states = hidden_states.reshape(batch_size * num_frames, seq_length, cur_channels)
+            return hidden_states
+
+        TemporalBasicTransformerBlock.forward = custom_temporal_forward
+        print("[✓] Micro-chunked feed-forward and norm installed on TemporalBasicTransformerBlock")
 
         from diffusers.models.unets.unet_3d_blocks import (
             CrossAttnDownBlockSpatioTemporal,
