@@ -30,8 +30,8 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-# Enforce expandable segments before torch initializes CUDA
-os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+# Enforce expandable segments and 64MB max split size before torch initializes CUDA
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True,max_split_size_mb:64"
 
 import torch
 
@@ -395,11 +395,50 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
         module.gradient_checkpointing = True
 
     try:
+        from diffusers.models.activations import GEGLU
         from diffusers.models.attention import (
             Attention,
             BasicTransformerBlock,
+            FeedForward,
             TemporalBasicTransformerBlock,
         )
+
+        orig_linear_forward = torch.nn.Linear.forward
+
+        def safe_linear_forward(self, input):
+            try:
+                return orig_linear_forward(self, input)
+            except torch.OutOfMemoryError:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                return orig_linear_forward(self, input)
+
+        torch.nn.Linear.forward = safe_linear_forward
+
+        orig_geglu_forward = GEGLU.forward
+
+        def safe_geglu_forward(self, hidden_states, *args, **kwargs):
+            try:
+                return orig_geglu_forward(self, hidden_states, *args, **kwargs)
+            except torch.OutOfMemoryError:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                return orig_geglu_forward(self, hidden_states, *args, **kwargs)
+
+        GEGLU.forward = safe_geglu_forward
+
+        orig_ff_forward = FeedForward.forward
+
+        def safe_ff_forward(self, hidden_states, *args, **kwargs):
+            try:
+                return orig_ff_forward(self, hidden_states, *args, **kwargs)
+            except torch.OutOfMemoryError:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                return orig_ff_forward(self, hidden_states, *args, **kwargs)
+
+        FeedForward.forward = safe_ff_forward
+        print("[✓] Safe OOM-recovery wrappers installed on Linear, GEGLU, and FeedForward")
 
         # Install broadcast attention processor to eliminate ~800MB/layer duplicate projection memory
         for m in unet.modules():
