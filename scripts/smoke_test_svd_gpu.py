@@ -494,7 +494,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             hidden_states = hidden_states.reshape(batch_size * seq_length, num_frames, channels)
 
             M = hidden_states.shape[0]
-            chunk_size = 32
+            chunk_size = 2
 
             # 0. Input Norm & FeedForward
             residual = hidden_states
