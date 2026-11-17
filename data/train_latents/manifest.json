@@ -1,0 +1,189 @@
+{
+  "total_encoded": 8,
+  "records": [
+    {
+      "scenario_id": "0000400",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "81f6064f44fa341b4b93a953a9d2d41e47b93ef50bf5c30bd386e11f13a10088",
+      "mp4_sha256": "2267f63efc06c5b28dac0f683ceb3b44ffaf56a5574a518781eadd69880a37e6",
+      "status": "ENCODED_GENUINE_VAE"
+    },
+    {
+      "scenario_id": "0000401",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "22a54f8607884c14dbb0b4cdef0d4fa520a52ac3810518f3485e505c6fe7c259",
+      "mp4_sha256": "8f19304700943a802f91e3d79eea45a29b6344d44c3e5a24ce73cc02ef6a717f",
+      "status": "ENCODED_GENUINE_VAE"
+    },
+    {
+      "scenario_id": "0000402",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "9060ea5be82a04c0634f40b89688c4259a13452c3e3b95b38583e5bc78c811f7",
+      "mp4_sha256": "950d2da44b239ff1cd1d2870fc91835e44f9ad91d91593fa3de5850ea283fbba",
+      "status": "ENCODED_GENUINE_VAE"
+    },
+    {
+      "scenario_id": "0000403",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "5c8a9908f8eb5c9098b02d97e65849a3948b156be23764c571b248adcae6cb5f",
+      "mp4_sha256": "055d8dbcc91ebe1da7559e4efc9dc0dc5a11c3ee7d10cacb19318199000e95ff",
+      "status": "ENCODED_GENUINE_VAE"
+    },
+    {
+      "scenario_id": "0000404",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "331c0952f1c392b531d15f4557ca900b7a225e03970e8a2b157975317c2d4f0f",
+      "mp4_sha256": "9c1de71ad6f5b8fa65f399d38e069769f3446eb86ed0d139d24a76f3cffccfa6",
+      "status": "ENCODED_GENUINE_VAE"
+    },
+    {
+      "scenario_id": "0000405",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "d1b4f8dfd3027346c8fc296b9c3db0843d18f88f830b898b868a52f23c70f5b0",
+      "mp4_sha256": "f11fb87a6d022d408aa3822405efafc46b830cd9c059465b994ddd16a7792d50",
+      "status": "ENCODED_GENUINE_VAE"
+    },
+    {
+      "scenario_id": "0000406",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "eaf22f5a5336ad1a7c21547c88b289dde3ae6a351afa86f67545b0a70e34ea0c",
+      "mp4_sha256": "78111f3d0b8ba8582711531c026da25a165d098ef6aa5f3064951e884edfde68",
+      "status": "ENCODED_GENUINE_VAE"
+    },
+    {
+      "scenario_id": "0000407",
+      "camera": "front",
+      "num_frames": 25,
+      "fps": 5.0,
+      "latent_shape": [
+        1,
+        25,
+        4,
+        72,
+        128
+      ],
+      "initial_latent_shape": [
+        1,
+        4,
+        72,
+        128
+      ],
+      "scaling_factor": 0.18215,
+      "t0_sha256": "b3a33c49e896854b845932c18333cbd4345ea97463d7662ed87f8c8ac8b80a3f",
+      "mp4_sha256": "747b8adf97987d1504d485fef0a2b293ee9f25f04c07fad74a6bdaffe0f4c5f0",
+      "status": "ENCODED_GENUINE_VAE"
+    }
+  ]
+}

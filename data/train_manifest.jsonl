@@ -1,0 +1,500 @@
+{"scenario_id": "0000400", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000401", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000402", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000403", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000404", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000405", "driving_instruction": "turn left", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000406", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000407", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000408", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000409", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000410", "driving_instruction": "overtake van driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000411", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000412", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000413", "driving_instruction": "overtake truck driving on the right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000414", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000415", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000416", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000417", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000418", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000419", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000420", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000421", "driving_instruction": "use right lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000422", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000423", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000424", "driving_instruction": "overtake car in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000425", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000426", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000427", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000428", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000429", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000430", "driving_instruction": "overtake car in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000431", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000432", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000433", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000434", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000435", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000436", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000437", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000438", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000439", "driving_instruction": "use right lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000440", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000441", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000442", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000443", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000444", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000445", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000446", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000447", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000448", "driving_instruction": "turn left", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000449", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000450", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000451", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000452", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000453", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000454", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000455", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000456", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000457", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000458", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000459", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000460", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000461", "driving_instruction": "overtake truck in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000462", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000463", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000464", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000465", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000466", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000467", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000468", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000469", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000470", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000471", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000472", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000473", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000474", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000475", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000476", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000477", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000478", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000479", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000480", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000481", "driving_instruction": "use left lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000482", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000483", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000484", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000485", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000486", "driving_instruction": "turn right", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000487", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000488", "driving_instruction": "overtake truck driving on the right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000489", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000490", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000491", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000492", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000493", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000494", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000495", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000496", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000497", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000498", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000499", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000500", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000501", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000502", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000503", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000504", "driving_instruction": "overtake truck in front", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000505", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000506", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000507", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000508", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000509", "driving_instruction": "use right lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000510", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000511", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000512", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000513", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000514", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000515", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000516", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000517", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000518", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000519", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000520", "driving_instruction": "turn right", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000521", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000522", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000523", "driving_instruction": "overtake van driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000524", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000525", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000526", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000527", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000528", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000529", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000530", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000531", "driving_instruction": "turn left", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000532", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000533", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000534", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000535", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000536", "driving_instruction": "overtake car driving on the right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000537", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000538", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000539", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000540", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000541", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000542", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000543", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000544", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000545", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000546", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000547", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000548", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000549", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000550", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000551", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000552", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000553", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000554", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000555", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000556", "driving_instruction": "turn right", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000557", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000558", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000559", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000560", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000561", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000562", "driving_instruction": "use right lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000563", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000564", "driving_instruction": "u-turn", "scenario_type": "4 intersection"}
+{"scenario_id": "0000565", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000566", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000567", "driving_instruction": "overtake car driving on the right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000568", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000569", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000570", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000571", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000572", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000573", "driving_instruction": "use right lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000574", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000575", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000576", "driving_instruction": "turn right", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000577", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000578", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000579", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000580", "driving_instruction": "use left lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000581", "driving_instruction": "turn left", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000582", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000583", "driving_instruction": "use left lane", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000584", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000585", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000586", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000587", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000588", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000589", "driving_instruction": "u-turn", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000590", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000591", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000592", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000593", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000594", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000595", "driving_instruction": "use middle lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000596", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000597", "driving_instruction": "use right lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000598", "driving_instruction": "overtake car in front", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000599", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000600", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000601", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000602", "driving_instruction": "u-turn", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000603", "driving_instruction": "turn right", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000604", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000605", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000606", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000607", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000608", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000609", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000610", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000611", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000612", "driving_instruction": "overtake trucks driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000613", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000614", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000615", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000616", "driving_instruction": "use left lane", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000617", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000618", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000619", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000620", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000621", "driving_instruction": "turn right", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000622", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000623", "driving_instruction": "use left lane", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000624", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000625", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000626", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000627", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000628", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000629", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000630", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000631", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000632", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000633", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000634", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000635", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000636", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000637", "driving_instruction": "turn left", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000638", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000639", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000640", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000641", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000642", "driving_instruction": "use left lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000643", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000644", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000645", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000646", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000647", "driving_instruction": "overtake truck in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000648", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000649", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000650", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000651", "driving_instruction": "u-turn", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000652", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000653", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000654", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000655", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000656", "driving_instruction": "turn right", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000657", "driving_instruction": "overtake car in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000658", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000659", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000660", "driving_instruction": "turn left", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000661", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000662", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000663", "driving_instruction": "overtake car driving on the right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000664", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000665", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000666", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000667", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000668", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000669", "driving_instruction": "turn left", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000670", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000671", "driving_instruction": "overtake truck driving on the right", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000672", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000673", "driving_instruction": "turn right", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000674", "driving_instruction": "u-turn", "scenario_type": "4 intersection"}
+{"scenario_id": "0000675", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000676", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000677", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000678", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000679", "driving_instruction": "overtake truck in front", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000680", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000681", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000682", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000683", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000684", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000685", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000686", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000687", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000688", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000689", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000690", "driving_instruction": "use right lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000691", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000692", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000693", "driving_instruction": "turn left", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000694", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000695", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000696", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000697", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000698", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000699", "driving_instruction": "use right lane", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000700", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000701", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000702", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000703", "driving_instruction": "use left lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000704", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000705", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000706", "driving_instruction": "u-turn", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000707", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000708", "driving_instruction": "turn left", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000709", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000710", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000711", "driving_instruction": "use right lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000712", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000713", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000714", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000715", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000716", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000717", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000718", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000719", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000720", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000721", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000722", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000723", "driving_instruction": "use right lane", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000724", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000725", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000726", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000727", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000728", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000729", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000730", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000731", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000732", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000733", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000734", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000735", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000736", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000737", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000738", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000739", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000740", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000741", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000742", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000743", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000744", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000745", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000746", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000747", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000748", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000749", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000750", "driving_instruction": "overtake van driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000751", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000752", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000753", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000754", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000755", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000756", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000757", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000758", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000759", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000760", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000761", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000762", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000763", "driving_instruction": "overtake truck in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000764", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000765", "driving_instruction": "overtake car with a trailer driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000766", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000767", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000768", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000769", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000770", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000771", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000772", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000773", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000774", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000775", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000776", "driving_instruction": "drive straight on", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000777", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000778", "driving_instruction": "use right lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000779", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000780", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000781", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000782", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000783", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000784", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000785", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000786", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000787", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000788", "driving_instruction": "turn right", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000789", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000790", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000791", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000792", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000793", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000794", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000795", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000796", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000797", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000798", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000799", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000800", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000801", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000802", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000803", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000804", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000805", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000806", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000807", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000808", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000809", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000810", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000811", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000812", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000813", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000814", "driving_instruction": "overtake car driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000815", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000816", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000817", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000818", "driving_instruction": "use middle lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000819", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000820", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000821", "driving_instruction": "use middle lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000822", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000823", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000824", "driving_instruction": "turn left", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000825", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000826", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000827", "driving_instruction": "turn right", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000828", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000829", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000830", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000831", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000832", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000833", "driving_instruction": "overtake van driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000834", "driving_instruction": "use right lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000835", "driving_instruction": "use left lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000836", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000837", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000838", "driving_instruction": "turn right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000839", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000840", "driving_instruction": "overtake trucks in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000841", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000842", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000843", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000844", "driving_instruction": "overtake bus driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000845", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000846", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000847", "driving_instruction": "use left lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000848", "driving_instruction": "drive straight on", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000849", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000850", "driving_instruction": "use right lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000851", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000852", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000853", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000854", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000855", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000856", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000857", "driving_instruction": "turn right", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000858", "driving_instruction": "u-turn", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000859", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000860", "driving_instruction": "overtake truck driving on the right", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000861", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000862", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000863", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000864", "driving_instruction": "turn left", "scenario_type": "4 intersection"}
+{"scenario_id": "0000865", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000866", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000867", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000868", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000869", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000870", "driving_instruction": "overtake truck in front", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000871", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000872", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000873", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000874", "driving_instruction": "u-turn", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000875", "driving_instruction": "turn right", "scenario_type": "4 intersection"}
+{"scenario_id": "0000876", "driving_instruction": "overtake truck driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000877", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000878", "driving_instruction": "overtake bus driving on the right", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000879", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000880", "driving_instruction": "use middle lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000881", "driving_instruction": "use right lane", "scenario_type": "3 overtake or lane change"}
+{"scenario_id": "0000882", "driving_instruction": "use right lane", "scenario_type": "5 nighttime"}
+{"scenario_id": "0000883", "driving_instruction": "turn right", "scenario_type": "1 heavy rain"}
+{"scenario_id": "0000884", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000885", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000886", "driving_instruction": "use left lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000887", "driving_instruction": "u-turn", "scenario_type": "4 intersection"}
+{"scenario_id": "0000888", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000889", "driving_instruction": "turn left", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000890", "driving_instruction": "drive straight on", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000891", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000892", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000893", "driving_instruction": "use right lane", "scenario_type": "0 specifically selected"}
+{"scenario_id": "0000894", "driving_instruction": "drive straight on", "scenario_type": "6 snow & wintry mix"}
+{"scenario_id": "0000895", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000896", "driving_instruction": "drive straight on", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000897", "driving_instruction": "use left lane", "scenario_type": "2 construction zone"}
+{"scenario_id": "0000898", "driving_instruction": "drive straight on", "scenario_type": "4 intersection"}
+{"scenario_id": "0000899", "driving_instruction": "turn right", "scenario_type": "2 construction zone"}
