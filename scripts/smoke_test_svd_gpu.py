@@ -415,6 +415,24 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
         except Exception as e:
             print(f"[!] Note: GEGLU/FeedForward safe wrapper skipped ({e})")
 
+        # Install OOM recovery wrapper on LayerNorm
+        try:
+            from torch.nn import LayerNorm
+            _orig_ln_forward = LayerNorm.forward
+
+            def safe_ln_forward(self, input):
+                try:
+                    return _orig_ln_forward(self, input)
+                except torch.OutOfMemoryError:
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                    return _orig_ln_forward(self, input)
+
+            LayerNorm.forward = safe_ln_forward
+            print("[✓] Safe LayerNorm with OOM cache flush installed")
+        except Exception as e:
+            print(f"[!] Note: LayerNorm safe wrapper skipped ({e})")
+
 
 
 
@@ -551,6 +569,21 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             TransformerTemporalModelOutput,
         )
 
+        def _run_temporal_slice(t_block, s_in, n_frames, ctx):
+            try:
+                return t_block(s_in, num_frames=n_frames, encoder_hidden_states=ctx)
+            except torch.OutOfMemoryError:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                if s_in.shape[1] > 1:
+                    mid = s_in.shape[1] // 2
+                    out1 = _run_temporal_slice(t_block, s_in[:, :mid, :], n_frames, ctx)
+                    out2 = _run_temporal_slice(t_block, s_in[:, mid:, :], n_frames, ctx)
+                    res = torch.cat([out1, out2], dim=1)
+                    del out1, out2
+                    return res
+                raise
+
         def custom_spatio_temporal_forward(
             self,
             hidden_states: torch.Tensor,
@@ -582,29 +615,21 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             t_emb = self.time_proj(num_frames_emb).to(dtype=hidden_states.dtype)
             emb = self.time_pos_embed(t_emb)[:, None, :]
 
+            t_chunk_size = 144
             for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
                 h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
                 seq_len = h_spat.shape[1]
-                t_chunk_size = 576
                 if seq_len > t_chunk_size:
                     mixed_chunks = []
                     for i in range(0, seq_len, t_chunk_size):
                         h_spat_slice = h_spat[:, i : i + t_chunk_size, :]
                         h_slice = h_spat_slice + emb
-                        try:
-                            h_temp_slice = temporal_block(
-                                h_slice,
-                                num_frames=num_frames,
-                                encoder_hidden_states=time_context,
-                            )
-                        except torch.OutOfMemoryError:
-                            if torch.cuda.is_available():
-                                torch.cuda.empty_cache()
-                            h_temp_slice = temporal_block(
-                                h_slice,
-                                num_frames=num_frames,
-                                encoder_hidden_states=time_context,
-                            )
+                        h_temp_slice = _run_temporal_slice(
+                            temporal_block,
+                            h_slice,
+                            num_frames=num_frames,
+                            ctx=time_context,
+                        )
                         mixed_slice = self.time_mixer(
                             x_spatial=h_spat_slice,
                             x_temporal=h_temp_slice,
@@ -612,24 +637,21 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                         )
                         mixed_chunks.append(mixed_slice)
                         del h_slice, h_temp_slice
-                    hidden_states = torch.cat(mixed_chunks, dim=1)
-                    del mixed_chunks, h_spat
-                else:
-                    h_in = h_spat + emb
                     try:
-                        h_temp = temporal_block(
-                            h_in,
-                            num_frames=num_frames,
-                            encoder_hidden_states=time_context,
-                        )
+                        hidden_states = torch.cat(mixed_chunks, dim=1)
                     except torch.OutOfMemoryError:
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
-                        h_temp = temporal_block(
-                            h_in,
-                            num_frames=num_frames,
-                            encoder_hidden_states=time_context,
-                        )
+                        hidden_states = torch.cat(mixed_chunks, dim=1)
+                    del mixed_chunks, h_spat
+                else:
+                    h_in = h_spat + emb
+                    h_temp = _run_temporal_slice(
+                        temporal_block,
+                        h_in,
+                        num_frames=num_frames,
+                        ctx=time_context,
+                    )
                     hidden_states = self.time_mixer(
                         x_spatial=h_spat,
                         x_temporal=h_temp,
