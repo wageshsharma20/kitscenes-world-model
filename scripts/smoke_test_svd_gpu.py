@@ -257,6 +257,7 @@ class BroadcastAttnProcessor2_0:
     Memory-efficient cross-attention processor supporting broadcast encoder_hidden_states.
     Prevents allocating [9216, 27, 1024] (486 MiB) tensor duplicates by projecting the
     compact [1, 27, 1024] token bank directly and leveraging PyTorch SDPA native batch broadcasting.
+    Runs in a single vectorized kernel call with zero chunking loops or in-place slicing.
     """
 
     def __call__(
@@ -311,63 +312,19 @@ class BroadcastAttnProcessor2_0:
         if getattr(attn, "norm_k", None) is not None:
             key = attn.norm_k(key)
 
-        out_dim = getattr(attn.to_out[0], "out_features", attn.heads * head_dim)
-        if batch_size > 1:
-            chunk_size = 1
-            hidden_states = torch.empty(
-                batch_size, sequence_length, out_dim, device=query.device, dtype=query.dtype
-            )
-            for i in range(0, batch_size, chunk_size):
-                if i > 0 and (i // chunk_size) % 128 == 0 and torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                q_c = query[i : i + chunk_size]
-                k_c = key[i : i + chunk_size] if key.shape[0] == batch_size else key
-                v_c = value[i : i + chunk_size] if value.shape[0] == batch_size else value
-                mask_c = (
-                    attention_mask[i : i + chunk_size]
-                    if (attention_mask is not None and attention_mask.shape[0] == batch_size)
-                    else attention_mask
-                )
-                try:
-                    out_c = F.scaled_dot_product_attention(
-                        q_c, k_c, v_c, attn_mask=mask_c, dropout_p=0.0, is_causal=False
-                    )
-                except torch.OutOfMemoryError:
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    out_c = F.scaled_dot_product_attention(
-                        q_c, k_c, v_c, attn_mask=mask_c, dropout_p=0.0, is_causal=False
-                    )
-                out_c = out_c.transpose(1, 2).reshape(
-                    chunk_size, sequence_length, attn.heads * head_dim
-                )
-                out_c = out_c.to(query.dtype)
-                out_c = attn.to_out[0](out_c)
-                out_c = attn.to_out[1](out_c)
-                rescale_factor = getattr(attn, "rescale_output_factor", 1.0)
-                if rescale_factor != 1.0:
-                    out_c = out_c / rescale_factor
-                hidden_states[i : i + chunk_size] = out_c
-            del query, key, value
-        else:
-            try:
-                hidden_states = F.scaled_dot_product_attention(
-                    query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
-                )
-            except torch.OutOfMemoryError:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                hidden_states = F.scaled_dot_product_attention(
-                    query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
-                )
-            del query, key, value
-            hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
-            hidden_states = hidden_states.to(attn.to_out[0].weight.dtype)
-            hidden_states = attn.to_out[0](hidden_states)
-            hidden_states = attn.to_out[1](hidden_states)
-            rescale_factor = getattr(attn, "rescale_output_factor", 1.0)
-            if rescale_factor != 1.0:
-                hidden_states = hidden_states / rescale_factor
+        # PyTorch SDPA natively broadcasts when enc_batch == 1 and batch_size > 1
+        hidden_states = F.scaled_dot_product_attention(
+            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+        )
+        del query, key, value
+
+        hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
+        hidden_states = hidden_states.to(attn.to_out[0].weight.dtype)
+        hidden_states = attn.to_out[0](hidden_states)
+        hidden_states = attn.to_out[1](hidden_states)
+        rescale_factor = getattr(attn, "rescale_output_factor", 1.0)
+        if rescale_factor != 1.0:
+            hidden_states = hidden_states / rescale_factor
 
         if input_ndim == 4:
             hidden_states = hidden_states.transpose(-1, -2).reshape(batch_size, channel, height, width)
@@ -395,327 +352,17 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
         module.gradient_checkpointing = True
 
     try:
-        from diffusers.models.activations import GEGLU
-        from diffusers.models.attention import (
-            Attention,
-            BasicTransformerBlock,
-            FeedForward,
-            TemporalBasicTransformerBlock,
-        )
-
-        orig_linear_forward = torch.nn.Linear.forward
-
-        def safe_linear_forward(self, input):
-            try:
-                return orig_linear_forward(self, input)
-            except torch.OutOfMemoryError:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                return orig_linear_forward(self, input)
-
-        torch.nn.Linear.forward = safe_linear_forward
-
-        orig_layernorm_forward = torch.nn.LayerNorm.forward
-
-        def safe_layernorm_forward(self, input):
-            try:
-                return orig_layernorm_forward(self, input)
-            except torch.OutOfMemoryError:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                return orig_layernorm_forward(self, input)
-
-        torch.nn.LayerNorm.forward = safe_layernorm_forward
-
-        orig_groupnorm_forward = torch.nn.GroupNorm.forward
-
-        def safe_groupnorm_forward(self, input):
-            try:
-                return orig_groupnorm_forward(self, input)
-            except torch.OutOfMemoryError:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                return orig_groupnorm_forward(self, input)
-
-        torch.nn.GroupNorm.forward = safe_groupnorm_forward
-
-        orig_conv2d_forward = torch.nn.Conv2d.forward
-
-        def safe_conv2d_forward(self, input):
-            try:
-                return orig_conv2d_forward(self, input)
-            except torch.OutOfMemoryError:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                return orig_conv2d_forward(self, input)
-
-        torch.nn.Conv2d.forward = safe_conv2d_forward
-
-        orig_geglu_forward = GEGLU.forward
-
-        def safe_geglu_forward(self, hidden_states, *args, **kwargs):
-            try:
-                return orig_geglu_forward(self, hidden_states, *args, **kwargs)
-            except torch.OutOfMemoryError:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                return orig_geglu_forward(self, hidden_states, *args, **kwargs)
-
-        GEGLU.forward = safe_geglu_forward
-
-        orig_ff_forward = FeedForward.forward
-
-        def safe_ff_forward(self, hidden_states, *args, **kwargs):
-            try:
-                return orig_ff_forward(self, hidden_states, *args, **kwargs)
-            except torch.OutOfMemoryError:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                return orig_ff_forward(self, hidden_states, *args, **kwargs)
-
-        FeedForward.forward = safe_ff_forward
-        print("[✓] Safe OOM-recovery wrappers installed on Linear, LayerNorm, GroupNorm, Conv2d, GEGLU, and FeedForward")
+        from diffusers.models.attention import Attention
 
         # Install broadcast attention processor to eliminate ~800MB/layer duplicate projection memory
         for m in unet.modules():
             if isinstance(m, Attention):
                 m.set_processor(BroadcastAttnProcessor2_0())
-        print("[✓] BroadcastAttnProcessor2_0 installed on all attention modules")
+        print("[✓] Clean vectorized BroadcastAttnProcessor2_0 installed on all attention modules")
 
-        orig_basic_forward = BasicTransformerBlock.forward
 
-        def custom_basic_forward(
-            self,
-            hidden_states: torch.Tensor,
-            attention_mask=None,
-            encoder_hidden_states=None,
-            encoder_attention_mask=None,
-            timestep=None,
-            cross_attention_kwargs=None,
-            class_labels=None,
-            added_cond_kwargs=None,
-        ) -> torch.Tensor:
-            if getattr(self, "norm_type", None) not in ["layer_norm", "layer_norm_i2vgen"]:
-                return orig_basic_forward(
-                    self,
-                    hidden_states,
-                    attention_mask=attention_mask,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=encoder_attention_mask,
-                    timestep=timestep,
-                    cross_attention_kwargs=cross_attention_kwargs,
-                    class_labels=class_labels,
-                    added_cond_kwargs=added_cond_kwargs,
-                )
 
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
 
-            # 0. Self-Attention
-            norm_hidden_states = self.norm1(hidden_states)
-            if self.pos_embed is not None:
-                norm_hidden_states = self.pos_embed(norm_hidden_states)
-
-            c_kwargs = cross_attention_kwargs.copy() if cross_attention_kwargs is not None else {}
-            gligen_kwargs = c_kwargs.pop("gligen", None)
-
-            attn_output = self.attn1(
-                norm_hidden_states,
-                encoder_hidden_states=encoder_hidden_states if self.only_cross_attention else None,
-                attention_mask=attention_mask,
-                **c_kwargs,
-            )
-            hidden_states = attn_output + hidden_states
-            del norm_hidden_states, attn_output
-
-            if hidden_states.ndim == 4:
-                hidden_states = hidden_states.squeeze(1)
-
-            if gligen_kwargs is not None:
-                hidden_states = self.fuser(hidden_states, gligen_kwargs["objs"])
-
-            # 3. Cross-Attention
-            if self.attn2 is not None:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                norm_hidden_states = self.norm2(hidden_states)
-                if self.pos_embed is not None:
-                    norm_hidden_states = self.pos_embed(norm_hidden_states)
-
-                attn_output = self.attn2(
-                    norm_hidden_states,
-                    encoder_hidden_states=encoder_hidden_states,
-                    attention_mask=encoder_attention_mask,
-                    **c_kwargs,
-                )
-                hidden_states = attn_output + hidden_states
-                del norm_hidden_states, attn_output
-
-            # 4. Feed-forward (Micro-chunked along batch dim to eliminate 282MB norm3 + 1.1GB ff peak)
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            batch_size = hidden_states.shape[0]
-            if batch_size > 1:
-                ff_output = torch.empty_like(hidden_states)
-                chunk_size = 1
-                for i in range(0, batch_size, chunk_size):
-                    try:
-                        h_slice = hidden_states[i : i + chunk_size]
-                        norm_slice = self.norm3(h_slice)
-                        ff_slice = self.ff(norm_slice)
-                        ff_output[i : i + chunk_size] = ff_slice
-                    except torch.OutOfMemoryError:
-                        if torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                        h_slice = hidden_states[i : i + chunk_size]
-                        norm_slice = self.norm3(h_slice)
-                        ff_slice = self.ff(norm_slice)
-                        ff_output[i : i + chunk_size] = ff_slice
-            else:
-                try:
-                    norm_hidden_states = self.norm3(hidden_states)
-                    ff_output = self.ff(norm_hidden_states)
-                except torch.OutOfMemoryError:
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    norm_hidden_states = self.norm3(hidden_states)
-                    ff_output = self.ff(norm_hidden_states)
-
-            hidden_states = ff_output + hidden_states
-            del ff_output
-            if hidden_states.ndim == 4:
-                hidden_states = hidden_states.squeeze(1)
-
-            return hidden_states
-
-        BasicTransformerBlock.forward = custom_basic_forward
-        print("[✓] Micro-chunked feed-forward and norm3 installed on BasicTransformerBlock")
-
-        orig_temporal_forward = TemporalBasicTransformerBlock.forward
-
-        def custom_temporal_forward(
-            self,
-            hidden_states: torch.Tensor,
-            num_frames: int,
-            encoder_hidden_states=None,
-        ) -> torch.Tensor:
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            batch_frames, seq_length, channels = hidden_states.shape
-            batch_size = batch_frames // num_frames
-
-            hidden_states = hidden_states[None, :].reshape(batch_size, num_frames, seq_length, channels)
-            hidden_states = hidden_states.permute(0, 2, 1, 3)
-            hidden_states = hidden_states.reshape(batch_size * seq_length, num_frames, channels)
-
-            M = hidden_states.shape[0]
-            chunk_size = 4
-
-            # 0. Input Norm & FeedForward
-            residual = hidden_states
-            if M > chunk_size:
-                ff_in_out = torch.empty_like(hidden_states)
-                for i in range(0, M, chunk_size):
-                    if i > 0 and (i // chunk_size) % 32 == 0 and torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    h_chunk = hidden_states[i : i + chunk_size]
-                    try:
-                        n_chunk = self.norm_in(h_chunk)
-                        ff_chunk = self.ff_in(n_chunk)
-                    except torch.OutOfMemoryError:
-                        if torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                        n_chunk = self.norm_in(h_chunk)
-                        ff_chunk = self.ff_in(n_chunk)
-                    ff_in_out[i : i + chunk_size] = ff_chunk
-            else:
-                try:
-                    ff_in_out = self.ff_in(self.norm_in(hidden_states))
-                except torch.OutOfMemoryError:
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    ff_in_out = self.ff_in(self.norm_in(hidden_states))
-
-            if self.is_res:
-                hidden_states = residual + ff_in_out
-            else:
-                hidden_states = ff_in_out
-            del residual, ff_in_out
-
-            # 1. Self-Attention
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            if M > chunk_size:
-                norm_hidden_states = torch.empty_like(hidden_states)
-                for i in range(0, M, chunk_size):
-                    norm_hidden_states[i : i + chunk_size] = self.norm1(hidden_states[i : i + chunk_size])
-            else:
-                norm_hidden_states = self.norm1(hidden_states)
-
-            attn_output = self.attn1(norm_hidden_states, encoder_hidden_states=None)
-            hidden_states = attn_output + hidden_states
-            del norm_hidden_states, attn_output
-
-            # 2. Cross-Attention
-            if self.attn2 is not None:
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-
-                if M > chunk_size:
-                    norm_hidden_states = torch.empty_like(hidden_states)
-                    for i in range(0, M, chunk_size):
-                        norm_hidden_states[i : i + chunk_size] = self.norm2(hidden_states[i : i + chunk_size])
-                else:
-                    norm_hidden_states = self.norm2(hidden_states)
-
-                attn_output = self.attn2(norm_hidden_states, encoder_hidden_states=encoder_hidden_states)
-                hidden_states = attn_output + hidden_states
-                del norm_hidden_states, attn_output
-
-            # 3. Feed-forward (Micro-chunked along M dim to eliminate 282MB norm3 + 1.1GB ff peak)
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-
-            if M > chunk_size:
-                ff_out = torch.empty_like(hidden_states)
-                for i in range(0, M, chunk_size):
-                    if i > 0 and (i // chunk_size) % 32 == 0 and torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    h_chunk = hidden_states[i : i + chunk_size]
-                    try:
-                        n_chunk = self.norm3(h_chunk)
-                        ff_chunk = self.ff(n_chunk)
-                    except torch.OutOfMemoryError:
-                        if torch.cuda.is_available():
-                            torch.cuda.empty_cache()
-                        n_chunk = self.norm3(h_chunk)
-                        ff_chunk = self.ff(n_chunk)
-                    ff_out[i : i + chunk_size] = ff_chunk
-            else:
-                try:
-                    ff_out = self.ff(self.norm3(hidden_states))
-                except torch.OutOfMemoryError:
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    ff_out = self.ff(self.norm3(hidden_states))
-
-            if self.is_res:
-                hidden_states = hidden_states + ff_out
-            else:
-                hidden_states = ff_out
-            del ff_out
-
-            cur_channels = hidden_states.shape[-1]
-            hidden_states = hidden_states[None, :].reshape(batch_size, seq_length, num_frames, cur_channels)
-            hidden_states = hidden_states.permute(0, 2, 1, 3)
-            hidden_states = hidden_states.reshape(batch_size * num_frames, seq_length, cur_channels)
-            return hidden_states
-
-        TemporalBasicTransformerBlock.forward = custom_temporal_forward
-        print("[✓] Micro-chunked feed-forward and norm installed on TemporalBasicTransformerBlock")
 
         from diffusers.models.unets.unet_3d_blocks import (
             CrossAttnDownBlockSpatioTemporal,
@@ -862,7 +509,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
             # Pass compact [batch_size, 27, 1024] directly to avoid allocating ~486 MiB duplicate tensor
             time_context = encoder_hidden_states
-            if time_context is not None:
+            if time_context is not None and time_context.shape[0] == batch_frames:
                 time_context_first_timestep = time_context[None, :].reshape(
                     batch_size, num_frames, -1, time_context.shape[-1]
                 )[:, 0]
@@ -923,12 +570,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
     except Exception as e:
         print(f"[!] Note: Deep attention checkpointing patch skipped ({e})")
 
-    if hasattr(unet, "enable_forward_chunking"):
-        try:
-            unet.enable_forward_chunking(chunk_size=1, dim=0)
-            print("[✓] UNet feed-forward chunking enabled (chunk_size=1)")
-        except Exception as e:
-            print(f"[!] Note: Forward chunking skipped ({e})")
+
 
 
 def run_svd_gpu_smoke_test(
