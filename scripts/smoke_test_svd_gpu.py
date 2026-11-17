@@ -306,7 +306,7 @@ class BroadcastAttnProcessor2_0:
             key = attn.norm_k(key)
 
         if batch_size > 1:
-            chunk_size = 1 if sequence_length > 25 else 16
+            chunk_size = 1 if sequence_length > 25 else 128
             out_chunks = []
             for i in range(0, batch_size, chunk_size):
                 q_c = query[i : i + chunk_size]
@@ -323,6 +323,7 @@ class BroadcastAttnProcessor2_0:
                     )
                 )
             hidden_states = torch.cat(out_chunks, dim=0)
+            del out_chunks
         else:
             hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
@@ -826,6 +827,10 @@ def run_svd_gpu_smoke_test(
     del sample_tensor
     if "initial_image_latents_4d" in locals():
         del initial_image_latents_4d
+    if "unet_input" in locals():
+        del unet_input
+    if "noisy_latents" in locals():
+        del noisy_latents
     if "cssc_out" in locals():
         del cssc_out
     if parsed_device.type == "cuda":
