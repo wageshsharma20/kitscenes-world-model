@@ -21,6 +21,10 @@ reports/*
 !reports/visual_calibration_audit/**
 !reports/svd_gpu_smoke_test.md
 !reports/svd_gpu_smoke_test.json
+!reports/svd_training_step.md
+!reports/svd_training_step.json
+!reports/previews/
+!reports/previews/**
 .DS_Store
 .env
 .env.*
