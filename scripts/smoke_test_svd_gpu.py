@@ -458,15 +458,25 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                     res_out = torch.utils.checkpoint.checkpoint(
                         _run_down_resnet, hidden_states, use_reentrant=False
                     )
+
+                    def _run_down_attn(h, m_attn=attn):
+                        return m_attn(
+                            h,
+                            encoder_hidden_states=encoder_hidden_states,
+                            image_only_indicator=image_only_indicator,
+                            return_dict=False,
+                        )[0]
+                    hidden_states = torch.utils.checkpoint.checkpoint(
+                        _run_down_attn, res_out, use_reentrant=False
+                    )
                 else:
                     res_out = resnet(hidden_states, temb, image_only_indicator=image_only_indicator)
-
-                hidden_states = attn(
-                    res_out,
-                    encoder_hidden_states=encoder_hidden_states,
-                    image_only_indicator=image_only_indicator,
-                    return_dict=False,
-                )[0]
+                    hidden_states = attn(
+                        res_out,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                        return_dict=False,
+                    )[0]
                 output_states = output_states + (hidden_states,)
 
             if self.downsamplers is not None:
@@ -497,16 +507,26 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                     res_out = torch.utils.checkpoint.checkpoint(
                         _run_up_resnet, hidden_states, res_hidden_states, use_reentrant=False
                     )
+
+                    def _run_up_attn(h, m_attn=attn):
+                        return m_attn(
+                            h,
+                            encoder_hidden_states=encoder_hidden_states,
+                            image_only_indicator=image_only_indicator,
+                            return_dict=False,
+                        )[0]
+                    hidden_states = torch.utils.checkpoint.checkpoint(
+                        _run_up_attn, res_out, use_reentrant=False
+                    )
                 else:
                     cat_h = torch.cat([hidden_states, res_hidden_states], dim=1)
                     res_out = resnet(cat_h, temb, image_only_indicator=image_only_indicator)
-
-                hidden_states = attn(
-                    res_out,
-                    encoder_hidden_states=encoder_hidden_states,
-                    image_only_indicator=image_only_indicator,
-                    return_dict=False,
-                )[0]
+                    hidden_states = attn(
+                        res_out,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                        return_dict=False,
+                    )[0]
 
             if self.upsamplers is not None:
                 for upsampler in self.upsamplers:
@@ -532,20 +552,30 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 hidden_states = self.resnets[0](hidden_states, temb, image_only_indicator=image_only_indicator)
 
             for attn, resnet in zip(self.attentions, self.resnets[1:]):
-                hidden_states = attn(
-                    hidden_states,
-                    encoder_hidden_states=encoder_hidden_states,
-                    image_only_indicator=image_only_indicator,
-                    return_dict=False,
-                )[0]
-
                 if torch.is_grad_enabled() and self.gradient_checkpointing:
+                    def _run_mid_attn(h, m_attn=attn):
+                        return m_attn(
+                            h,
+                            encoder_hidden_states=encoder_hidden_states,
+                            image_only_indicator=image_only_indicator,
+                            return_dict=False,
+                        )[0]
+                    hidden_states = torch.utils.checkpoint.checkpoint(
+                        _run_mid_attn, hidden_states, use_reentrant=False
+                    )
+
                     def _run_mid_resnet(h, m_resnet=resnet):
                         return m_resnet(h, temb, image_only_indicator=image_only_indicator)
                     hidden_states = torch.utils.checkpoint.checkpoint(
                         _run_mid_resnet, hidden_states, use_reentrant=False
                     )
                 else:
+                    hidden_states = attn(
+                        hidden_states,
+                        encoder_hidden_states=encoder_hidden_states,
+                        image_only_indicator=image_only_indicator,
+                        return_dict=False,
+                    )[0]
                     hidden_states = resnet(hidden_states, temb, image_only_indicator=image_only_indicator)
             return hidden_states
 
@@ -621,14 +651,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
             t_chunk_size = 144
             for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
-                if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", True):
-                    def _run_spat(h, enc, b=block):
-                        return b(h, encoder_hidden_states=enc)
-                    h_spat = torch.utils.checkpoint.checkpoint(
-                        _run_spat, hidden_states, encoder_hidden_states, use_reentrant=False
-                    )
-                else:
-                    h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
+                h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
                 seq_len = h_spat.shape[1]
                 if seq_len > t_chunk_size:
                     mixed_chunks = []
