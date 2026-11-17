@@ -306,7 +306,7 @@ class BroadcastAttnProcessor2_0:
             key = attn.norm_k(key)
 
         if batch_size > 1:
-            chunk_size = 1 if sequence_length > 25 else 128
+            chunk_size = 1 if sequence_length > 25 else 8
             out_chunks = []
             for i in range(0, batch_size, chunk_size):
                 q_c = query[i : i + chunk_size]
