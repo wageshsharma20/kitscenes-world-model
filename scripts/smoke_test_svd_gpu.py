@@ -881,44 +881,18 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             emb = self.time_pos_embed(t_emb)[:, None, :]
 
             for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
-                if torch.is_grad_enabled() and self.gradient_checkpointing:
-                    def _run_spatio_step(h, b=block):
-                        return b(h, encoder_hidden_states=encoder_hidden_states)
-
-                    h_spat = torch.utils.checkpoint.checkpoint(
-                        _run_spatio_step, hidden_states, use_reentrant=False
-                    )
-
-                    def _run_temporal_step(hs, tb=temporal_block):
-                        return tb(
-                            hs + emb,
-                            num_frames=num_frames,
-                            encoder_hidden_states=time_context,
-                        )
-
-                    h_temp = torch.utils.checkpoint.checkpoint(
-                        _run_temporal_step, h_spat, use_reentrant=False
-                    )
-
-                    hidden_states = self.time_mixer(
-                        x_spatial=h_spat,
-                        x_temporal=h_temp,
-                        image_only_indicator=image_only_indicator,
-                    )
-                    del h_spat, h_temp
-                else:
-                    h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
-                    h_temp = temporal_block(
-                        h_spat + emb,
-                        num_frames=num_frames,
-                        encoder_hidden_states=time_context,
-                    )
-                    hidden_states = self.time_mixer(
-                        x_spatial=h_spat,
-                        x_temporal=h_temp,
-                        image_only_indicator=image_only_indicator,
-                    )
-                    del h_spat, h_temp
+                h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
+                h_temp = temporal_block(
+                    h_spat + emb,
+                    num_frames=num_frames,
+                    encoder_hidden_states=time_context,
+                )
+                hidden_states = self.time_mixer(
+                    x_spatial=h_spat,
+                    x_temporal=h_temp,
+                    image_only_indicator=image_only_indicator,
+                )
+                del h_spat, h_temp
 
             hidden_states = self.proj_out(hidden_states)
             hidden_states = (
