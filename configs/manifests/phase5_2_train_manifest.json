@@ -1,0 +1,259 @@
+{
+  "created_at": "2026-11-17T14:50:02.625795+00:00",
+  "dataset_version": "KITScenes-LongTail Phase 5.2",
+  "canonical_camera_order": [
+    "front",
+    "front_left",
+    "front_right",
+    "rear",
+    "rear_left",
+    "rear_right"
+  ],
+  "scenario_count": 5,
+  "internal_training_exclusions": [
+    "0000406",
+    "0000407"
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "0000400",
+      "split": "train",
+      "cameras": [
+        "front",
+        "front_left",
+        "front_right",
+        "rear",
+        "rear_left",
+        "rear_right"
+      ],
+      "driving_instruction": "turn left",
+      "scenario_type": "4 intersection",
+      "knn_method": "knn_retrieval_with_cv_blend",
+      "knn_retrieved_donors": [
+        "0000859",
+        "0000760",
+        "0000479",
+        "0000637",
+        "0000758"
+      ],
+      "multicam_bundle_path": "data/train_latents/0000400_multicam.pt",
+      "multicam_bundle_sha256": "STAGED_FOR_GPU_PIPELINE",
+      "image_hashes": {
+        "front": "81f6064f44fa341b4b93a953a9d2d41e47b93ef50bf5c30bd386e11f13a10088",
+        "front_left": "446144e2c8e7d6d319450001562e6ab5d485a3ba6c3128c286ffcd9dfd290744",
+        "front_right": "b8599ebbc1c4075fdf581072447a363f5bd2fc03761b009a8416029a2cd39b5a",
+        "rear": "d6504ac831a53ea7a1260675eb4f835519117be4ecbb7eae6eed4db66bbd16b4",
+        "rear_left": "01d70d0ba2b6426e3adab604c592e48be732ded464eecef1ce795673126ac902",
+        "rear_right": "fe1ef49cf11ea31af6574a9eb79770e01500c09888543735a2262285f69ab790"
+      },
+      "video_hashes": {
+        "front": "2267f63efc06c5b28dac0f683ceb3b44ffaf56a5574a518781eadd69880a37e6",
+        "front_left": "65856e581bd3c0c51746e560cd77b3c5704125355e7666166219622bfedad661",
+        "front_right": "f01d0c37fc2d6be504af95335d8e2ae98ba6d6f84eb88155b12645a0fa64d430",
+        "rear": "2058d186c305c435de343bbdaaca9144bbe434d84e295a34f2f2ab8ef7f271ba",
+        "rear_left": "cb082aa1c13425c64a08bc24da456958964784def676efc021a70e2ef3a3db1f",
+        "rear_right": "2f5973c3033e8abf5962114cf67d1d34c7c816750a5f9daee8c72419ed87d1c8"
+      },
+      "latent_hashes": {
+        "front": "STAGED_FOR_GPU_PIPELINE",
+        "front_left": "STAGED_FOR_GPU_PIPELINE",
+        "front_right": "STAGED_FOR_GPU_PIPELINE",
+        "rear": "STAGED_FOR_GPU_PIPELINE",
+        "rear_left": "STAGED_FOR_GPU_PIPELINE",
+        "rear_right": "STAGED_FOR_GPU_PIPELINE"
+      }
+    },
+    {
+      "scenario_id": "0000401",
+      "split": "train",
+      "cameras": [
+        "front",
+        "front_left",
+        "front_right",
+        "rear",
+        "rear_left",
+        "rear_right"
+      ],
+      "driving_instruction": "turn right",
+      "scenario_type": "4 intersection",
+      "knn_method": "knn_retrieval_with_cv_blend",
+      "knn_retrieved_donors": [
+        "0000653",
+        "0000505",
+        "0000781",
+        "0000813",
+        "0000436"
+      ],
+      "multicam_bundle_path": "data/train_latents/0000401_multicam.pt",
+      "multicam_bundle_sha256": "STAGED_FOR_GPU_PIPELINE",
+      "image_hashes": {
+        "front": "22a54f8607884c14dbb0b4cdef0d4fa520a52ac3810518f3485e505c6fe7c259",
+        "front_left": "f6f91aad3656cd6c018c5a74e97239cc85f56441408b54f6f21231312cd92d69",
+        "front_right": "7dae57d433d132ecf301d1b3082d9f260961839cc1a5187c1581175e73427098",
+        "rear": "b157f7b70d063d0797bb40e591d0168ad9513e19a4c8a27d67fc228f007ad4a7",
+        "rear_left": "005888f62c9f5c536ec902845975c0b691ef2404ef53267632d446e8c872324d",
+        "rear_right": "c741c35ae6f4b09b95e4255a69039e82ab97c71c8c28d239e169a6a28633bbea"
+      },
+      "video_hashes": {
+        "front": "8f19304700943a802f91e3d79eea45a29b6344d44c3e5a24ce73cc02ef6a717f",
+        "front_left": "1281ef24a19086ab80f362def666cba44a030efad298a4d6e3533e06e45c1c4d",
+        "front_right": "4e3ae9fa73b54e59f00750f6239acefbc721dfc3ae9bf874db2cfc6edb78dc0f",
+        "rear": "2e1a9f13466f4c6636630ad6005b08dc640e3fa83c3f0b1b52b050e1b6575034",
+        "rear_left": "6aaa9f2def75a202086edbadfcd564986705945dcd67c8808315b44b700f840f",
+        "rear_right": "48e08315deb484a6655c36651e7a2789cc5b13766cbb738c75c4a737d0b6e9bb"
+      },
+      "latent_hashes": {
+        "front": "STAGED_FOR_GPU_PIPELINE",
+        "front_left": "STAGED_FOR_GPU_PIPELINE",
+        "front_right": "STAGED_FOR_GPU_PIPELINE",
+        "rear": "STAGED_FOR_GPU_PIPELINE",
+        "rear_left": "STAGED_FOR_GPU_PIPELINE",
+        "rear_right": "STAGED_FOR_GPU_PIPELINE"
+      }
+    },
+    {
+      "scenario_id": "0000402",
+      "split": "train",
+      "cameras": [
+        "front",
+        "front_left",
+        "front_right",
+        "rear",
+        "rear_left",
+        "rear_right"
+      ],
+      "driving_instruction": "use right lane",
+      "scenario_type": "3 overtake or lane change",
+      "knn_method": "knn_retrieval_with_cv_blend",
+      "knn_retrieved_donors": [
+        "0000460",
+        "0000459",
+        "0000419",
+        "0000779",
+        "0000722"
+      ],
+      "multicam_bundle_path": "data/train_latents/0000402_multicam.pt",
+      "multicam_bundle_sha256": "STAGED_FOR_GPU_PIPELINE",
+      "image_hashes": {
+        "front": "9060ea5be82a04c0634f40b89688c4259a13452c3e3b95b38583e5bc78c811f7",
+        "front_left": "951422bfc00b656c0f1d3c66c05aa6e7d223166a3b42af8044db18f5bcb617f4",
+        "front_right": "3741df9d92c9aa73b6612845e81aac94b053473b0fe3f6efc4723c5eaaf7ed3b",
+        "rear": "b9b017540544ad8eff5da900b9d19738346fa9417165e670cbd82cfe423b7c12",
+        "rear_left": "6fbede0e61517d7f424949c458f0e450e7e77638af04a822af71ced356e125af",
+        "rear_right": "4270a8b1e2cf1c86fb1bc67122c98f8d76bd4f44453396ab54025302d6e88b38"
+      },
+      "video_hashes": {
+        "front": "950d2da44b239ff1cd1d2870fc91835e44f9ad91d91593fa3de5850ea283fbba",
+        "front_left": "c972a43f8627b16f7e2bbbdda8a0e216cfd0a433ad8bcc061f6fc184855e44ce",
+        "front_right": "e34a9b155b7ea02c437e3ef7f10e6f66ea0f0ef64f23d9df73129c84936fa7e8",
+        "rear": "bba47209e59a8de62784641f9ae9edc6cd01e87955c5662c46842c340e91917b",
+        "rear_left": "d523961dc9c1834df6771a433652645439bea339e2d2a705497948b596cfa4c7",
+        "rear_right": "e0b24cd527d32c120a91fd04fe5d521177b107a864fef28c5c414b3123fbf532"
+      },
+      "latent_hashes": {
+        "front": "STAGED_FOR_GPU_PIPELINE",
+        "front_left": "STAGED_FOR_GPU_PIPELINE",
+        "front_right": "STAGED_FOR_GPU_PIPELINE",
+        "rear": "STAGED_FOR_GPU_PIPELINE",
+        "rear_left": "STAGED_FOR_GPU_PIPELINE",
+        "rear_right": "STAGED_FOR_GPU_PIPELINE"
+      }
+    },
+    {
+      "scenario_id": "0000403",
+      "split": "train",
+      "cameras": [
+        "front",
+        "front_left",
+        "front_right",
+        "rear",
+        "rear_left",
+        "rear_right"
+      ],
+      "driving_instruction": "drive straight on",
+      "scenario_type": "1 heavy rain",
+      "knn_method": "knn_retrieval_with_cv_blend",
+      "knn_retrieved_donors": [
+        "0000620",
+        "0000702",
+        "0000718",
+        "0000457",
+        "0000613"
+      ],
+      "multicam_bundle_path": "data/train_latents/0000403_multicam.pt",
+      "multicam_bundle_sha256": "STAGED_FOR_GPU_PIPELINE",
+      "image_hashes": {
+        "front": "5c8a9908f8eb5c9098b02d97e65849a3948b156be23764c571b248adcae6cb5f",
+        "front_left": "ac31e69a4e10c688a73679a9ef0ee99e32c8773241dc2029618e0e4cd2fddeef",
+        "front_right": "85d9ee41d73e3db622ca84dc4aec89bb0523c87ff49456daa8af4eb749410f3f",
+        "rear": "348e9d7574e7c22913996c16b7ad486014b4f55ce877dd5d00b0efe9ab5eb5d9",
+        "rear_left": "da61bfda2eaee0984abcf27d31f0538595b58d8c40ba75a8d202257736f64251",
+        "rear_right": "4d02d5b371dfbd33f677ac54b98ebd6e03cf70e80005561953d17fcc406b1466"
+      },
+      "video_hashes": {
+        "front": "055d8dbcc91ebe1da7559e4efc9dc0dc5a11c3ee7d10cacb19318199000e95ff",
+        "front_left": "b31fe28a084a4170bed20194a8a172819e97fe385d5311d99cae46711da6d16e",
+        "front_right": "9d6f85aeec4accaf9f12fe7458d69378450b17a715b9db3d1d883ddc05e6ff4c",
+        "rear": "99822f521e6c9fe997c090fc0892e2ac00f32766af51ad9c6f3eeb572336a622",
+        "rear_left": "d5988733f2439e21651a8702f9dc224de076841125dddad7e747b9a75be06c46",
+        "rear_right": "e71d46598920befe484992a670e38cd92de419d1fdfb08098a2882283c9d361f"
+      },
+      "latent_hashes": {
+        "front": "STAGED_FOR_GPU_PIPELINE",
+        "front_left": "STAGED_FOR_GPU_PIPELINE",
+        "front_right": "STAGED_FOR_GPU_PIPELINE",
+        "rear": "STAGED_FOR_GPU_PIPELINE",
+        "rear_left": "STAGED_FOR_GPU_PIPELINE",
+        "rear_right": "STAGED_FOR_GPU_PIPELINE"
+      }
+    },
+    {
+      "scenario_id": "0000404",
+      "split": "train",
+      "cameras": [
+        "front",
+        "front_left",
+        "front_right",
+        "rear",
+        "rear_left",
+        "rear_right"
+      ],
+      "driving_instruction": "use left lane",
+      "scenario_type": "3 overtake or lane change",
+      "knn_method": "knn_retrieval_with_cv_blend",
+      "knn_retrieved_donors": [
+        "0000826",
+        "0000475",
+        "0000623",
+        "0000730",
+        "0000580"
+      ],
+      "multicam_bundle_path": "data/train_latents/0000404_multicam.pt",
+      "multicam_bundle_sha256": "STAGED_FOR_GPU_PIPELINE",
+      "image_hashes": {
+        "front": "331c0952f1c392b531d15f4557ca900b7a225e03970e8a2b157975317c2d4f0f",
+        "front_left": "8f068eadf35122cbd8dc4c4fc5e3d77c090ff14e921653fe3f5c5b0ccf0b6157",
+        "front_right": "8ca287e9aa73322d0e4a790824c5ea80e7d30479781e62c1c7ac1dcf11ac9692",
+        "rear": "e919f51d5c33404a0007a06d73f26e60edb1ee26871681d497a712ce82802617",
+        "rear_left": "167ac43bb111fa641d218cf0b6e26111a433cd76abf14c6766c45a5ec9c1d0e4",
+        "rear_right": "2845faeb632dbd31db3c0534e929866d843efb733bc7876e7751a3bc336c4b00"
+      },
+      "video_hashes": {
+        "front": "9c1de71ad6f5b8fa65f399d38e069769f3446eb86ed0d139d24a76f3cffccfa6",
+        "front_left": "f2b49c8b659cae4d5646917e6b09215a919a0be161354d58bafd5f087659a159",
+        "front_right": "cc381c63034a754a04d846d30fe59fe17a83905e56526f8248fcca3a5683539e",
+        "rear": "59f41476cfe159d1bda65b75bd5ec26076a5fa47d2db0d9c0adf041235cd3ab1",
+        "rear_left": "9dbf4b99b217704003b5e1211b7e6417075048fa112b665574fe186ed40c7c35",
+        "rear_right": "02bcc2c4fb9050ecbddcdf876e164938694779a92af808c05c602a4b521388d0"
+      },
+      "latent_hashes": {
+        "front": "STAGED_FOR_GPU_PIPELINE",
+        "front_left": "STAGED_FOR_GPU_PIPELINE",
+        "front_right": "STAGED_FOR_GPU_PIPELINE",
+        "rear": "STAGED_FOR_GPU_PIPELINE",
+        "rear_left": "STAGED_FOR_GPU_PIPELINE",
+        "rear_right": "STAGED_FOR_GPU_PIPELINE"
+      }
+    }
+  ]
+}

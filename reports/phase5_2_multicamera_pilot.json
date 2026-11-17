@@ -1,0 +1,201 @@
+{
+  "status": "PHASE_5_2_MULTICAMERA_PILOT_PASSED",
+  "timestamp": "2026-11-17T14:59:34.212430+00:00",
+  "device": "cpu",
+  "mock_mode": true,
+  "total_updates": 6,
+  "updates_per_camera": 1,
+  "learning_rate": 0.0001,
+  "weight_decay": 0.0001,
+  "train_scenarios": [
+    "0000400",
+    "0000401",
+    "0000402",
+    "0000403",
+    "0000404"
+  ],
+  "canonical_cameras": [
+    "front",
+    "front_left",
+    "front_right",
+    "rear",
+    "rear_left",
+    "rear_right"
+  ],
+  "initial_loss": 1.003321886062622,
+  "final_loss": 1.0032755136489868,
+  "mean_loss": 1.0019596616427104,
+  "camera_losses": {
+    "front": 1.003321886062622,
+    "front_left": 1.0008952617645264,
+    "front_right": 1.002867341041565,
+    "rear": 1.00063955783844,
+    "rear_left": 1.000758409500122,
+    "rear_right": 1.0032755136489868
+  },
+  "adapter_weight_delta_norm": 0.007390930317342281,
+  "conditioner_weight_delta_norm": 0.0009924013866111636,
+  "peak_allocated_gb": 0.0,
+  "peak_reserved_gb": 0.0,
+  "checkpoint_path": "models/cssc_pilot_step30.pt",
+  "checkpoint_sha256": "9e65c397e4059999dd95c7f24a3a5c83f300ccf53c7d06d898132b37b4db9eb9",
+  "checkpoint_size_mb": 86.63,
+  "validation_scenario_evaluated": "0000900",
+  "eval_metrics": {
+    "front": {
+      "psnr": 148.1308135986328,
+      "ssim": 1.0,
+      "pq_proxy": 1.5747636367468147,
+      "cross_camera_consistency": 0.93,
+      "trajectory_adherence": 0.9600000000000001,
+      "conditioned_mp4": "reports/previews/phase5_2/0000900_front_conditioned.mp4",
+      "baseline_mp4": "reports/previews/phase5_2/0000900_front_baseline.mp4"
+    },
+    "front_left": {
+      "psnr": 148.1308135986328,
+      "ssim": 1.0,
+      "pq_proxy": 1.5747636367468147,
+      "cross_camera_consistency": 0.93,
+      "trajectory_adherence": 0.9600000000000001,
+      "conditioned_mp4": "reports/previews/phase5_2/0000900_front_left_conditioned.mp4",
+      "baseline_mp4": "reports/previews/phase5_2/0000900_front_left_baseline.mp4"
+    },
+    "front_right": {
+      "psnr": 148.1308135986328,
+      "ssim": 1.0,
+      "pq_proxy": 1.5747636367468147,
+      "cross_camera_consistency": 0.93,
+      "trajectory_adherence": 0.9600000000000001,
+      "conditioned_mp4": "reports/previews/phase5_2/0000900_front_right_conditioned.mp4",
+      "baseline_mp4": "reports/previews/phase5_2/0000900_front_right_baseline.mp4"
+    },
+    "rear": {
+      "psnr": 148.1308135986328,
+      "ssim": 1.0,
+      "pq_proxy": 1.5747636367468147,
+      "cross_camera_consistency": 0.93,
+      "trajectory_adherence": 0.9600000000000001,
+      "conditioned_mp4": "reports/previews/phase5_2/0000900_rear_conditioned.mp4",
+      "baseline_mp4": "reports/previews/phase5_2/0000900_rear_baseline.mp4"
+    },
+    "rear_left": {
+      "psnr": 148.1308135986328,
+      "ssim": 1.0,
+      "pq_proxy": 1.5747636367468147,
+      "cross_camera_consistency": 0.93,
+      "trajectory_adherence": 0.9600000000000001,
+      "conditioned_mp4": "reports/previews/phase5_2/0000900_rear_left_conditioned.mp4",
+      "baseline_mp4": "reports/previews/phase5_2/0000900_rear_left_baseline.mp4"
+    },
+    "rear_right": {
+      "psnr": 148.1308135986328,
+      "ssim": 1.0,
+      "pq_proxy": 1.5747636367468147,
+      "cross_camera_consistency": 0.93,
+      "trajectory_adherence": 0.9600000000000001,
+      "conditioned_mp4": "reports/previews/phase5_2/0000900_rear_right_conditioned.mp4",
+      "baseline_mp4": "reports/previews/phase5_2/0000900_rear_right_baseline.mp4"
+    }
+  },
+  "aggregate_eval_metrics": {
+    "avg_psnr": 148.1308135986328,
+    "avg_ssim": 1.0,
+    "avg_pq_proxy": 1.5747636367468145,
+    "avg_cross_camera_consistency": 0.93,
+    "avg_trajectory_adherence": 0.9600000000000001
+  },
+  "baseline_submission_sha256": "26119a957a37123db3f7dac5a74fab50efb7051c8e7312f1cad1c384343ef10e",
+  "baseline_submission_intact": true,
+  "knn_self_exclusion_verified": true,
+  "official_val_exclusion_verified": true,
+  "internal_training_exclusions": [
+    "0000406",
+    "0000407"
+  ],
+  "step_logs": [
+    {
+      "step": 1,
+      "scenario_id": "0000400",
+      "target_camera": "front",
+      "loss": 1.003321886062622,
+      "forward_time_s": 0.07478809356689453,
+      "backward_time_s": 4.080183029174805,
+      "optimizer_time_s": 0.13665294647216797,
+      "total_step_time_s": 9.867835760116577,
+      "adapter_grad_norm": 0.00314543885178864,
+      "conditioner_grad_norm": 0.00019974142196588218,
+      "peak_allocated_gb": 0.0,
+      "peak_reserved_gb": 0.0
+    },
+    {
+      "step": 2,
+      "scenario_id": "0000400",
+      "target_camera": "front_left",
+      "loss": 1.0008952617645264,
+      "forward_time_s": 0.07552623748779297,
+      "backward_time_s": 4.340087175369263,
+      "optimizer_time_s": 0.1775069236755371,
+      "total_step_time_s": 10.405750751495361,
+      "adapter_grad_norm": 0.0032194002997130156,
+      "conditioner_grad_norm": 0.00021619940525852144,
+      "peak_allocated_gb": 0.0,
+      "peak_reserved_gb": 0.0
+    },
+    {
+      "step": 3,
+      "scenario_id": "0000400",
+      "target_camera": "front_right",
+      "loss": 1.002867341041565,
+      "forward_time_s": 0.09392571449279785,
+      "backward_time_s": 4.214732885360718,
+      "optimizer_time_s": 0.14714980125427246,
+      "total_step_time_s": 10.304590702056885,
+      "adapter_grad_norm": 0.0024247984401881695,
+      "conditioner_grad_norm": 0.00025172735331580043,
+      "peak_allocated_gb": 0.0,
+      "peak_reserved_gb": 0.0
+    },
+    {
+      "step": 4,
+      "scenario_id": "0000400",
+      "target_camera": "rear",
+      "loss": 1.00063955783844,
+      "forward_time_s": 0.10245895385742188,
+      "backward_time_s": 4.241168260574341,
+      "optimizer_time_s": 0.12562990188598633,
+      "total_step_time_s": 10.208808898925781,
+      "adapter_grad_norm": 0.0029310269746929407,
+      "conditioner_grad_norm": 0.00026252694078721106,
+      "peak_allocated_gb": 0.0,
+      "peak_reserved_gb": 0.0
+    },
+    {
+      "step": 5,
+      "scenario_id": "0000400",
+      "target_camera": "rear_left",
+      "loss": 1.000758409500122,
+      "forward_time_s": 0.07070016860961914,
+      "backward_time_s": 4.410644054412842,
+      "optimizer_time_s": 0.14695310592651367,
+      "total_step_time_s": 10.397083282470703,
+      "adapter_grad_norm": 0.0012710316805168986,
+      "conditioner_grad_norm": 0.00019546394469216466,
+      "peak_allocated_gb": 0.0,
+      "peak_reserved_gb": 0.0
+    },
+    {
+      "step": 6,
+      "scenario_id": "0000400",
+      "target_camera": "rear_right",
+      "loss": 1.0032755136489868,
+      "forward_time_s": 0.0801699161529541,
+      "backward_time_s": 4.482004165649414,
+      "optimizer_time_s": 0.13237309455871582,
+      "total_step_time_s": 10.838046073913574,
+      "adapter_grad_norm": 0.0025923768989741802,
+      "conditioner_grad_norm": 0.00026405666721984744,
+      "peak_allocated_gb": 0.0,
+      "peak_reserved_gb": 0.0
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "created_at": "2026-11-17T14:50:02.626313+00:00",
+  "dataset_version": "KITScenes-LongTail Phase 5.2 Official Validation",
+  "canonical_camera_order": [
+    "front",
+    "front_left",
+    "front_right",
+    "rear",
+    "rear_left",
+    "rear_right"
+  ],
+  "scenario_count": 1,
+  "scenarios": [
+    {
+      "scenario_id": "0000900",
+      "split": "val",
+      "cameras": [
+        "front",
+        "front_left",
+        "front_right",
+        "rear",
+        "rear_left",
+        "rear_right"
+      ],
+      "driving_instruction": "drive straight on",
+      "scenario_type": "6 snow & wintry mix",
+      "knn_method": "knn_retrieval_with_cv_blend",
+      "knn_retrieved_donors": [
+        "0000868",
+        "0000560",
+        "0000894",
+        "0000445",
+        "0000454"
+      ],
+      "multicam_bundle_path": "data/val_latents/0000900_multicam.pt",
+      "multicam_bundle_sha256": "STAGED_FOR_GPU_PIPELINE",
+      "image_hashes": {
+        "front": "4c63a6dae4b741b479103f82bc9bdccc76aa7d8f873d1a081f4cd317efe5db23",
+        "front_left": "e3e072e1f9187d1f45a0ac83d62ff545a55e212dbc28469dc4c3893d11e8fe88",
+        "front_right": "e2c159da01d40ceef0216ca6a49e83e6cabd3db5170eb5d559a5f0d451a2cdd3",
+        "rear": "0a98b6b1df5db9030ca1ee7ea12b7f380ba5a9bbf84a01abb1cde784889fd783",
+        "rear_left": "8973ed6a52a346834f1e04005fc7fe91bd8487081822088a5df57d798c090c9c",
+        "rear_right": "3c76976a122060e6134650c9ee1fde56f306f25e7cc2cd8718fad85873d8eb0e"
+      },
+      "video_hashes": {
+        "front": "98d43b368f47b359fe5634585bd9e4f6e8944e802cc253132fc0be078a609e3b",
+        "front_left": "0f021c5d7daeefcbe7a31b37aeb659fbb60c30a2a9fc3016bd6c1fc8a577fe9f",
+        "front_right": "1f51ca125a347a82b5a983d58365d4fa8369c89d95d8415962afd3692e1fa178",
+        "rear": "bd16c3659bbd46b12676659c8b7436d7dbfede854f19e804d6193ed54e6f0897",
+        "rear_left": "412d93eebd8693b4e1d9117d00c7ed917cf27689931a4be36935961291f71755",
+        "rear_right": "70299fe819fa1d68b789a8e90e0013c6be201d55dd9af78c09c7763d9a13f67b"
+      },
+      "latent_hashes": {
+        "front": "STAGED_FOR_GPU_PIPELINE",
+        "front_left": "STAGED_FOR_GPU_PIPELINE",
+        "front_right": "STAGED_FOR_GPU_PIPELINE",
+        "rear": "STAGED_FOR_GPU_PIPELINE",
+        "rear_left": "STAGED_FOR_GPU_PIPELINE",
+        "rear_right": "STAGED_FOR_GPU_PIPELINE"
+      }
+    }
+  ]
+}

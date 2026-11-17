@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-11-17T14:50:02.626387+00:00",
+  "status": "ALL_SIX_CAMERA_ASSETS_VERIFIED_GENUINE",
+  "canonical_camera_order": [
+    "front",
+    "front_left",
+    "front_right",
+    "rear",
+    "rear_left",
+    "rear_right"
+  ],
+  "train_scenario_count": 5,
+  "val_scenario_count": 1,
+  "total_scenarios_verified": 6,
+  "total_camera_streams": 36,
+  "resolution_verified": "876x568",
+  "latent_shape_verified": "[1, 25, 4, 72, 128]",
+  "clip_dim_verified": "[1, 1, 1024]",
+  "knn_self_exclusion_verified": true,
+  "official_val_exclusion_verified": true,
+  "train_scenarios": [
+    "0000400",
+    "0000401",
+    "0000402",
+    "0000403",
+    "0000404"
+  ],
+  "val_scenarios": [
+    "0000900"
+  ],
+  "internal_training_exclusions": [
+    "0000406",
+    "0000407"
+  ]
+}

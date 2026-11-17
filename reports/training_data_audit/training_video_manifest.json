@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-11-15 10:35:39 UTC",
-  "total_sequences": 8,
+  "timestamp": "2026-11-17 14:34:16 UTC",
+  "total_sequences": 6,
   "records": [
     {
       "scenario_id": "0000400",
@@ -19,114 +19,82 @@
       "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
     },
     {
-      "scenario_id": "0000401",
-      "camera": "front",
+      "scenario_id": "0000400",
+      "camera": "front_left",
       "num_frames": 25,
       "fps": 5.0,
       "resolution": [
         876,
         568
       ],
-      "initial_rgb_path": "data/train_observed_t0/0000401/front.jpg",
-      "initial_rgb_sha256": "22a54f8607884c14dbb0b4cdef0d4fa520a52ac3810518f3485e505c6fe7c259",
-      "future_video_mp4_path": "data/train_future_videos/0000401/front.mp4",
-      "future_video_sha256": "8f19304700943a802f91e3d79eea45a29b6344d44c3e5a24ce73cc02ef6a717f",
+      "initial_rgb_path": "data/train_observed_t0/0000400/front_left.jpg",
+      "initial_rgb_sha256": "446144e2c8e7d6d319450001562e6ab5d485a3ba6c3128c286ffcd9dfd290744",
+      "future_video_mp4_path": "data/train_future_videos/0000400/front_left.mp4",
+      "future_video_sha256": "65856e581bd3c0c51746e560cd77b3c5704125355e7666166219622bfedad661",
       "status": "VERIFIED_GENUINE",
       "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
     },
     {
-      "scenario_id": "0000402",
-      "camera": "front",
+      "scenario_id": "0000400",
+      "camera": "front_right",
       "num_frames": 25,
       "fps": 5.0,
       "resolution": [
         876,
         568
       ],
-      "initial_rgb_path": "data/train_observed_t0/0000402/front.jpg",
-      "initial_rgb_sha256": "9060ea5be82a04c0634f40b89688c4259a13452c3e3b95b38583e5bc78c811f7",
-      "future_video_mp4_path": "data/train_future_videos/0000402/front.mp4",
-      "future_video_sha256": "950d2da44b239ff1cd1d2870fc91835e44f9ad91d91593fa3de5850ea283fbba",
+      "initial_rgb_path": "data/train_observed_t0/0000400/front_right.jpg",
+      "initial_rgb_sha256": "b8599ebbc1c4075fdf581072447a363f5bd2fc03761b009a8416029a2cd39b5a",
+      "future_video_mp4_path": "data/train_future_videos/0000400/front_right.mp4",
+      "future_video_sha256": "f01d0c37fc2d6be504af95335d8e2ae98ba6d6f84eb88155b12645a0fa64d430",
       "status": "VERIFIED_GENUINE",
       "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
     },
     {
-      "scenario_id": "0000403",
-      "camera": "front",
+      "scenario_id": "0000400",
+      "camera": "rear",
       "num_frames": 25,
       "fps": 5.0,
       "resolution": [
         876,
         568
       ],
-      "initial_rgb_path": "data/train_observed_t0/0000403/front.jpg",
-      "initial_rgb_sha256": "5c8a9908f8eb5c9098b02d97e65849a3948b156be23764c571b248adcae6cb5f",
-      "future_video_mp4_path": "data/train_future_videos/0000403/front.mp4",
-      "future_video_sha256": "055d8dbcc91ebe1da7559e4efc9dc0dc5a11c3ee7d10cacb19318199000e95ff",
+      "initial_rgb_path": "data/train_observed_t0/0000400/rear.jpg",
+      "initial_rgb_sha256": "d6504ac831a53ea7a1260675eb4f835519117be4ecbb7eae6eed4db66bbd16b4",
+      "future_video_mp4_path": "data/train_future_videos/0000400/rear.mp4",
+      "future_video_sha256": "2058d186c305c435de343bbdaaca9144bbe434d84e295a34f2f2ab8ef7f271ba",
       "status": "VERIFIED_GENUINE",
       "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
     },
     {
-      "scenario_id": "0000404",
-      "camera": "front",
+      "scenario_id": "0000400",
+      "camera": "rear_left",
       "num_frames": 25,
       "fps": 5.0,
       "resolution": [
         876,
         568
       ],
-      "initial_rgb_path": "data/train_observed_t0/0000404/front.jpg",
-      "initial_rgb_sha256": "331c0952f1c392b531d15f4557ca900b7a225e03970e8a2b157975317c2d4f0f",
-      "future_video_mp4_path": "data/train_future_videos/0000404/front.mp4",
-      "future_video_sha256": "9c1de71ad6f5b8fa65f399d38e069769f3446eb86ed0d139d24a76f3cffccfa6",
+      "initial_rgb_path": "data/train_observed_t0/0000400/rear_left.jpg",
+      "initial_rgb_sha256": "01d70d0ba2b6426e3adab604c592e48be732ded464eecef1ce795673126ac902",
+      "future_video_mp4_path": "data/train_future_videos/0000400/rear_left.mp4",
+      "future_video_sha256": "cb082aa1c13425c64a08bc24da456958964784def676efc021a70e2ef3a3db1f",
       "status": "VERIFIED_GENUINE",
       "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
     },
     {
-      "scenario_id": "0000405",
-      "camera": "front",
+      "scenario_id": "0000400",
+      "camera": "rear_right",
       "num_frames": 25,
       "fps": 5.0,
       "resolution": [
         876,
         568
       ],
-      "initial_rgb_path": "data/train_observed_t0/0000405/front.jpg",
-      "initial_rgb_sha256": "d1b4f8dfd3027346c8fc296b9c3db0843d18f88f830b898b868a52f23c70f5b0",
-      "future_video_mp4_path": "data/train_future_videos/0000405/front.mp4",
-      "future_video_sha256": "f11fb87a6d022d408aa3822405efafc46b830cd9c059465b994ddd16a7792d50",
-      "status": "VERIFIED_GENUINE",
-      "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
-    },
-    {
-      "scenario_id": "0000406",
-      "camera": "front",
-      "num_frames": 25,
-      "fps": 5.0,
-      "resolution": [
-        876,
-        568
-      ],
-      "initial_rgb_path": "data/train_observed_t0/0000406/front.jpg",
-      "initial_rgb_sha256": "eaf22f5a5336ad1a7c21547c88b289dde3ae6a351afa86f67545b0a70e34ea0c",
-      "future_video_mp4_path": "data/train_future_videos/0000406/front.mp4",
-      "future_video_sha256": "78111f3d0b8ba8582711531c026da25a165d098ef6aa5f3064951e884edfde68",
-      "status": "VERIFIED_GENUINE",
-      "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
-    },
-    {
-      "scenario_id": "0000407",
-      "camera": "front",
-      "num_frames": 25,
-      "fps": 5.0,
-      "resolution": [
-        876,
-        568
-      ],
-      "initial_rgb_path": "data/train_observed_t0/0000407/front.jpg",
-      "initial_rgb_sha256": "b3a33c49e896854b845932c18333cbd4345ea97463d7662ed87f8c8ac8b80a3f",
-      "future_video_mp4_path": "data/train_future_videos/0000407/front.mp4",
-      "future_video_sha256": "747b8adf97987d1504d485fef0a2b293ee9f25f04c07fad74a6bdaffe0f4c5f0",
+      "initial_rgb_path": "data/train_observed_t0/0000400/rear_right.jpg",
+      "initial_rgb_sha256": "fe1ef49cf11ea31af6574a9eb79770e01500c09888543735a2262285f69ab790",
+      "future_video_mp4_path": "data/train_future_videos/0000400/rear_right.mp4",
+      "future_video_sha256": "2f5973c3033e8abf5962114cf67d1d34c7c816750a5f9daee8c72419ed87d1c8",
       "status": "VERIFIED_GENUINE",
       "provenance": "Hugging Face datasets/KIT-MRT/KITScenes-LongTail (train_future-00000-of-00001.parquet)"
     }
