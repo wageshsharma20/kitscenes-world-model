@@ -267,7 +267,8 @@ class BroadcastAttnProcessor2_0:
     ) -> torch.Tensor:
         import torch.nn.functional as F
 
-        residual = hidden_states
+        has_residual = getattr(attn, "residual_connection", False)
+        residual = hidden_states if has_residual else None
         if getattr(attn, "spatial_norm", None) is not None:
             hidden_states = attn.spatial_norm(hidden_states, temb)
 
@@ -282,10 +283,11 @@ class BroadcastAttnProcessor2_0:
             hidden_states = attn.group_norm(hidden_states.transpose(1, 2)).transpose(1, 2)
 
         query = attn.to_q(hidden_states)
+        del hidden_states
 
         is_cross = encoder_hidden_states is not None
         if not is_cross:
-            encoder_hidden_states = hidden_states
+            encoder_hidden_states = query
         elif getattr(attn, "norm_cross", False):
             encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
 
@@ -333,12 +335,14 @@ class BroadcastAttnProcessor2_0:
                 if rescale_factor != 1.0:
                     out_c = out_c / rescale_factor
                 hidden_states[i : i + chunk_size] = out_c
+            del query, key, value
         else:
             hidden_states = F.scaled_dot_product_attention(
                 query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
             )
+            del query, key, value
             hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
-            hidden_states = hidden_states.to(query.dtype)
+            hidden_states = hidden_states.to(attn.to_out[0].weight.dtype)
             hidden_states = attn.to_out[0](hidden_states)
             hidden_states = attn.to_out[1](hidden_states)
             rescale_factor = getattr(attn, "rescale_output_factor", 1.0)
@@ -348,7 +352,7 @@ class BroadcastAttnProcessor2_0:
         if input_ndim == 4:
             hidden_states = hidden_states.transpose(-1, -2).reshape(batch_size, channel, height, width)
 
-        if getattr(attn, "residual_connection", False):
+        if has_residual and residual is not None:
             hidden_states = hidden_states + residual
 
         return hidden_states
@@ -427,6 +431,8 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 **c_kwargs,
             )
             hidden_states = attn_output + hidden_states
+            del norm_hidden_states, attn_output
+
             if hidden_states.ndim == 4:
                 hidden_states = hidden_states.squeeze(1)
 
@@ -448,6 +454,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                     **c_kwargs,
                 )
                 hidden_states = attn_output + hidden_states
+                del norm_hidden_states, attn_output
 
             # 4. Feed-forward (Micro-chunked along batch dim to eliminate 282MB norm3 + 1.1GB ff peak)
             if torch.cuda.is_available():
@@ -467,6 +474,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 ff_output = self.ff(norm_hidden_states)
 
             hidden_states = ff_output + hidden_states
+            del ff_output
             if hidden_states.ndim == 4:
                 hidden_states = hidden_states.squeeze(1)
 
@@ -509,6 +517,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 hidden_states = residual + ff_in_out
             else:
                 hidden_states = ff_in_out
+            del residual, ff_in_out
 
             # 1. Self-Attention
             if torch.cuda.is_available():
@@ -523,6 +532,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
             attn_output = self.attn1(norm_hidden_states, encoder_hidden_states=None)
             hidden_states = attn_output + hidden_states
+            del norm_hidden_states, attn_output
 
             # 2. Cross-Attention
             if self.attn2 is not None:
@@ -538,6 +548,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
                 attn_output = self.attn2(norm_hidden_states, encoder_hidden_states=encoder_hidden_states)
                 hidden_states = attn_output + hidden_states
+                del norm_hidden_states, attn_output
 
             # 3. Feed-forward (Micro-chunked along M dim to eliminate 282MB norm3 + 1.1GB ff peak)
             if torch.cuda.is_available():
@@ -554,6 +565,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 hidden_states = hidden_states + ff_out
             else:
                 hidden_states = ff_out
+            del ff_out
 
             cur_channels = hidden_states.shape[-1]
             hidden_states = hidden_states[None, :].reshape(batch_size, seq_length, num_frames, cur_channels)
@@ -752,6 +764,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                         x_temporal=h_temp,
                         image_only_indicator=image_only_indicator,
                     )
+                    del h_spat, h_temp
                 else:
                     h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
                     h_temp = temporal_block(
@@ -764,6 +777,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                         x_temporal=h_temp,
                         image_only_indicator=image_only_indicator,
                     )
+                    del h_spat, h_temp
 
             hidden_states = self.proj_out(hidden_states)
             hidden_states = (
