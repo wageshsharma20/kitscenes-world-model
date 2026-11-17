@@ -306,7 +306,7 @@ class BroadcastAttnProcessor2_0:
             key = attn.norm_k(key)
 
         if batch_size > 1:
-            chunk_size = 1 if sequence_length > 25 else 2
+            chunk_size = 1
             hidden_states = torch.empty(
                 batch_size, attn.heads, sequence_length, head_dim, device=query.device, dtype=query.dtype
             )
@@ -583,6 +583,18 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
         TransformerSpatioTemporalModel.forward = custom_spatio_temporal_forward
         print("[✓] Deep spatio-temporal transformer gradient checkpointing active")
         print("[✓] Deep UNet block-level gradient checkpointing active")
+
+        def _empty_cache_hook(m, gi, go):
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+        for b in getattr(unet, "down_blocks", []):
+            b.register_full_backward_hook(_empty_cache_hook)
+        if hasattr(unet, "mid_block") and unet.mid_block is not None:
+            unet.mid_block.register_full_backward_hook(_empty_cache_hook)
+        for b in getattr(unet, "up_blocks", []):
+            b.register_full_backward_hook(_empty_cache_hook)
+        print("[✓] Block-level backward CUDA cache flush hooks active")
     except Exception as e:
         print(f"[!] Note: Deep attention checkpointing patch skipped ({e})")
 
