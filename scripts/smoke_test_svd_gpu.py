@@ -415,6 +415,42 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
         torch.nn.Linear.forward = safe_linear_forward
 
+        orig_layernorm_forward = torch.nn.LayerNorm.forward
+
+        def safe_layernorm_forward(self, input):
+            try:
+                return orig_layernorm_forward(self, input)
+            except torch.OutOfMemoryError:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                return orig_layernorm_forward(self, input)
+
+        torch.nn.LayerNorm.forward = safe_layernorm_forward
+
+        orig_groupnorm_forward = torch.nn.GroupNorm.forward
+
+        def safe_groupnorm_forward(self, input):
+            try:
+                return orig_groupnorm_forward(self, input)
+            except torch.OutOfMemoryError:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                return orig_groupnorm_forward(self, input)
+
+        torch.nn.GroupNorm.forward = safe_groupnorm_forward
+
+        orig_conv2d_forward = torch.nn.Conv2d.forward
+
+        def safe_conv2d_forward(self, input):
+            try:
+                return orig_conv2d_forward(self, input)
+            except torch.OutOfMemoryError:
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                return orig_conv2d_forward(self, input)
+
+        torch.nn.Conv2d.forward = safe_conv2d_forward
+
         orig_geglu_forward = GEGLU.forward
 
         def safe_geglu_forward(self, hidden_states, *args, **kwargs):
@@ -438,7 +474,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 return orig_ff_forward(self, hidden_states, *args, **kwargs)
 
         FeedForward.forward = safe_ff_forward
-        print("[✓] Safe OOM-recovery wrappers installed on Linear, GEGLU, and FeedForward")
+        print("[✓] Safe OOM-recovery wrappers installed on Linear, LayerNorm, GroupNorm, Conv2d, GEGLU, and FeedForward")
 
         # Install broadcast attention processor to eliminate ~800MB/layer duplicate projection memory
         for m in unet.modules():
@@ -575,21 +611,25 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             hidden_states = hidden_states.reshape(batch_size * seq_length, num_frames, channels)
 
             M = hidden_states.shape[0]
-            chunk_size = 2
+            chunk_size = 4
 
             # 0. Input Norm & FeedForward
             residual = hidden_states
             if M > chunk_size:
                 ff_in_out = torch.empty_like(hidden_states)
                 for i in range(0, M, chunk_size):
-                    if i > 0 and (i // chunk_size) % 64 == 0 and torch.cuda.is_available():
+                    if i > 0 and (i // chunk_size) % 32 == 0 and torch.cuda.is_available():
                         torch.cuda.empty_cache()
+                    h_chunk = hidden_states[i : i + chunk_size]
                     try:
-                        ff_in_out[i : i + chunk_size] = self.ff_in(self.norm_in(hidden_states[i : i + chunk_size]))
+                        n_chunk = self.norm_in(h_chunk)
+                        ff_chunk = self.ff_in(n_chunk)
                     except torch.OutOfMemoryError:
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
-                        ff_in_out[i : i + chunk_size] = self.ff_in(self.norm_in(hidden_states[i : i + chunk_size]))
+                        n_chunk = self.norm_in(h_chunk)
+                        ff_chunk = self.ff_in(n_chunk)
+                    ff_in_out[i : i + chunk_size] = ff_chunk
             else:
                 try:
                     ff_in_out = self.ff_in(self.norm_in(hidden_states))
@@ -642,14 +682,18 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             if M > chunk_size:
                 ff_out = torch.empty_like(hidden_states)
                 for i in range(0, M, chunk_size):
-                    if i > 0 and (i // chunk_size) % 64 == 0 and torch.cuda.is_available():
+                    if i > 0 and (i // chunk_size) % 32 == 0 and torch.cuda.is_available():
                         torch.cuda.empty_cache()
+                    h_chunk = hidden_states[i : i + chunk_size]
                     try:
-                        ff_out[i : i + chunk_size] = self.ff(self.norm3(hidden_states[i : i + chunk_size]))
+                        n_chunk = self.norm3(h_chunk)
+                        ff_chunk = self.ff(n_chunk)
                     except torch.OutOfMemoryError:
                         if torch.cuda.is_available():
                             torch.cuda.empty_cache()
-                        ff_out[i : i + chunk_size] = self.ff(self.norm3(hidden_states[i : i + chunk_size]))
+                        n_chunk = self.norm3(h_chunk)
+                        ff_chunk = self.ff(n_chunk)
+                    ff_out[i : i + chunk_size] = ff_chunk
             else:
                 try:
                     ff_out = self.ff(self.norm3(hidden_states))
