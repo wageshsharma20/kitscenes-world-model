@@ -651,7 +651,14 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
 
             t_chunk_size = 144
             for block, temporal_block in zip(self.transformer_blocks, self.temporal_transformer_blocks):
-                h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
+                if torch.is_grad_enabled() and getattr(self, "gradient_checkpointing", True):
+                    def _run_spat(b, h, enc):
+                        return b(h, encoder_hidden_states=enc)
+                    h_spat = torch.utils.checkpoint.checkpoint(
+                        _run_spat, block, hidden_states, encoder_hidden_states, use_reentrant=False
+                    )
+                else:
+                    h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
                 seq_len = h_spat.shape[1]
                 if seq_len > t_chunk_size:
                     mixed_chunks = []
