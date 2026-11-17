@@ -569,16 +569,33 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
             TransformerTemporalModelOutput,
         )
 
-        def _run_temporal_slice(t_block, s_in, n_frames, ctx):
+        def _run_temporal_slice(t_block, s_in, num_frames=None, encoder_hidden_states=None, **kwargs):
             try:
-                return t_block(s_in, num_frames=n_frames, encoder_hidden_states=ctx)
+                return t_block(
+                    s_in,
+                    num_frames=num_frames,
+                    encoder_hidden_states=encoder_hidden_states,
+                    **kwargs,
+                )
             except torch.OutOfMemoryError:
                 if torch.cuda.is_available():
                     torch.cuda.empty_cache()
                 if s_in.shape[1] > 1:
                     mid = s_in.shape[1] // 2
-                    out1 = _run_temporal_slice(t_block, s_in[:, :mid, :], n_frames, ctx)
-                    out2 = _run_temporal_slice(t_block, s_in[:, mid:, :], n_frames, ctx)
+                    out1 = _run_temporal_slice(
+                        t_block,
+                        s_in[:, :mid, :],
+                        num_frames=num_frames,
+                        encoder_hidden_states=encoder_hidden_states,
+                        **kwargs,
+                    )
+                    out2 = _run_temporal_slice(
+                        t_block,
+                        s_in[:, mid:, :],
+                        num_frames=num_frames,
+                        encoder_hidden_states=encoder_hidden_states,
+                        **kwargs,
+                    )
                     res = torch.cat([out1, out2], dim=1)
                     del out1, out2
                     return res
@@ -628,7 +645,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                             temporal_block,
                             h_slice,
                             num_frames=num_frames,
-                            ctx=time_context,
+                            encoder_hidden_states=time_context,
                         )
                         mixed_slice = self.time_mixer(
                             x_spatial=h_spat_slice,
@@ -650,7 +667,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                         temporal_block,
                         h_in,
                         num_frames=num_frames,
-                        ctx=time_context,
+                        encoder_hidden_states=time_context,
                     )
                     hidden_states = self.time_mixer(
                         x_spatial=h_spat,
