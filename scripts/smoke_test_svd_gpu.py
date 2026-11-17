@@ -287,7 +287,12 @@ class BroadcastAttnProcessor2_0:
         if getattr(attn, "group_norm", None) is not None:
             hidden_states = attn.group_norm(hidden_states.transpose(1, 2)).transpose(1, 2)
 
-        query = attn.to_q(hidden_states)
+        try:
+            query = attn.to_q(hidden_states)
+        except torch.OutOfMemoryError:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            query = attn.to_q(hidden_states)
         del hidden_states
 
         is_cross = encoder_hidden_states is not None
@@ -297,8 +302,14 @@ class BroadcastAttnProcessor2_0:
             encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
 
         enc_batch = encoder_hidden_states.shape[0]
-        key = attn.to_k(encoder_hidden_states)
-        value = attn.to_v(encoder_hidden_states)
+        try:
+            key = attn.to_k(encoder_hidden_states)
+            value = attn.to_v(encoder_hidden_states)
+        except torch.OutOfMemoryError:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            key = attn.to_k(encoder_hidden_states)
+            value = attn.to_v(encoder_hidden_states)
 
         inner_dim = key.shape[-1]
         head_dim = inner_dim // attn.heads
@@ -313,15 +324,28 @@ class BroadcastAttnProcessor2_0:
             key = attn.norm_k(key)
 
         # PyTorch SDPA natively broadcasts when enc_batch == 1 and batch_size > 1
-        hidden_states = F.scaled_dot_product_attention(
-            query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
-        )
+        try:
+            hidden_states = F.scaled_dot_product_attention(
+                query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+            )
+        except torch.OutOfMemoryError:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            hidden_states = F.scaled_dot_product_attention(
+                query, key, value, attn_mask=attention_mask, dropout_p=0.0, is_causal=False
+            )
         del query, key, value
 
         hidden_states = hidden_states.transpose(1, 2).reshape(batch_size, -1, attn.heads * head_dim)
         hidden_states = hidden_states.to(attn.to_out[0].weight.dtype)
-        hidden_states = attn.to_out[0](hidden_states)
-        hidden_states = attn.to_out[1](hidden_states)
+        try:
+            hidden_states = attn.to_out[0](hidden_states)
+            hidden_states = attn.to_out[1](hidden_states)
+        except torch.OutOfMemoryError:
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            hidden_states = attn.to_out[0](hidden_states)
+            hidden_states = attn.to_out[1](hidden_states)
         rescale_factor = getattr(attn, "rescale_output_factor", 1.0)
         if rescale_factor != 1.0:
             hidden_states = hidden_states / rescale_factor
@@ -531,7 +555,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                 h_spat = block(hidden_states, encoder_hidden_states=encoder_hidden_states)
                 h_in = h_spat + emb
                 seq_len = h_in.shape[1]
-                t_chunk_size = 2304
+                t_chunk_size = 576
                 if seq_len > t_chunk_size:
                     t_chunks = []
                     for i in range(0, seq_len, t_chunk_size):
@@ -544,6 +568,7 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
                             )
                         )
                     h_temp = torch.cat(t_chunks, dim=1)
+                    del t_chunks
                 else:
                     h_temp = temporal_block(
                         h_in,
