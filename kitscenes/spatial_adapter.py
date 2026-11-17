@@ -444,9 +444,6 @@ def create_default_euler_scheduler() -> Any:
             sigma_min=0.002,
             sigma_max=700.0,
             interpolation_type="linear",
-            clip_sample=False,
-            set_alpha_to_one=False,
-            skip_prk_steps=True,
             final_sigmas_type="zero",
             rescale_betas_zero_snr=False,
         )
