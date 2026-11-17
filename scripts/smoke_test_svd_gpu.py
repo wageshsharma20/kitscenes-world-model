@@ -570,6 +570,13 @@ def apply_deep_gradient_checkpointing(unet: torch.nn.Module) -> None:
     except Exception as e:
         print(f"[!] Note: Deep attention checkpointing patch skipped ({e})")
 
+    if hasattr(unet, "enable_forward_chunking"):
+        try:
+            unet.enable_forward_chunking(chunk_size=5, dim=0)
+            print("[✓] UNet 5-frame feed-forward chunking enabled (chunk_size=5, dim=0)")
+        except Exception as e:
+            print(f"[!] Note: Forward chunking skipped ({e})")
+
 
 
 
