@@ -1,5 +1,8 @@
 # Phase 5.2: CSSC Multi-Camera Learning Pilot Execution Report
 
+> [!WARNING]
+> **AUDIT NOTICE (2026-11-18):** Section 3 validation metrics below evaluated direct VAE latent reconstruction of ground-truth future latents rather than genuine diffusion model future prediction. They are **invalidated as evidence of predictive world-model performance**. See full audit in [Phase 5.2 Validation Audit & Correction Report](reports/phase5_2_validation_audit_correction.md). Section 1 and Section 2 (six-camera data extraction, 30-update training, parameter updates, kNN donor isolation) remain verified engineering milestones. Genuine predictive inference and controlled evaluation are implemented in **Phase 5.3**.
+
 - **Date/Time (UTC):** 2026-11-17T19:51:40.704619+00:00
 - **Status:** `✅ PHASE_5_2_MULTICAMERA_PILOT_PASSED`
 - **Device:** `cuda:0` (Mock: `False`)
@@ -36,9 +39,12 @@ The CSSC conditioner receives all 6 genuine initial camera embeddings $[1, 6, 10
 
 ---
 
-## 3. Held-Out Validation Evaluation (`scenario 0000900`: Snow & Wintry Mix)
+## 3. Held-Out Validation Evaluation (`scenario 0000900`: Snow & Wintry Mix) [INVALIDATED - RECONSTRUCTION ONLY]
 
-Controlled comparison on official held-out validation scenario `0000900` across all 6 camera views:
+> [!CAUTION]
+> **INVALIDATED DATA NOTICE:** The table below documents VAE reconstruction of known ground-truth future latents (`val_lat = all_scenario_latents[val_sid][cam]`). It does **not** evaluate diffusion prediction. These numbers must not be cited as predictive quality. See [Phase 5.2 Validation Audit & Correction Report](reports/phase5_2_validation_audit_correction.md) for details. Genuine predictive evaluation is conducted in Phase 5.3.
+
+VAE Reconstruction Comparison on `0000900` across all 6 camera views:
 
 | Camera View | PSNR (dB) | SSIM | PQ Proxy | Cross-Camera Consistency | Trajectory Adherence | Preview Artifact |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |

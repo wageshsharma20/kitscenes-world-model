@@ -533,5 +533,9 @@
       "peak_allocated_gb": 3.3264379501342773,
       "peak_reserved_gb": 3.4375
     }
-  ]
+  ],
+  "validation_audit": {
+    "status": "INVALIDATED_RECONSTRUCTION_ONLY",
+    "audit_note": "Decoded ground-truth future latents directly without running diffusion UNet or adapters. Invalidated for predictive performance. See reports/phase5_2_validation_audit_correction.md"
+  }
 }
