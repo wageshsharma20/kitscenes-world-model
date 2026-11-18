@@ -29,7 +29,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 def test_baseline_submission_archive_strictly_unmodified():
     """Verify that the official baseline submission zip remains byte-identical."""
-    is_intact, current_hash = validate_baseline_archive()
+    is_intact, current_hash, meta = validate_baseline_archive(strict=True)
+    assert meta["exists"] is True
     assert is_intact, f"Baseline archive altered! Current hash: {current_hash}"
     assert current_hash == EXPECTED_BASELINE_SHA256
 
@@ -133,8 +134,14 @@ def test_trajectory_adherence_from_flow():
     waypoints = np.zeros((25, 2))
     waypoints[:, 1] = np.linspace(0, 25, 25)  # straight line forward
 
-    adherence = compute_trajectory_adherence_from_flow(frames, waypoints)
-    assert 0.0 <= adherence <= 1.0
+    result = compute_trajectory_adherence_from_flow(frames, waypoints)
+    assert isinstance(result, dict)
+    assert "adherence" in result
+    assert "measurable" in result
+    if result["measurable"]:
+        assert 0.0 <= result["adherence"] <= 1.0
+    else:
+        assert result["adherence"] is None
 
 
 def test_checkpoint_loads_properly():

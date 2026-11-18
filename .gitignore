@@ -48,6 +48,7 @@ reports/*
 !reports/phase5_2_validation_audit_correction.md
 !reports/phase5_3_predictive_evaluation.md
 !reports/phase5_3_predictive_evaluation.json
+!reports/phase5_4*
 !reports/previews/
 !reports/previews/**
 .DS_Store

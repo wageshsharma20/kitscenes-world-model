@@ -74,13 +74,35 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def validate_baseline_archive() -> Tuple[bool, str]:
-    """Verify that the official baseline submission zip is strictly unchanged."""
-    if not BASELINE_SUBMISSION_PATH.exists():
-        # Remote runners without full dataset archive skip check
-        return True, EXPECTED_BASELINE_SHA256
+def validate_baseline_archive(strict: bool = False) -> Tuple[bool, str, Dict[str, Any]]:
+    """Verify that the official baseline submission zip exists and is strictly unchanged.
+    
+    A missing archive is treated as a hard failure.
+    Never returns the expected hash when the file does not exist.
+    """
+    exists = BASELINE_SUBMISSION_PATH.exists()
+    if not exists:
+        err_msg = f"ARCHIVE_MISSING: {BASELINE_SUBMISSION_PATH} does not exist on disk!"
+        if strict:
+            raise FileNotFoundError(err_msg)
+        return False, "ARCHIVE_MISSING_ON_DISK", {
+            "exists": False,
+            "path": str(BASELINE_SUBMISSION_PATH),
+            "expected_sha256": EXPECTED_BASELINE_SHA256,
+            "actual_sha256": None,
+            "intact": False,
+        }
+    
     actual_hash = sha256_file(BASELINE_SUBMISSION_PATH)
-    return (actual_hash == EXPECTED_BASELINE_SHA256), actual_hash
+    is_intact = (actual_hash == EXPECTED_BASELINE_SHA256)
+    return is_intact, actual_hash, {
+        "exists": True,
+        "path": str(BASELINE_SUBMISSION_PATH),
+        "expected_sha256": EXPECTED_BASELINE_SHA256,
+        "actual_sha256": actual_hash,
+        "intact": is_intact,
+        "size_bytes": BASELINE_SUBMISSION_PATH.stat().st_size,
+    }
 
 
 def adapt_aspect_ratio_to_svd(
@@ -171,12 +193,15 @@ def compute_video_ssim(pred: np.ndarray, gt: np.ndarray) -> float:
     return float(np.mean(scores))
 
 
-def compute_cross_camera_overlap_consistency(
+def compute_boundary_strip_correlation(
     camera_frames: Dict[str, np.ndarray],
-) -> float:
-    """Compute visual geometric consistency across overlapping camera view frustums.
+) -> Dict[str, Any]:
+    """Compute 2D boundary-strip Pearson normalized cross-correlation across adjacent camera pairs.
 
-    Adjacent camera pairs in KITScenes overlap:
+    DISCLAIMER: This is a 2D boundary pixel correlation heuristic across 15%-wide image edges,
+    NOT calibrated 3D geometric scene reprojection consistency.
+
+    Evaluates all 6 adjacent camera relationships:
     - (front, front_left)
     - (front, front_right)
     - (rear, rear_left)
@@ -189,19 +214,21 @@ def compute_cross_camera_overlap_consistency(
         ("front", "front_right"),
         ("rear", "rear_left"),
         ("rear", "rear_right"),
+        ("front_left", "rear_left"),
+        ("front_right", "rear_right"),
     ]
+    pairwise_scores: Dict[str, float] = {}
     overlap_scores = []
     w = spec.WIDTH
     strip = int(w * 0.15)  # 15% boundary overlap strip
 
     for c1, c2 in pairs:
+        pair_key = f"{c1}_to_{c2}"
         if c1 not in camera_frames or c2 not in camera_frames:
             continue
         v1 = camera_frames[c1]  # [25, 568, 876, 3]
         v2 = camera_frames[c2]
 
-        # In horizontal rig layout:
-        # front left edge overlaps with front_left right edge
         if c2.endswith("_left"):
             s1 = v1[:, :, :strip, :].astype(np.float32)
             s2 = v2[:, :, -strip:, :].astype(np.float32)
@@ -213,17 +240,42 @@ def compute_cross_camera_overlap_consistency(
         s1_norm = (s1 - s1.mean()) / (s1.std() + 1e-6)
         s2_norm = (s2 - s2.mean()) / (s2.std() + 1e-6)
         ncc = float(np.clip(np.mean(s1_norm * s2_norm), 0.0, 1.0))
+        pairwise_scores[pair_key] = round(ncc, 4)
         overlap_scores.append(ncc)
 
-    return float(np.mean(overlap_scores)) if overlap_scores else 0.0
+    mean_score = float(round(np.mean(overlap_scores), 4)) if overlap_scores else 0.0
+    return {
+        "boundary_strip_correlation": mean_score,
+        "pairwise_correlations": pairwise_scores,
+        "pair_count_evaluated": len(overlap_scores),
+        "is_calibrated_3d_geometry": False,
+    }
+
+
+def compute_cross_camera_overlap_consistency(
+    camera_frames: Dict[str, np.ndarray],
+) -> float:
+    """Backwards-compatibility wrapper returning the scalar boundary_strip_correlation."""
+    res = compute_boundary_strip_correlation(camera_frames)
+    return res["boundary_strip_correlation"]
 
 
 def compute_trajectory_adherence_from_flow(
     frames: np.ndarray, planned_waypoints: np.ndarray
-) -> float:
-    """Measure whether visual motion recovered from video matches planned waypoint headings."""
+) -> Dict[str, Any]:
+    """Measure whether visual motion recovered from video matches planned waypoint headings.
+    
+    Returns null/None when optical flow is unmeasurable or below motion threshold.
+    Never returns a silent 0.5 fallback as measured adherence.
+    """
     if len(frames) < 2 or len(planned_waypoints) < 2:
-        return 0.0
+        return {
+            "adherence": None,
+            "valid_flow_count": 0,
+            "planned_heading_rad": 0.0,
+            "recovered_flow_heading_rad": None,
+            "measurable": False,
+        }
 
     # Planned heading change between start and end
     wp_start = planned_waypoints[0]
@@ -244,12 +296,25 @@ def compute_trajectory_adherence_from_flow(
             flow_headings.append(math.atan2(-u, -v))
 
     if not flow_headings:
-        return 0.5
+        # Optical flow is unmeasurable: return explicit None, never fallback 0.5
+        return {
+            "adherence": None,
+            "valid_flow_count": 0,
+            "planned_heading_rad": round(plan_heading, 4),
+            "recovered_flow_heading_rad": None,
+            "measurable": False,
+        }
 
     mean_flow_heading = float(np.mean(flow_headings))
     heading_diff = abs(plan_heading - mean_flow_heading)
     adherence = max(0.0, 1.0 - (heading_diff / math.pi))
-    return float(adherence)
+    return {
+        "adherence": float(round(adherence, 4)),
+        "valid_flow_count": len(flow_headings),
+        "planned_heading_rad": round(plan_heading, 4),
+        "recovered_flow_heading_rad": round(mean_flow_heading, 4),
+        "measurable": True,
+    }
 
 
 def create_side_by_side_video(
@@ -441,11 +506,12 @@ def evaluate_cssc_checkpoint(
     print("=" * 80)
 
     # 1. Baseline submission integrity check (pre-inference)
-    base_intact, base_hash = validate_baseline_archive()
+    base_intact, base_hash, base_meta = validate_baseline_archive(strict=False)
     print(f"\n[*] Pre-Inference Baseline Submission Archive Integrity:")
+    print(f"  - Exists on disk: {base_meta['exists']}")
     print(f"  - SHA-256: {base_hash}")
     print(f"  - Intact: {base_intact}")
-    if not base_intact:
+    if base_meta["exists"] and not base_intact:
         raise RuntimeError(f"FATAL: Baseline submission archive corrupted before inference! Hash: {base_hash}")
 
     parsed_device = torch.device(device)
@@ -854,8 +920,10 @@ def evaluate_cssc_checkpoint(
                 "ssim_conditioned": round(ssim_cond, 4),
                 "ssim_delta": round(ssim_cond - ssim_base, 4),
                 "pixel_divergence_l1": round(divergence_l1, 2),
-                "adherence_baseline": round(adherence_base, 4),
-                "adherence_conditioned": round(adherence_cond, 4),
+                "adherence_baseline": adherence_base["adherence"],
+                "adherence_conditioned": adherence_cond["adherence"],
+                "adherence_baseline_details": adherence_base,
+                "adherence_conditioned_details": adherence_cond,
                 "baseline_mp4": str(baseline_renders[cam].relative_to(PROJECT_ROOT)),
                 "conditioned_mp4": str(conditioned_renders[cam].relative_to(PROJECT_ROOT)),
                 "side_by_side_preview": str((output_previews_dir / f"{sid}_{cam}_side_by_side.mp4").relative_to(PROJECT_ROOT)),
@@ -891,12 +959,22 @@ def evaluate_cssc_checkpoint(
             "mean_ssim_conditioned": round(mean_ssim_cond, 4),
             "ssim_net_improvement": round(mean_ssim_cond - mean_ssim_base, 4),
             "official_mms_score": round(float(mms_score), 2),
+            "mms_evaluates_video": False,  # Explicit: MMS measures planned waypoints, not generated pixels
+            "local_emc_approximation_baseline": round(float(emc_base_dict.get("local_emc_approximation", emc_base_dict["emc"])), 3),
+            "local_emc_approximation_conditioned": round(float(emc_cond_dict.get("local_emc_approximation", emc_cond_dict["emc"])), 3),
             "official_emc_baseline": round(float(emc_base_dict["emc"]), 3),
             "official_emc_conditioned": round(float(emc_cond_dict["emc"]), 3),
+            "is_official_emc": False,  # Local optical-flow approximation
+            "visual_naturalness_proxy_baseline": round(float(pq_base_dict["scenario_pq_proxy"]), 2),
+            "visual_naturalness_proxy_conditioned": round(float(pq_cond_dict["scenario_pq_proxy"]), 2),
             "pq_proxy_baseline": round(float(pq_base_dict["scenario_pq_proxy"]), 2),
             "pq_proxy_conditioned": round(float(pq_cond_dict["scenario_pq_proxy"]), 2),
+            "is_official_pq": False,  # Visual naturalness proxy, NOT Q-Align
+            "boundary_strip_correlation_baseline": round(overlap_base, 4),
+            "boundary_strip_correlation_conditioned": round(overlap_cond, 4),
             "overlap_consistency_baseline": round(overlap_base, 4),
             "overlap_consistency_conditioned": round(overlap_cond, 4),
+            "is_calibrated_3d_consistency": False,
             "peak_vram_measurements": peak_vram_measurements,
             "camera_evaluations": camera_evals,
         }
@@ -911,10 +989,11 @@ def evaluate_cssc_checkpoint(
         print(f"  PQ Proxy: Baseline={pq_base_dict['scenario_pq_proxy']:.2f} | Conditioned={pq_cond_dict['scenario_pq_proxy']:.2f}")
 
     # 7. Post-Inference Submission Archive Check
-    final_intact, final_hash = validate_baseline_archive()
+    final_intact, final_hash, final_meta = validate_baseline_archive(strict=False)
     evaluation_results["baseline_submission_sha256"] = final_hash
     evaluation_results["baseline_submission_intact"] = final_intact
-    if not final_intact:
+    evaluation_results["baseline_submission_meta"] = final_meta
+    if final_meta["exists"] and not final_intact:
         raise RuntimeError(f"FATAL: Baseline submission archive corrupted during evaluation! Hash: {final_hash}")
 
     # 8. Save Reports

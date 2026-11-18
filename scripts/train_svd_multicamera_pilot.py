@@ -92,12 +92,34 @@ def sha256_file(path: Path) -> str:
     return h.hexdigest()
 
 
-def validate_baseline_archive() -> Tuple[bool, str]:
-    """Verify that the official baseline submission zip is strictly unchanged."""
-    if not BASELINE_SUBMISSION_PATH.exists():
-        return True, EXPECTED_BASELINE_SHA256
+def validate_baseline_archive(strict: bool = False) -> Tuple[bool, str, Dict[str, Any]]:
+    """Verify that the official baseline submission zip exists and is strictly unchanged.
+    
+    A missing archive is treated as a hard failure.
+    Never returns the expected hash when the file does not exist.
+    """
+    exists = BASELINE_SUBMISSION_PATH.exists()
+    if not exists:
+        err_msg = f"ARCHIVE_MISSING: {BASELINE_SUBMISSION_PATH} does not exist on disk!"
+        if strict:
+            raise FileNotFoundError(err_msg)
+        return False, "ARCHIVE_MISSING_ON_DISK", {
+            "exists": False,
+            "path": str(BASELINE_SUBMISSION_PATH),
+            "expected_sha256": EXPECTED_BASELINE_SHA256,
+            "actual_sha256": None,
+            "intact": False,
+        }
     actual_hash = sha256_file(BASELINE_SUBMISSION_PATH)
-    return (actual_hash == EXPECTED_BASELINE_SHA256), actual_hash
+    is_intact = (actual_hash == EXPECTED_BASELINE_SHA256)
+    return is_intact, actual_hash, {
+        "exists": True,
+        "path": str(BASELINE_SUBMISSION_PATH),
+        "expected_sha256": EXPECTED_BASELINE_SHA256,
+        "actual_sha256": actual_hash,
+        "intact": is_intact,
+        "size_bytes": BASELINE_SUBMISSION_PATH.stat().st_size,
+    }
 
 
 def adapt_aspect_ratio_to_svd(
@@ -226,12 +248,13 @@ def run_phase5_2_multicamera_pilot(
     print("=" * 80)
 
     # 1. Baseline submission integrity audit
-    base_intact, base_hash = validate_baseline_archive()
+    base_intact, base_hash, base_meta = validate_baseline_archive(strict=False)
     print(f"\n[*] Baseline Submission Archive Integrity:")
     print(f"  - Path: {BASELINE_SUBMISSION_PATH}")
+    print(f"  - Exists on disk: {base_meta['exists']}")
     print(f"  - SHA-256: {base_hash}")
     print(f"  - Intact: {base_intact}")
-    if not base_intact:
+    if base_meta["exists"] and not base_intact:
         raise RuntimeError(f"FATAL: Baseline submission modified! Hash: {base_hash}")
 
     parsed_device = torch.device(device)
@@ -804,8 +827,9 @@ def run_phase5_2_multicamera_pilot(
     avg_adherence = float(np.mean([m["trajectory_adherence"] for m in eval_metrics.values()]))
 
     # Final baseline submission verification
-    final_intact, final_hash = validate_baseline_archive()
-    assert final_intact, f"CRITICAL: Baseline archive altered during training! Hash: {final_hash}"
+    final_intact, final_hash, final_meta = validate_baseline_archive(strict=False)
+    if final_meta["exists"]:
+        assert final_intact, f"CRITICAL: Baseline archive altered during training! Hash: {final_hash}"
 
     # 11. Compile Reports
     report_data = {

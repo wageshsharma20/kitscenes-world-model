@@ -38,24 +38,42 @@ DT = spec.WAYPOINT_STEP_S  # 0.2 s per frame @ 5 fps
 
 
 def extract_video_frames(
-    video_path: Path,
+    video_source: Union[Path, str, np.ndarray],
     max_frames: int = spec.FRAME_COUNT,
     downsample_factor: int = 4,
 ) -> np.ndarray:
-    """Extract grayscale frames from an MP4 file using ffmpeg.
+    """Extract grayscale frames from an MP4 file or convert in-memory array.
 
     Returns an array of shape (N, H // downsample, W // downsample) uint8.
     """
-    video_path = Path(video_path)
+    target_w = spec.WIDTH // downsample_factor
+    target_h = spec.HEIGHT // downsample_factor
+
+    if isinstance(video_source, np.ndarray):
+        frames = video_source[:max_frames]
+        out_frames = []
+        for f in frames:
+            if f.ndim == 3 and f.shape[-1] == 3:
+                gray = cv2.cvtColor(f, cv2.COLOR_RGB2GRAY) if HAS_OPENCV else (0.299 * f[..., 0] + 0.587 * f[..., 1] + 0.114 * f[..., 2]).astype(np.uint8)
+            elif f.ndim == 2:
+                gray = f.astype(np.uint8)
+            else:
+                gray = f[..., 0].astype(np.uint8)
+
+            if HAS_OPENCV:
+                resized = cv2.resize(gray, (target_w, target_h), interpolation=cv2.INTER_AREA)
+            else:
+                resized = gray[::downsample_factor, ::downsample_factor][:target_h, :target_w]
+            out_frames.append(resized)
+        return np.array(out_frames, dtype=np.uint8) if out_frames else np.zeros((0, target_h, target_w), dtype=np.uint8)
+
+    video_path = Path(video_source)
     if not video_path.exists():
-        return np.zeros((0, spec.HEIGHT // downsample_factor, spec.WIDTH // downsample_factor), dtype=np.uint8)
+        return np.zeros((0, target_h, target_w), dtype=np.uint8)
 
     ffmpeg_bin = shutil.which("ffmpeg")
     if ffmpeg_bin is None:
-        return np.zeros((0, spec.HEIGHT // downsample_factor, spec.WIDTH // downsample_factor), dtype=np.uint8)
-
-    target_w = spec.WIDTH // downsample_factor
-    target_h = spec.HEIGHT // downsample_factor
+        return np.zeros((0, target_h, target_w), dtype=np.uint8)
 
     cmd = [
         ffmpeg_bin,
@@ -130,7 +148,7 @@ def compute_video_optical_flow_emc(
     # 1. Enforce 6-camera presence: if any camera is missing, EMC is strictly 0.0
     for cam in spec.CAMERAS:
         p = camera_video_paths.get(cam)
-        if p is None or not Path(p).exists() or Path(p).stat().st_size == 0:
+        if p is None:
             return {
                 "emc": 0.0,
                 "all_cameras_present": False,
@@ -142,6 +160,33 @@ def compute_video_optical_flow_emc(
                 "seg2_steering_match": False,
                 "seg2_accel_match": False,
             }
+        if isinstance(p, np.ndarray):
+            if len(p) < spec.FRAME_COUNT:
+                return {
+                    "emc": 0.0,
+                    "all_cameras_present": False,
+                    "matches": 0,
+                    "seg1_speed_ratio": 0.0,
+                    "seg2_speed_ratio": 0.0,
+                    "seg1_steering_match": False,
+                    "seg1_accel_match": False,
+                    "seg2_steering_match": False,
+                    "seg2_accel_match": False,
+                }
+        else:
+            p_path = Path(p)
+            if not p_path.exists() or p_path.stat().st_size == 0:
+                return {
+                    "emc": 0.0,
+                    "all_cameras_present": False,
+                    "matches": 0,
+                    "seg1_speed_ratio": 0.0,
+                    "seg2_speed_ratio": 0.0,
+                    "seg1_steering_match": False,
+                    "seg1_accel_match": False,
+                    "seg2_steering_match": False,
+                    "seg2_accel_match": False,
+                }
 
     plan_pts = np.asarray(planned_trajectory, dtype=float)
     if plan_pts.shape != (spec.WAYPOINT_COUNT, 2):
@@ -246,16 +291,31 @@ def compute_video_optical_flow_emc(
     yaw_plan_s1 = float(np.sum(plan_turn_angles[0:13])) if len(plan_turn_angles) > 12 else 0.0
     yaw_plan_s2 = float(np.sum(plan_turn_angles[13:])) if len(plan_turn_angles) > 13 else 0.0
 
-    # 5. Recovered flow metrics per segment
+    # 5. Recovered flow metrics per segment with strict front/rear agreement check
     v_rec_s1 = float(np.mean(side_flow_speeds[seg1_slice]))
     v_rec_s2 = float(np.mean(side_flow_speeds[seg2_slice]))
 
     a_rec_s1 = float((side_flow_speeds[13] - side_flow_speeds[0]) / (14 * DT))
     a_rec_s2 = float((side_flow_speeds[-1] - side_flow_speeds[14]) / (10 * DT))
 
-    # Yaw agreement: front and rear must agree in sign
-    yaw_rec_s1 = float(np.mean([np.sum(front_yaw_rates[seg1_slice]), np.sum(rear_yaw_rates[seg1_slice])]))
-    yaw_rec_s2 = float(np.mean([np.sum(front_yaw_rates[seg2_slice]), np.sum(rear_yaw_rates[seg2_slice])]))
+    # Independent front and rear yaw computation
+    yaw_front_s1 = float(np.sum(front_yaw_rates[seg1_slice]))
+    yaw_rear_s1 = float(np.sum(rear_yaw_rates[seg1_slice]))
+    yaw_front_s2 = float(np.sum(front_yaw_rates[seg2_slice]))
+    yaw_rear_s2 = float(np.sum(rear_yaw_rates[seg2_slice]))
+
+    # Strict agreement audit: Front and Rear must agree in sign (or both straight)
+    steer_front_s1 = _classify_steering(yaw_front_s1)
+    steer_rear_s1 = _classify_steering(yaw_rear_s1)
+    yaw_agrees_s1 = (steer_front_s1 == steer_rear_s1)
+
+    steer_front_s2 = _classify_steering(yaw_front_s2)
+    steer_rear_s2 = _classify_steering(yaw_rear_s2)
+    yaw_agrees_s2 = (steer_front_s2 == steer_rear_s2)
+
+    # If front and rear disagree, the recovered yaw is ambiguous and treated as non-matching
+    yaw_rec_s1 = float(np.mean([yaw_front_s1, yaw_rear_s1])) if yaw_agrees_s1 else 0.0
+    yaw_rec_s2 = float(np.mean([yaw_front_s2, yaw_rear_s2])) if yaw_agrees_s2 else 0.0
 
     # 6. Compare classes and check speed ratio condition:
     # (min(v_rec, v_plan) + 0.5) / (max(v_rec, v_plan) + 0.5) >= 0.5
@@ -265,11 +325,11 @@ def compute_video_optical_flow_emc(
     speed_ok_s1 = ratio_s1 >= spec.EMC_SPEED_RATIO_MIN
     speed_ok_s2 = ratio_s2 >= spec.EMC_SPEED_RATIO_MIN
 
-    # Steering classes
+    # Steering classes: requires front/rear agreement
     steer_plan_s1 = _classify_steering(yaw_plan_s1)
     steer_plan_s2 = _classify_steering(yaw_plan_s2)
-    steer_rec_s1 = _classify_steering(yaw_rec_s1)
-    steer_rec_s2 = _classify_steering(yaw_rec_s2)
+    steer_rec_s1 = _classify_steering(yaw_rec_s1) if yaw_agrees_s1 else "disagreement"
+    steer_rec_s2 = _classify_steering(yaw_rec_s2) if yaw_agrees_s2 else "disagreement"
 
     # Acceleration classes
     accel_plan_s1 = _classify_acceleration(a_plan_s1)
@@ -277,17 +337,19 @@ def compute_video_optical_flow_emc(
     accel_rec_s1 = _classify_acceleration(a_rec_s1)
     accel_rec_s2 = _classify_acceleration(a_rec_s2)
 
-    # A class matches only if segment speeds are also close
-    match_steer_s1 = (steer_plan_s1 == steer_rec_s1) and speed_ok_s1
+    # A class matches only if segment speeds are also close and yaw agreed
+    match_steer_s1 = (steer_plan_s1 == steer_rec_s1) and speed_ok_s1 and yaw_agrees_s1
     match_accel_s1 = (accel_plan_s1 == accel_rec_s1) and speed_ok_s1
-    match_steer_s2 = (steer_plan_s2 == steer_rec_s2) and speed_ok_s2
+    match_steer_s2 = (steer_plan_s2 == steer_rec_s2) and speed_ok_s2 and yaw_agrees_s2
     match_accel_s2 = (accel_plan_s2 == accel_rec_s2) and speed_ok_s2
 
     matches = sum([match_steer_s1, match_accel_s1, match_steer_s2, match_accel_s2])
     emc_score = float(round(matches / spec.EMC_CLASSES_PER_SCENARIO, 3))
 
     return {
-        "emc": emc_score,
+        "local_emc_approximation": emc_score,
+        "emc": emc_score,  # Backwards compatibility key with explicit alias
+        "is_official_emc": False,  # Explicit non-official disclaimer
         "all_cameras_present": True,
         "matches": matches,
         "seg1_speed_ratio": float(round(ratio_s1, 3)),
@@ -296,4 +358,19 @@ def compute_video_optical_flow_emc(
         "seg1_accel_match": match_accel_s1,
         "seg2_steering_match": match_steer_s2,
         "seg2_accel_match": match_accel_s2,
+        "seg1_yaw_agreement": yaw_agrees_s1,
+        "seg2_yaw_agreement": yaw_agrees_s2,
+        "seg1_yaw_front": float(round(yaw_front_s1, 4)),
+        "seg1_yaw_rear": float(round(yaw_rear_s1, 4)),
+        "seg2_yaw_front": float(round(yaw_front_s2, 4)),
+        "seg2_yaw_rear": float(round(yaw_rear_s2, 4)),
+        "seg1_speed_recovered_mps": float(round(v_rec_s1, 2)),
+        "seg1_speed_planned_mps": float(round(v_plan_s1, 2)),
+        "seg2_speed_recovered_mps": float(round(v_rec_s2, 2)),
+        "seg2_speed_planned_mps": float(round(v_plan_s2, 2)),
+        "seg1_accel_recovered_mps2": float(round(a_rec_s1, 2)),
+        "seg1_accel_planned_mps2": float(round(a_plan_s1, 2)),
+        "seg2_accel_recovered_mps2": float(round(a_rec_s2, 2)),
+        "seg2_accel_planned_mps2": float(round(a_plan_s2, 2)),
+        "valid_flow_measurements": len(side_flow_speeds),
     }
