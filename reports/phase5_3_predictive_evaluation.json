@@ -1,0 +1,125 @@
+{
+  "checkpoint_path": "/kaggle/working/kitscenes-world-model/models/cssc_pilot_step30.pt",
+  "checkpoint_sha256": "9e65c397e4059999dd95c7f24a3a5c83f300ccf53c7d06d898132b37b4db9eb9",
+  "device": "cuda:0",
+  "mock_mode": false,
+  "denoising_steps": 25,
+  "guidance_scale_range": [
+    1.0,
+    3.0
+  ],
+  "seed": 42,
+  "scenarios": {
+    "0000900": {
+      "scenario_id": "0000900",
+      "instruction": "drive straight on",
+      "mean_psnr_baseline": 18.54,
+      "mean_psnr_conditioned": 9.36,
+      "psnr_net_improvement": -9.18,
+      "mean_ssim_baseline": 0.8066,
+      "mean_ssim_conditioned": 0.709,
+      "ssim_net_improvement": -0.0977,
+      "official_mms_score": 2.5,
+      "official_emc_baseline": 0.0,
+      "official_emc_conditioned": 1.0,
+      "pq_proxy_baseline": 2.11,
+      "pq_proxy_conditioned": 0.31,
+      "overlap_consistency_baseline": 0.4838,
+      "overlap_consistency_conditioned": 0.9986,
+      "peak_vram_measurements": {
+        "baseline_peak_allocated_gb": 12.518205642700195,
+        "baseline_peak_reserved_gb": 14.39453125,
+        "conditioned_peak_allocated_gb": 13.440046310424805,
+        "conditioned_peak_reserved_gb": 14.4140625
+      },
+      "camera_evaluations": {
+        "front": {
+          "psnr_baseline": 21.28,
+          "psnr_conditioned": 9.45,
+          "psnr_delta": -11.83,
+          "ssim_baseline": 0.8743,
+          "ssim_conditioned": 0.763,
+          "ssim_delta": -0.1113,
+          "pixel_divergence_l1": 73.35,
+          "adherence_baseline": 0.4994,
+          "adherence_conditioned": 0.5,
+          "baseline_mp4": "renders/phase5_3/0000900_front_baseline.mp4",
+          "conditioned_mp4": "renders/phase5_3/0000900_front_conditioned.mp4",
+          "side_by_side_preview": "reports/previews/phase5_3/0000900_front_side_by_side.mp4"
+        },
+        "front_left": {
+          "psnr_baseline": 21.08,
+          "psnr_conditioned": 10.52,
+          "psnr_delta": -10.56,
+          "ssim_baseline": 0.8889,
+          "ssim_conditioned": 0.8143,
+          "ssim_delta": -0.0746,
+          "pixel_divergence_l1": 67.01,
+          "adherence_baseline": 0.528,
+          "adherence_conditioned": 0.5,
+          "baseline_mp4": "renders/phase5_3/0000900_front_left_baseline.mp4",
+          "conditioned_mp4": "renders/phase5_3/0000900_front_left_conditioned.mp4",
+          "side_by_side_preview": "reports/previews/phase5_3/0000900_front_left_side_by_side.mp4"
+        },
+        "front_right": {
+          "psnr_baseline": 15.65,
+          "psnr_conditioned": 8.55,
+          "psnr_delta": -7.1,
+          "ssim_baseline": 0.7744,
+          "ssim_conditioned": 0.6589,
+          "ssim_delta": -0.1156,
+          "pixel_divergence_l1": 70.99,
+          "adherence_baseline": 0.7718,
+          "adherence_conditioned": 0.5,
+          "baseline_mp4": "renders/phase5_3/0000900_front_right_baseline.mp4",
+          "conditioned_mp4": "renders/phase5_3/0000900_front_right_conditioned.mp4",
+          "side_by_side_preview": "reports/previews/phase5_3/0000900_front_right_side_by_side.mp4"
+        },
+        "rear": {
+          "psnr_baseline": 19.23,
+          "psnr_conditioned": 9.74,
+          "psnr_delta": -9.49,
+          "ssim_baseline": 0.7939,
+          "ssim_conditioned": 0.7,
+          "ssim_delta": -0.0938,
+          "pixel_divergence_l1": 68.94,
+          "adherence_baseline": 0.5,
+          "adherence_conditioned": 0.5,
+          "baseline_mp4": "renders/phase5_3/0000900_rear_baseline.mp4",
+          "conditioned_mp4": "renders/phase5_3/0000900_rear_conditioned.mp4",
+          "side_by_side_preview": "reports/previews/phase5_3/0000900_rear_side_by_side.mp4"
+        },
+        "rear_left": {
+          "psnr_baseline": 18.56,
+          "psnr_conditioned": 9.31,
+          "psnr_delta": -9.24,
+          "ssim_baseline": 0.815,
+          "ssim_conditioned": 0.7163,
+          "ssim_delta": -0.0987,
+          "pixel_divergence_l1": 72.21,
+          "adherence_baseline": 0.7683,
+          "adherence_conditioned": 0.5,
+          "baseline_mp4": "renders/phase5_3/0000900_rear_left_baseline.mp4",
+          "conditioned_mp4": "renders/phase5_3/0000900_rear_left_conditioned.mp4",
+          "side_by_side_preview": "reports/previews/phase5_3/0000900_rear_left_side_by_side.mp4"
+        },
+        "rear_right": {
+          "psnr_baseline": 15.47,
+          "psnr_conditioned": 8.61,
+          "psnr_delta": -6.86,
+          "ssim_baseline": 0.6932,
+          "ssim_conditioned": 0.6013,
+          "ssim_delta": -0.092,
+          "pixel_divergence_l1": 69.94,
+          "adherence_baseline": 0.1448,
+          "adherence_conditioned": 0.5,
+          "baseline_mp4": "renders/phase5_3/0000900_rear_right_baseline.mp4",
+          "conditioned_mp4": "renders/phase5_3/0000900_rear_right_conditioned.mp4",
+          "side_by_side_preview": "reports/previews/phase5_3/0000900_rear_right_side_by_side.mp4"
+        }
+      }
+    }
+  },
+  "baseline_submission_sha256": "26119a957a37123db3f7dac5a74fab50efb7051c8e7312f1cad1c384343ef10e",
+  "baseline_submission_intact": true
+}
