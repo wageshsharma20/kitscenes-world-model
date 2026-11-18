@@ -804,6 +804,7 @@ def evaluate_cssc_checkpoint(
 
         for cam in CANONICAL_CAMERAS:
             gt_mp4 = fut_dir / f"{cam}.mp4"
+            gt_frame_dir = fut_dir / cam
             gt_frames = []
             if gt_mp4.exists():
                 cap = cv2.VideoCapture(str(gt_mp4))
@@ -813,6 +814,12 @@ def evaluate_cssc_checkpoint(
                         break
                     gt_frames.append(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
                 cap.release()
+            elif gt_frame_dir.exists():
+                frame_files = sorted(gt_frame_dir.glob("*.jpg"))
+                for fp in frame_files:
+                    f = cv2.imread(str(fp))
+                    if f is not None:
+                        gt_frames.append(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
             while len(gt_frames) < spec.FRAME_COUNT:
                 gt_frames.append(np.zeros((spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8))
             gt_video_arrays[cam] = np.stack(gt_frames[:spec.FRAME_COUNT], axis=0)
