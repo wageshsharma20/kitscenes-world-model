@@ -5,7 +5,7 @@
 - **Device:** `cuda:0` (Mock Mode: `False`)
 - **Denoising Steps:** 1 steps (EulerDiscreteScheduler)
 - **Base Seed:** 42 (Deterministic camera seed offsets applied)
-- **Evaluated Checkpoint:** `cssc_pilot_step30.pt` (SHA-256: `9e65c397e4059999...`)
+- **Evaluated Checkpoint:** `cssc_pilot_step30.pt` (SHA-256: `9e65c397e4059999...`, internal training step: 6 — early checkpoint from git history)
 - **Baseline Submission Archive:** `ARCHIVE_MISSING_ON_DISK` (Intact: `False`)
 
 ---
@@ -61,3 +61,23 @@ This benchmark evaluates three reference systems and isolates the impact of each
 3. **Boundary Strip Correlation:** Computed across all 6 adjacent camera frustum boundaries (15% image-edge strips).
 4. **Trajectory Adherence:** Returns `null` when optical flow is unmeasurable; never defaults to `0.5`.
 5. **MMS:** Evaluates submitted trajectory waypoints (`3.50`), not video frames.
+
+---
+
+## 5. Architectural Findings, Qualifications & Candidate Strategy
+
+### 5.1 Root-Cause Forensic Diagnosis
+The SpatialAdapter injected a residual perturbation with RMS magnitude approximately **10.09%** of the latent representation ($\|\Delta z_{\text{adapter}}\|_{\text{RMS}} / \|z_t\|_{\text{RMS}} \approx 0.1009$).
+This high-frequency additive perturbation severely disrupted the pretrained SVD-XT diffusion trajectory, causing an immediate collapse of ~3.8 dB PSNR and ~0.17–0.20 SSIM across all 6 camera views.
+
+### 5.2 Scientific Qualifications
+- **Experiment Scope:** The SpatialAdapter degradation is **strongly isolated in this experiment (on validation scenario `0000900`)**. Because this was measured on a single scenario, further multi-scenario evaluation is required before making a global dataset-wide claim.
+- **Checkpoint Provenance:** As verified in `reports/phase5_4_checkpoint_provenance_audit.md`, the evaluated checkpoint is the git-tracked Step-6 artifact (`9e65c397...`). All findings strictly characterize this checkpoint; no claims of 30-step convergence are made.
+
+### 5.3 Candidate Strategy for Submission
+1. **Freeze SpatialAdapter:** The current SpatialAdapter implementation is removed from the submission pipeline and frozen for future research.
+2. **Two Serious Submission Candidates Identified:**
+   - **Candidate 1: Project Baseline (`project_baseline`)** — Trajectory planner + trajectory-derived motion bucket. Strongest PSNR (`15.63 dB`).
+   - **Candidate 2: CSSC-Only (`cssc_only`)** — 27-token MultiViewConditioner bank with SpatialAdapter disabled. Highest SSIM (`0.7135`) and +0.21 dB PSNR over Vanilla SVD.
+3. **Phase 5.5 Execution:** A dedicated multi-scenario head-to-head evaluation across 8+ diverse official validation scenarios will decide between Candidate 1 and Candidate 2 before final test split video generation.
+

@@ -16,8 +16,10 @@ data/*
 !data/train_future_videos/
 !data/train_future_videos/*/*.mp4
 !data/val_future_videos/
-!data/val_future_videos/*/*.mp4
+!data/val_future_videos/0000900/*.mp4
 data/*_future_videos/*/*/
+data/val_future_videos/*/*.mp4
+!data/val_future_videos/0000900/*.mp4
 !data/train_latents/
 !data/train_latents/0000400.pt
 !data/train_latents/manifest.json
@@ -49,6 +51,7 @@ reports/*
 !reports/phase5_3_predictive_evaluation.md
 !reports/phase5_3_predictive_evaluation.json
 !reports/phase5_4*
+!reports/phase5_5*
 !reports/previews/
 !reports/previews/**
 .DS_Store
