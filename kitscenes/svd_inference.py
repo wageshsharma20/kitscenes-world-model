@@ -72,14 +72,28 @@ def encode_image_to_vae_latents(
     generator: Optional[torch.Generator] = None,
     noise_aug_strength: float = 0.02,
     dtype: torch.dtype = torch.float16,
+    video_processor: Optional[Any] = None,
 ) -> torch.Tensor:
     """Encode initial PIL image to mode-extracted VAE latent [1, 4, 72, 128] with noise augmentation."""
     padded_img, _ = adapt_aspect_ratio_to_svd(image)
-    arr = np.array(padded_img).astype(np.float32) / 127.5 - 1.0  # [-1, 1]
-    
-    # Safely match VAE parameter dtype (e.g. float32 to avoid half-precision conv bias mismatch)
     vae_dtype = next(vae.parameters()).dtype if hasattr(vae, "parameters") and list(vae.parameters()) else dtype
-    tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=vae_dtype)
+
+    if video_processor is None:
+        try:
+            from diffusers.video_processor import VideoProcessor
+            video_processor = VideoProcessor(do_resize=True)
+        except Exception:
+            try:
+                from diffusers.image_processor import VaeImageProcessor
+                video_processor = VaeImageProcessor(do_resize=True)
+            except Exception:
+                video_processor = None
+
+    if video_processor is not None:
+        tensor = video_processor.preprocess(padded_img, height=576, width=1024).to(device=device, dtype=vae_dtype)
+    else:
+        arr = np.array(padded_img.convert("RGB")).astype(np.float32) / 255.0
+        tensor = (torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0) * 2.0 - 1.0).to(device=device, dtype=vae_dtype)
 
     if noise_aug_strength > 0:
         noise = torch.randn(tensor.shape, generator=generator, device=device, dtype=vae_dtype)

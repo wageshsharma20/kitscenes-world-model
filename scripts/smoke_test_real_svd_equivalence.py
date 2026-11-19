@@ -227,7 +227,9 @@ def run_real_svd_smoke_test(
         latents_official = out_official.frames
 
         # Execution of our corrected custom sampler with identical parameters
-        init_lat_custom = encode_image_to_vae_latents(vae, padded_front, parsed_device, noise_aug_strength=0.0, dtype=dtype)
+        init_lat_custom = encode_image_to_vae_latents(
+            vae, padded_front, parsed_device, noise_aug_strength=0.0, dtype=dtype, video_processor=getattr(pipeline, "video_processor", None)
+        )
         clip_custom = encode_image_to_clip_embedding(image_encoder, feature_extractor, padded_front, parsed_device, dtype)
 
         latents_custom, telem_custom = run_official_svd_diffusion_rollout(
@@ -313,7 +315,9 @@ def run_real_svd_smoke_test(
             clip_dict[cam] = clip_emb
 
             gen_init = torch.Generator(device=parsed_device.type).manual_seed(base_seed + CAMERA_SEED_OFFSETS[cam])
-            init_lat = encode_image_to_vae_latents(vae, pil_obs, parsed_device, gen_init, noise_aug_strength=0.02, dtype=dtype)
+            init_lat = encode_image_to_vae_latents(
+                vae, pil_obs, parsed_device, gen_init, noise_aug_strength=0.02, dtype=dtype, video_processor=getattr(pipeline, "video_processor", None)
+            )
             initial_latents_dict[cam] = init_lat
         else:
             clip_dict[cam] = torch.randn(1, 1, 1024, device=parsed_device, dtype=dtype)
@@ -363,6 +367,8 @@ def run_real_svd_smoke_test(
             assert not telem["has_inf"], f"Inf detected in {cand} {cam}!"
 
             if not mock:
+                if parsed_device.type == "cuda":
+                    torch.cuda.empty_cache()
                 decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=decode_chunk_size)
                 arr = ((decoded[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
                 cropped = crop_svd_array_to_kitscenes(arr)

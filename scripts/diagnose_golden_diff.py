@@ -130,7 +130,7 @@ def main():
 
     # 1. VAE Latents
     print("\n--- 1. VAE Image Latents Comparison ---")
-    custom_vae_lat = encode_image_to_vae_latents(vae, padded_img, device, noise_aug_strength=0.0, dtype=dtype)
+    custom_vae_lat = encode_image_to_vae_latents(vae, padded_img, device, noise_aug_strength=0.0, dtype=dtype, video_processor=pipe.video_processor)
     pipe_preprocessed = pipe.video_processor.preprocess(padded_img, height=576, width=1024).to(device)
     pipe_vae_lat = pipe._encode_vae_image(pipe_preprocessed, device=device, num_videos_per_prompt=1, do_classifier_free_guidance=False)
     vae_diff = float(torch.max(torch.abs(custom_vae_lat.float() - pipe_vae_lat.float())).item())
