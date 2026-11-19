@@ -154,6 +154,32 @@ def main():
     print(f"Max Absolute Diff (CLIP Embeddings): {clip_diff:.6e}")
     diag_report["clip_embedding_diff"] = clip_diff
 
+    # 2b. Standalone Added Time IDs Helper Verification (Accounting for Diffusers fps-1 internal decrement)
+    print("\n--- 2b. Added Time IDs Standalone Helper Verification ---")
+    pipe_helper_tid = pipe._get_add_time_ids(
+        fps=4,  # explicit fps - 1 as computed internally in pipeline __call__
+        motion_bucket_id=127,
+        noise_aug_strength=0.0,
+        dtype=dtype,
+        batch_size=1,
+        num_videos_per_prompt=1,
+        do_classifier_free_guidance=True,
+    )
+    custom_helper_tid = build_svd_added_time_ids(
+        fps=5,  # user playback fps, helper decrements internally to fps - 1 = 4.0
+        motion_bucket_id=127,
+        noise_aug_strength=0.0,
+        dtype=dtype,
+        device=device,
+        do_classifier_free_guidance=True,
+    )
+    helper_tid_diff = float(torch.max(torch.abs(pipe_helper_tid.float() - custom_helper_tid.float())).item())
+    print(f"Pipe helper time IDs (fps_conditioned=4):   {pipe_helper_tid[0].cpu().numpy().tolist()}")
+    print(f"Custom helper time IDs (fps_playback=5):    {custom_helper_tid[0].cpu().numpy().tolist()}")
+    print(f"Max Absolute Diff (Added Time IDs Helper):  {helper_tid_diff:.6e}")
+    diag_report["standalone_time_ids_helper_diff"] = helper_tid_diff
+    assert helper_tid_diff == 0.0, f"Standalone time IDs helper mismatch: {helper_tid_diff}"
+
     # 3. UNet Forward Hook Full Execution Comparison
     print(f"\n--- 3. UNet Forward Hook & End-to-End {args.steps}-Step Execution Comparison ---")
     hook_data_pipe = {}

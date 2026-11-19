@@ -112,6 +112,7 @@ def run_real_svd_smoke_test(
     device: str = "cuda:0",
     mock: bool = False,
     steps: int = 25,
+    golden_steps: Optional[int] = None,
     decode_chunk_size: int = 8,
     base_seed: int = 42,
     output_dir: Path = PROJECT_ROOT / "renders" / "smoke_test_phase5_5_1",
@@ -208,15 +209,18 @@ def run_real_svd_smoke_test(
     padded_front, _ = adapt_aspect_ratio_to_svd(pil_front)
 
     golden_diff = 0.0
+    effective_golden_steps = 2 if mock else (golden_steps if golden_steps is not None else steps)
+    golden_preview_file: Optional[Path] = None
+
     if not mock and pipeline is not None:
-        print("  [*] Running official StableVideoDiffusionPipeline forward pass (2 steps)...")
+        print(f"  [*] Running official StableVideoDiffusionPipeline forward pass ({effective_golden_steps} steps)...")
         # Direct execution of official pipeline with zero noise augmentation to isolate sampler math
         out_official = pipeline(
             image=padded_front,
             height=576,
             width=1024,
             num_frames=25,
-            num_inference_steps=min(steps, 2),
+            num_inference_steps=effective_golden_steps,
             min_guidance_scale=1.0,
             max_guidance_scale=3.0,
             fps=5,
@@ -242,14 +246,14 @@ def run_real_svd_smoke_test(
             fps=5,
             motion_bucket_id=127,
             noise_aug_strength=0.0,
-            num_inference_steps=min(steps, 2),
+            num_inference_steps=effective_golden_steps,
             min_guidance_scale=1.0,
             max_guidance_scale=3.0,
             do_classifier_free_guidance=True,
         )
 
         golden_diff = float(torch.max(torch.abs(latents_official.float() - latents_custom.float())).item())
-        print(f"  [✓] Golden Equivalence Max Absolute Difference: {golden_diff:.6e}")
+        print(f"  [✓] Golden Equivalence Max Absolute Difference ({effective_golden_steps} steps): {golden_diff:.6e}")
         assert golden_diff < 1e-3, (
             f"FATAL: Golden equivalence verification failed! "
             f"Max latent difference {golden_diff:.6e} exceeds 1e-3 strict threshold against official Diffusers. "
@@ -257,9 +261,38 @@ def run_real_svd_smoke_test(
         )
         is_golden_passed = True
 
+        # Render side-by-side comparison video between Official Diffusers and Custom Sampler
+        print(f"  [*] Decoding {effective_golden_steps}-step official vs custom front camera rollouts...")
+        if parsed_device.type == "cuda":
+            torch.cuda.empty_cache()
+        dec_official = decode_latents_temporal(vae, latents_official, decode_chunk_size=decode_chunk_size)
+        arr_official = ((dec_official[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
+        crop_official = crop_svd_array_to_kitscenes(arr_official)
+        del dec_official
+
+        if parsed_device.type == "cuda":
+            torch.cuda.empty_cache()
+        dec_custom = decode_latents_temporal(vae, latents_custom, decode_chunk_size=decode_chunk_size)
+        arr_custom = ((dec_custom[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
+        crop_custom = crop_svd_array_to_kitscenes(arr_custom)
+        del dec_custom
+
+        golden_preview_file = preview_dir / f"golden_{effective_golden_steps}step_{scenario_id}_diffusers_vs_custom_front.mp4"
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(str(golden_preview_file), fourcc, 5.0, (spec.WIDTH * 2, spec.HEIGHT))
+        for f_idx in range(min(len(crop_official), len(crop_custom))):
+            f_off = cv2.cvtColor(crop_official[f_idx], cv2.COLOR_RGB2BGR)
+            f_cus = cv2.cvtColor(crop_custom[f_idx], cv2.COLOR_RGB2BGR)
+            cv2.putText(f_off, "Official Diffusers SVD-XT", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(f_cus, "Custom Sampler Rollout", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            combo = np.concatenate([f_off, f_cus], axis=1)
+            writer.write(combo)
+        writer.release()
+        print(f"  [✓] Saved official vs custom side-by-side preview: {golden_preview_file.name}")
+
         # CRITICAL VRAM RECLAMATION: Delete official pipeline and verification tensors before Part 2 rollouts
         video_processor = getattr(pipeline, "video_processor", None)
-        del out_official, latents_official, latents_custom, z_gold, pipeline
+        del out_official, latents_official, latents_custom, z_gold, pipeline, crop_official, crop_custom
         if parsed_device.type == "cuda":
             gc.collect()
             torch.cuda.empty_cache()
@@ -439,6 +472,8 @@ def run_real_svd_smoke_test(
         "fps_conditioned": 4,
         "golden_equivalence_max_diff": golden_diff,
         "golden_equivalence_passed": is_golden_passed,
+        "golden_preview_video": str(golden_preview_file) if golden_preview_file else None,
+        "golden_steps": effective_golden_steps,
         "nan_detected": nan_detected,
         "inf_detected": inf_detected,
         "environment_metadata": env_metadata,
@@ -490,6 +525,8 @@ def run_real_svd_smoke_test(
 
 ## 2. Generated Previews
 
+- **Golden Equivalence Verification Preview ({effective_golden_steps}-Step Diffusers vs Custom Sampler):** `{golden_preview_file}`
+
 Side-by-side horizontal video comparisons (`vanilla_svd` | `project_baseline` | `cssc_only`) generated for all 6 cameras:
 - `front`: `{preview_paths.get('front', '')}`
 - `front_left`: `{preview_paths.get('front_left', '')}`
@@ -510,6 +547,7 @@ def main() -> int:
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--steps", type=int, default=25)
+    parser.add_argument("--golden-steps", type=int, default=None, help="Steps for golden verification pass (default: matches --steps)")
     parser.add_argument("--decode-chunk-size", type=int, default=8)
     parser.add_argument("--scenario", type=str, default="0000900")
     parser.add_argument("--base-seed", type=int, default=42)
@@ -525,6 +563,7 @@ def main() -> int:
         device=args.device,
         mock=args.mock,
         steps=args.steps,
+        golden_steps=args.golden_steps,
         decode_chunk_size=args.decode_chunk_size,
         base_seed=args.base_seed,
     )
