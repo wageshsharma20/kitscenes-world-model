@@ -20,6 +20,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
 
 from . import spec
@@ -100,14 +101,36 @@ def encode_image_to_clip_embedding(
     device: torch.device,
     dtype: torch.dtype = torch.float16,
 ) -> torch.Tensor:
-    """Extract normalized CLIP image embedding [1, 1, 1024] from observed frame."""
+    """Extract normalized CLIP image embedding [1, 1, 1024] matching official SVD antialiased pipeline."""
     padded_img, _ = adapt_aspect_ratio_to_svd(image)
-    px = feature_extractor(images=padded_img, return_tensors="pt").pixel_values.to(
-        device=device, dtype=dtype
+
+    # 1. Convert to [1, 3, H, W] in [0, 1] range
+    arr = np.array(padded_img.convert("RGB")).astype(np.float32) / 255.0
+    tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0)  # [1, 3, 576, 1024]
+
+    # 2. Antialiased bicubic resize in [-1, 1] space matching Stability AI and diffusers
+    tensor_norm = tensor * 2.0 - 1.0
+    tensor_resized = F.interpolate(
+        tensor_norm, size=(224, 224), mode="bicubic", align_corners=False, antialias=True
     )
+    tensor_unnorm = (tensor_resized + 1.0) / 2.0
+
+    # 3. Apply CLIP normalization with feature extractor
+    px = feature_extractor(
+        images=tensor_unnorm,
+        do_normalize=True,
+        do_center_crop=False,
+        do_resize=False,
+        do_rescale=False,
+        return_tensors="pt",
+    ).pixel_values
+
+    enc_dtype = next(image_encoder.parameters()).dtype if hasattr(image_encoder, "parameters") and list(image_encoder.parameters()) else dtype
+    px = px.to(device=device, dtype=enc_dtype)
+
     with torch.no_grad():
         clip_emb = image_encoder(px).image_embeds.unsqueeze(1)  # [1, 1, 1024]
-    return clip_emb
+    return clip_emb.to(dtype=dtype)
 
 
 def build_svd_added_time_ids(
@@ -173,6 +196,8 @@ def run_official_svd_diffusion_rollout(
     initial_latent_rms_after = float(torch.sqrt(torch.mean(latents.float() ** 2)).item())
 
     # 3. Prepare image conditioning: unconditional half is zero, conditional half is initial latent
+    initial_latent = initial_latent.to(device=device, dtype=dtype)
+    encoder_hidden_states = encoder_hidden_states.to(device=device, dtype=dtype)
     if do_classifier_free_guidance:
         negative_image_latents = torch.zeros_like(initial_latent)
         image_latents_cat = torch.cat([negative_image_latents, initial_latent], dim=0)  # [2, 4, 72, 128]
