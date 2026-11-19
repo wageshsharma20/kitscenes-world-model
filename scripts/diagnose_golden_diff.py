@@ -84,7 +84,7 @@ def main():
     unet.eval().requires_grad_(False)
     if hasattr(unet, "enable_forward_chunking"):
         try:
-            unet.enable_forward_chunking(chunk_size=5, dim=0)
+            unet.enable_forward_chunking(chunk_size=1, dim=1)
         except Exception:
             pass
 

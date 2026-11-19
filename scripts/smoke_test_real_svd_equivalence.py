@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import gc
 import json
 import math
 import os
@@ -144,7 +145,7 @@ def run_real_svd_smoke_test(
         unet.requires_grad_(False)
         if hasattr(unet, "enable_forward_chunking"):
             try:
-                unet.enable_forward_chunking(chunk_size=5, dim=0)
+                unet.enable_forward_chunking(chunk_size=1, dim=1)
             except Exception:
                 pass
 
@@ -255,6 +256,13 @@ def run_real_svd_smoke_test(
             f"Execution halted per Phase 5.5.1 specification."
         )
         is_golden_passed = True
+
+        # CRITICAL VRAM RECLAMATION: Delete official pipeline and verification tensors before Part 2 rollouts
+        del out_official, latents_official, latents_custom, z_gold, pipeline
+        if parsed_device.type == "cuda":
+            gc.collect()
+            torch.cuda.empty_cache()
+            print("  [✓] Reclaimed VRAM: Part 1 pipeline and verification tensors purged from GPU.")
     else:
         is_golden_passed = True
         print("  [✓] Mock mode: golden equivalence mathematical identity verified in pytest suite.")
@@ -372,6 +380,7 @@ def run_real_svd_smoke_test(
                 decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=decode_chunk_size)
                 arr = ((decoded[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
                 cropped = crop_svd_array_to_kitscenes(arr)
+                del decoded
             else:
                 cropped = np.zeros((spec.FRAME_COUNT, spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8)
 
@@ -382,6 +391,12 @@ def run_real_svd_smoke_test(
                 writer.write(cv2.cvtColor(cropped[f_idx], cv2.COLOR_RGB2BGR))
             writer.release()
             candidate_renders[cand][cam] = cam_mp4
+
+            # Purge camera rollout tensors from VRAM
+            del latents_out
+            if parsed_device.type == "cuda":
+                gc.collect()
+                torch.cuda.empty_cache()
 
         print(f"  [✓] {cand.upper()} completed in {time.time() - t_cand_start:.2f}s")
 
