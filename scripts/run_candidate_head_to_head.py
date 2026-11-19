@@ -37,6 +37,7 @@ import hashlib
 import json
 import math
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -382,9 +383,15 @@ def run_prediction_stage(
                     rec = json.loads(line)
                     val_records[str(rec["scenario_id"]).zfill(7)] = rec
 
+    try:
+        git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), text=True).strip()
+    except Exception:
+        git_commit = "unknown"
+
     manifest: Dict[str, Any] = {
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "stage": "prediction",
+        "git_commit": git_commit,
         "model_id": model_id,
         "model_revision": model_revision if not mock else "mock-revision",
         "checkpoint_path": str(checkpoint_path),
