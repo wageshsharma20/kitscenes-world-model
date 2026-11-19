@@ -77,23 +77,26 @@ def main():
         return 0
 
     model_id = "stabilityai/stable-video-diffusion-img2vid-xt"
-    print(f"\n[*] Loading pretrained SVD-XT model: {model_id}...")
+    model_revision = "9e43909513c6714f1bc78bcb44d96e733cd242aa"
+    print(f"\n[*] Loading pretrained SVD-XT model: {model_id} (revision: {model_revision})...")
     unet = UNetSpatioTemporalConditionModel.from_pretrained(
-        model_id, subfolder="unet", torch_dtype=dtype, low_cpu_mem_usage=True
+        model_id, subfolder="unet", revision=model_revision, torch_dtype=dtype, low_cpu_mem_usage=True
     ).to(device)
     unet.eval().requires_grad_(False)
 
     vae = AutoencoderKLTemporalDecoder.from_pretrained(
-        model_id, subfolder="vae", torch_dtype=torch.float32, low_cpu_mem_usage=True
+        model_id, subfolder="vae", revision=model_revision, torch_dtype=torch.float32, low_cpu_mem_usage=True
     ).to(device)
     vae.eval().requires_grad_(False)
 
     image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-        model_id, subfolder="image_encoder", torch_dtype=dtype, low_cpu_mem_usage=True
+        model_id, subfolder="image_encoder", revision=model_revision, torch_dtype=dtype, low_cpu_mem_usage=True
     ).to(device)
     image_encoder.eval().requires_grad_(False)
 
-    feature_extractor = CLIPImageProcessor.from_pretrained(model_id, subfolder="feature_extractor")
+    feature_extractor = CLIPImageProcessor.from_pretrained(
+        model_id, subfolder="feature_extractor", revision=model_revision
+    )
 
     pipe = StableVideoDiffusionPipeline(
         vae=vae,

@@ -523,7 +523,7 @@ def decode_latents_temporal(
     vae: Any,
     latents: torch.Tensor,
     num_frames: int = 25,
-    decode_chunk_size: int = 14,
+    decode_chunk_size: int = 4,
 ) -> torch.Tensor:
     """Decode video latents using temporal VAE with temporal chunking (matching official SVD)."""
     b, t, c, h, w = latents.shape

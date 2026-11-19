@@ -297,6 +297,7 @@ def run_prediction_stage(
     device: str = "cuda:0",
     mock: bool = False,
     steps: int = 25,
+    decode_chunk_size: int = 4,
     min_guidance_scale: float = 1.0,
     max_guidance_scale: float = 3.0,
     base_seed: int = 42,
@@ -326,31 +327,34 @@ def run_prediction_stage(
 
     # Model architecture loading
     model_id = "stabilityai/stable-video-diffusion-img2vid-xt"
+    model_revision = "9e43909513c6714f1bc78bcb44d96e733cd242aa"
     if not mock:
-        print(f"\n[*] Loading pretrained SVD-XT components from {model_id}...")
+        print(f"\n[*] Loading pretrained SVD-XT components from {model_id} (revision: {model_revision})...")
         from diffusers import AutoencoderKLTemporalDecoder, UNetSpatioTemporalConditionModel
         from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
         t0 = time.time()
         unet = UNetSpatioTemporalConditionModel.from_pretrained(
-            model_id, subfolder="unet", torch_dtype=dtype, low_cpu_mem_usage=True
+            model_id, subfolder="unet", revision=model_revision, torch_dtype=dtype, low_cpu_mem_usage=True
         ).to(device=parsed_device)
         unet.eval()
         unet.requires_grad_(False)
 
         vae = AutoencoderKLTemporalDecoder.from_pretrained(
-            model_id, subfolder="vae", torch_dtype=torch.float32, low_cpu_mem_usage=True
+            model_id, subfolder="vae", revision=model_revision, torch_dtype=torch.float32, low_cpu_mem_usage=True
         ).to(device=parsed_device)
         vae.eval()
         vae.requires_grad_(False)
 
         image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-            model_id, subfolder="image_encoder", torch_dtype=dtype, low_cpu_mem_usage=True
+            model_id, subfolder="image_encoder", revision=model_revision, torch_dtype=dtype, low_cpu_mem_usage=True
         ).to(device=parsed_device)
         image_encoder.eval()
         image_encoder.requires_grad_(False)
 
-        feature_extractor = CLIPImageProcessor.from_pretrained(model_id, subfolder="feature_extractor")
+        feature_extractor = CLIPImageProcessor.from_pretrained(
+            model_id, subfolder="feature_extractor", revision=model_revision
+        )
         print(f"  [✓] Pretrained SVD-XT components loaded in {time.time() - t0:.2f}s")
     else:
         print("\n[*] Initializing Mock SVD-XT components...")
@@ -381,12 +385,15 @@ def run_prediction_stage(
     manifest: Dict[str, Any] = {
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "stage": "prediction",
+        "model_id": model_id,
+        "model_revision": model_revision if not mock else "mock-revision",
         "checkpoint_path": str(checkpoint_path),
         "checkpoint_sha256": ckpt_hash,
         "checkpoint_training_step": ckpt_step,
         "device": device,
         "mock_mode": mock,
         "denoising_steps": steps,
+        "decode_chunk_size": decode_chunk_size,
         "base_seed": base_seed,
         "candidates": list(CANDIDATES),
         "scenarios_evaluated": list(scenarios),
@@ -502,7 +509,7 @@ def run_prediction_stage(
                 candidate_telemetry[cand][cam] = telem
 
                 if not mock:
-                    decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=2)
+                    decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=decode_chunk_size)
                     arr = ((decoded[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
                     cropped = crop_svd_array_to_kitscenes(arr)
                 else:
@@ -879,6 +886,7 @@ def main() -> int:
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--mock", action="store_true", help="Run with mock SVD-XT components for fast testing")
     parser.add_argument("--steps", type=int, default=25, help="Number of Euler denoising steps")
+    parser.add_argument("--decode-chunk-size", type=int, default=4, help="Temporal VAE decode chunk size (default: 4)")
     parser.add_argument("--scenarios", type=str, default=",".join(DEFAULT_HEAD_TO_HEAD_SCENARIOS))
     parser.add_argument("--base-seed", type=int, default=42)
     parser.add_argument("--checkpoint-path", type=Path, default=PROJECT_ROOT / "models" / "cssc_pilot_step30.pt")
@@ -900,6 +908,7 @@ def main() -> int:
             device=args.device,
             mock=args.mock,
             steps=args.steps,
+            decode_chunk_size=args.decode_chunk_size,
             base_seed=args.base_seed,
             output_dir=args.output_dir,
             manifest_path=args.manifest_path,

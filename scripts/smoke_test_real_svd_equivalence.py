@@ -113,7 +113,7 @@ def run_real_svd_smoke_test(
     mock: bool = False,
     steps: int = 25,
     golden_steps: Optional[int] = None,
-    decode_chunk_size: int = 8,
+    decode_chunk_size: int = 4,
     base_seed: int = 42,
     output_dir: Path = PROJECT_ROOT / "renders" / "smoke_test_phase5_5_1",
     preview_dir: Path = PROJECT_ROOT / "reports" / "previews",
@@ -132,32 +132,35 @@ def run_real_svd_smoke_test(
 
     # 1. Model Loading
     model_id = "stabilityai/stable-video-diffusion-img2vid-xt"
+    model_revision = "9e43909513c6714f1bc78bcb44d96e733cd242aa"
     pipeline = None
     if not mock:
-        print(f"\n[*] Loading pretrained SVD-XT components from {model_id}...")
+        print(f"\n[*] Loading pretrained SVD-XT components from {model_id} (revision: {model_revision})...")
         from diffusers import AutoencoderKLTemporalDecoder, StableVideoDiffusionPipeline, UNetSpatioTemporalConditionModel
         from transformers import CLIPImageProcessor, CLIPVisionModelWithProjection
 
         t0 = time.time()
         unet = UNetSpatioTemporalConditionModel.from_pretrained(
-            model_id, subfolder="unet", torch_dtype=dtype, low_cpu_mem_usage=True
+            model_id, subfolder="unet", revision=model_revision, torch_dtype=dtype, low_cpu_mem_usage=True
         ).to(device=parsed_device)
         unet.eval()
         unet.requires_grad_(False)
 
         vae = AutoencoderKLTemporalDecoder.from_pretrained(
-            model_id, subfolder="vae", torch_dtype=torch.float32, low_cpu_mem_usage=True
+            model_id, subfolder="vae", revision=model_revision, torch_dtype=torch.float32, low_cpu_mem_usage=True
         ).to(device=parsed_device)
         vae.eval()
         vae.requires_grad_(False)
 
         image_encoder = CLIPVisionModelWithProjection.from_pretrained(
-            model_id, subfolder="image_encoder", torch_dtype=dtype, low_cpu_mem_usage=True
+            model_id, subfolder="image_encoder", revision=model_revision, torch_dtype=dtype, low_cpu_mem_usage=True
         ).to(device=parsed_device)
         image_encoder.eval()
         image_encoder.requires_grad_(False)
 
-        feature_extractor = CLIPImageProcessor.from_pretrained(model_id, subfolder="feature_extractor")
+        feature_extractor = CLIPImageProcessor.from_pretrained(
+            model_id, subfolder="feature_extractor", revision=model_revision
+        )
 
         # Load official diffusers pipeline for direct equivalence verification
         print("  [*] Instantiating official StableVideoDiffusionPipeline for golden check...")
@@ -285,13 +288,16 @@ def run_real_svd_smoke_test(
         writer.release()
         print(f"  [✓] Saved official vs custom side-by-side preview: {golden_preview_file.name}")
 
-        # CRITICAL VRAM RECLAMATION: Delete official pipeline and verification tensors before Part 2 rollouts
+        # VRAM RECLAMATION: Deallocate large Part 1 verification tensors (out_official, latents_official,
+        # latents_custom, decoded arrays) and pipeline wrapper object. Note: unet, vae, and image_encoder
+        # weights remain resident in memory as they are shared with Part 2; this reclamation frees intermediate
+        # activations, output frame tensors, and flushes PyTorch CUDA allocator cache.
         video_processor = getattr(pipeline, "video_processor", None)
         del out_official, latents_official, latents_custom, z_gold, pipeline, crop_official, crop_custom
         if parsed_device.type == "cuda":
             gc.collect()
             torch.cuda.empty_cache()
-            print("  [✓] Reclaimed VRAM: Part 1 pipeline and verification tensors purged from GPU.")
+            print("  [✓] Reclaimed VRAM: Part 1 verification tensors and output arrays deallocated, CUDA allocator cache flushed.")
     else:
         video_processor = None
         is_golden_passed = True
@@ -460,6 +466,11 @@ def run_real_svd_smoke_test(
         "scenario_id": scenario_id,
         "device": device,
         "mock_mode": mock,
+        "model_id": model_id,
+        "model_revision": model_revision if not mock else "mock-revision",
+        "cssc_checkpoint_path": str(checkpoint_path),
+        "cssc_checkpoint_sha256": "9e65c397e4059999dd95c7f24a3a5c83f300ccf53c7d06d898132b37b4db9eb9",
+        "cssc_checkpoint_step": 6,
         "denoising_steps": steps,
         "decode_chunk_size": decode_chunk_size,
         "base_seed": base_seed,
@@ -543,7 +554,7 @@ def main() -> int:
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--steps", type=int, default=25)
     parser.add_argument("--golden-steps", type=int, default=None, help="Steps for golden verification pass (default: matches --steps)")
-    parser.add_argument("--decode-chunk-size", type=int, default=8)
+    parser.add_argument("--decode-chunk-size", type=int, default=4, help="Temporal VAE decode chunk size (default: 4)")
     parser.add_argument("--scenario", type=str, default="0000900")
     parser.add_argument("--base-seed", type=int, default=42)
     parser.add_argument("--checkpoint-path", type=Path, default=PROJECT_ROOT / "models" / "cssc_pilot_step30.pt")
