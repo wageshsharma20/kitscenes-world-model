@@ -1,0 +1,1665 @@
+{
+  "checkpoint_path": "/kaggle/working/kitscenes-world-model/models/cssc_pilot_step30.pt",
+  "checkpoint_sha256": "9e65c397e4059999dd95c7f24a3a5c83f300ccf53c7d06d898132b37b4db9eb9",
+  "device": "cuda:0",
+  "mock_mode": false,
+  "denoising_steps": 1,
+  "guidance_scale_range": [
+    1.0,
+    3.0
+  ],
+  "base_seed": 42,
+  "ablation_variants": [
+    "vanilla_svd",
+    "project_baseline",
+    "cssc_only",
+    "spatial_adapter_only",
+    "cssc_plus_spatial_adapter"
+  ],
+  "scenarios": {
+    "0000900": {
+      "scenario_id": "0000900",
+      "instruction": "drive straight on",
+      "official_mms_score": 3.5,
+      "mms_evaluates_video": false,
+      "cssc_diagnostics": {
+        "front": {
+          "sequence_length": 27,
+          "hidden_dim": 1024,
+          "mean_token_norm": 31.995899200439453,
+          "std_token_norm": 0.0010999999940395355,
+          "min_token_norm": 31.994800567626953,
+          "max_token_norm": 31.999799728393555,
+          "camera_token_norm": 31.999799728393555,
+          "scene_motion_token_norm": 31.999300003051758,
+          "waypoint_token_norms_mean": 31.9955997467041,
+          "per_token_norms": [
+            31.999799728393555,
+            31.999300003051758,
+            31.995399475097656,
+            31.994800567626953,
+            31.9950008392334,
+            31.996599197387695,
+            31.995100021362305,
+            31.995500564575195,
+            31.995399475097656,
+            31.9955997467041,
+            31.9955997467041,
+            31.99489974975586,
+            31.99570083618164,
+            31.99530029296875,
+            31.99530029296875,
+            31.995800018310547,
+            31.99519920349121,
+            31.995899200439453,
+            31.9960994720459,
+            31.99530029296875,
+            31.9955997467041,
+            31.996299743652344,
+            31.995399475097656,
+            31.996000289916992,
+            31.996000289916992,
+            31.9960994720459,
+            31.995899200439453
+          ]
+        },
+        "front_left": {
+          "sequence_length": 27,
+          "hidden_dim": 1024,
+          "mean_token_norm": 31.99570083618164,
+          "std_token_norm": 0.0013000000035390258,
+          "min_token_norm": 31.994600296020508,
+          "max_token_norm": 32.00040054321289,
+          "camera_token_norm": 32.00040054321289,
+          "scene_motion_token_norm": 31.99959945678711,
+          "waypoint_token_norms_mean": 31.99530029296875,
+          "per_token_norms": [
+            32.00040054321289,
+            31.99959945678711,
+            31.995500564575195,
+            31.995100021362305,
+            31.994600296020508,
+            31.994800567626953,
+            31.99570083618164,
+            31.994800567626953,
+            31.995500564575195,
+            31.99530029296875,
+            31.99570083618164,
+            31.99519920349121,
+            31.994800567626953,
+            31.99519920349121,
+            31.995800018310547,
+            31.9955997467041,
+            31.995399475097656,
+            31.99530029296875,
+            31.995500564575195,
+            31.99519920349121,
+            31.995399475097656,
+            31.99519920349121,
+            31.9950008392334,
+            31.995800018310547,
+            31.995500564575195,
+            31.995800018310547,
+            31.9950008392334
+          ]
+        },
+        "front_right": {
+          "sequence_length": 27,
+          "hidden_dim": 1024,
+          "mean_token_norm": 31.99570083618164,
+          "std_token_norm": 0.0012000000569969416,
+          "min_token_norm": 31.994400024414062,
+          "max_token_norm": 32.00019836425781,
+          "camera_token_norm": 32.00019836425781,
+          "scene_motion_token_norm": 31.99920082092285,
+          "waypoint_token_norms_mean": 31.995399475097656,
+          "per_token_norms": [
+            32.00019836425781,
+            31.99920082092285,
+            31.99570083618164,
+            31.995399475097656,
+            31.996000289916992,
+            31.99650001525879,
+            31.99530029296875,
+            31.99570083618164,
+            31.995800018310547,
+            31.995100021362305,
+            31.995500564575195,
+            31.99530029296875,
+            31.994400024414062,
+            31.99570083618164,
+            31.99530029296875,
+            31.995399475097656,
+            31.996000289916992,
+            31.995100021362305,
+            31.995500564575195,
+            31.995100021362305,
+            31.99530029296875,
+            31.995500564575195,
+            31.995100021362305,
+            31.9950008392334,
+            31.99489974975586,
+            31.994800567626953,
+            31.9960994720459
+          ]
+        },
+        "rear": {
+          "sequence_length": 27,
+          "hidden_dim": 1024,
+          "mean_token_norm": 31.996200561523438,
+          "std_token_norm": 0.0012000000569969416,
+          "min_token_norm": 31.994800567626953,
+          "max_token_norm": 32.0005989074707,
+          "camera_token_norm": 32.0005989074707,
+          "scene_motion_token_norm": 32.0,
+          "waypoint_token_norms_mean": 31.995800018310547,
+          "per_token_norms": [
+            32.0005989074707,
+            32.0,
+            31.9955997467041,
+            31.996400833129883,
+            31.996000289916992,
+            31.995899200439453,
+            31.995899200439453,
+            31.995899200439453,
+            31.9960994720459,
+            31.99570083618164,
+            31.9955997467041,
+            31.99530029296875,
+            31.996000289916992,
+            31.995899200439453,
+            31.9955997467041,
+            31.99570083618164,
+            31.994800567626953,
+            31.996200561523438,
+            31.996200561523438,
+            31.996299743652344,
+            31.99570083618164,
+            31.996400833129883,
+            31.9955997467041,
+            31.9960994720459,
+            31.995800018310547,
+            31.995800018310547,
+            31.99530029296875
+          ]
+        },
+        "rear_left": {
+          "sequence_length": 27,
+          "hidden_dim": 1024,
+          "mean_token_norm": 31.9955997467041,
+          "std_token_norm": 0.00139999995008111,
+          "min_token_norm": 31.994699478149414,
+          "max_token_norm": 32.00090026855469,
+          "camera_token_norm": 32.00090026855469,
+          "scene_motion_token_norm": 31.99959945678711,
+          "waypoint_token_norms_mean": 31.99530029296875,
+          "per_token_norms": [
+            32.00090026855469,
+            31.99959945678711,
+            31.995100021362305,
+            31.995899200439453,
+            31.99530029296875,
+            31.995899200439453,
+            31.994800567626953,
+            31.99519920349121,
+            31.99570083618164,
+            31.995399475097656,
+            31.995399475097656,
+            31.99489974975586,
+            31.99489974975586,
+            31.9950008392334,
+            31.99489974975586,
+            31.9950008392334,
+            31.995399475097656,
+            31.99570083618164,
+            31.99489974975586,
+            31.99530029296875,
+            31.9950008392334,
+            31.994699478149414,
+            31.99519920349121,
+            31.995500564575195,
+            31.996000289916992,
+            31.995800018310547,
+            31.99519920349121
+          ]
+        },
+        "rear_right": {
+          "sequence_length": 27,
+          "hidden_dim": 1024,
+          "mean_token_norm": 31.995899200439453,
+          "std_token_norm": 0.0012000000569969416,
+          "min_token_norm": 31.99489974975586,
+          "max_token_norm": 32.0,
+          "camera_token_norm": 32.0,
+          "scene_motion_token_norm": 32.0,
+          "waypoint_token_norms_mean": 31.995500564575195,
+          "per_token_norms": [
+            32.0,
+            32.0,
+            31.996000289916992,
+            31.995500564575195,
+            31.99570083618164,
+            31.99530029296875,
+            31.995399475097656,
+            31.995800018310547,
+            31.99530029296875,
+            31.9960994720459,
+            31.9950008392334,
+            31.9955997467041,
+            31.99530029296875,
+            31.995100021362305,
+            31.99530029296875,
+            31.99570083618164,
+            31.995399475097656,
+            31.996000289916992,
+            31.99519920349121,
+            31.99489974975586,
+            31.995399475097656,
+            31.99570083618164,
+            31.995899200439453,
+            31.996000289916992,
+            31.996000289916992,
+            31.99530029296875,
+            31.9955997467041
+          ]
+        }
+      },
+      "variants": {
+        "vanilla_svd": {
+          "mean_psnr": 14.94,
+          "mean_ssim": 0.6861,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 0.0005,
+          "boundary_strip_correlation": 0.8593,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.8593,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.9282,
+              "front_to_front_right": 0.8804,
+              "rear_to_rear_left": 0.7526,
+              "rear_to_rear_right": 0.6591,
+              "front_left_to_rear_left": 0.9646,
+              "front_right_to_rear_right": 0.9711
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.75,
+          "emc_details": {
+            "local_emc_approximation": 0.75,
+            "emc": 0.75,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 3,
+            "seg1_speed_ratio": 0.722,
+            "seg2_speed_ratio": 0.934,
+            "seg1_steering_match": false,
+            "seg1_accel_match": true,
+            "seg2_steering_match": true,
+            "seg2_accel_match": true,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.0324,
+            "seg1_yaw_rear": 0.1333,
+            "seg2_yaw_front": 0.007,
+            "seg2_yaw_rear": 0.0048,
+            "seg1_speed_recovered_mps": 0.19,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 0.04,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.36,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.01,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 2.94,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 14.93,
+              "ssim": 0.7094,
+              "divergence_l1_from_vanilla": 0.0,
+              "mean_optical_flow_magnitude": 0.0005,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_left": {
+              "psnr": 13.48,
+              "ssim": 0.688,
+              "divergence_l1_from_vanilla": 0.0,
+              "mean_optical_flow_magnitude": 0.0002,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_right": {
+              "psnr": 15.69,
+              "ssim": 0.7063,
+              "divergence_l1_from_vanilla": 0.0,
+              "mean_optical_flow_magnitude": 0.0002,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear": {
+              "psnr": 15.94,
+              "ssim": 0.7168,
+              "divergence_l1_from_vanilla": 0.0,
+              "mean_optical_flow_magnitude": 0.0007,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_left": {
+              "psnr": 14.35,
+              "ssim": 0.666,
+              "divergence_l1_from_vanilla": 0.0,
+              "mean_optical_flow_magnitude": 0.0008,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_right": {
+              "psnr": 15.27,
+              "ssim": 0.6302,
+              "divergence_l1_from_vanilla": 0.0,
+              "mean_optical_flow_magnitude": 0.0003,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            }
+          },
+          "telemetry_summary": {
+            "front": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999119,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -4.8555,
+                  "latent_max": 2.6758,
+                  "latent_std": 0.3093
+                }
+              ],
+              "initial_latent_rms": 0.999119,
+              "final_latent_rms": 0.999119,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999917,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -4.5156,
+                  "latent_max": 2.2871,
+                  "latent_std": 0.3098
+                }
+              ],
+              "initial_latent_rms": 0.999917,
+              "final_latent_rms": 0.999917,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001112,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -2.9746,
+                  "latent_max": 1.4971,
+                  "latent_std": 0.3184
+                }
+              ],
+              "initial_latent_rms": 1.001112,
+              "final_latent_rms": 1.001112,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.000791,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -7.4727,
+                  "latent_max": 3.7891,
+                  "latent_std": 0.3035
+                }
+              ],
+              "initial_latent_rms": 1.000791,
+              "final_latent_rms": 1.000791,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001369,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -6.0703,
+                  "latent_max": 2.8789,
+                  "latent_std": 0.2876
+                }
+              ],
+              "initial_latent_rms": 1.001369,
+              "final_latent_rms": 1.001369,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001365,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -3.1953,
+                  "latent_max": 1.5947,
+                  "latent_std": 0.292
+                }
+              ],
+              "initial_latent_rms": 1.001365,
+              "final_latent_rms": 1.001365,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 15.63,
+          "mean_ssim": 0.7103,
+          "mean_divergence_l1": 7.31,
+          "mean_optical_flow": 0.0016,
+          "boundary_strip_correlation": 0.8232,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.8232,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.8858,
+              "front_to_front_right": 0.8769,
+              "rear_to_rear_left": 0.6309,
+              "rear_to_rear_right": 0.6082,
+              "front_left_to_rear_left": 0.9679,
+              "front_right_to_rear_right": 0.9693
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.5,
+          "emc_details": {
+            "local_emc_approximation": 0.5,
+            "emc": 0.5,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 2,
+            "seg1_speed_ratio": 0.523,
+            "seg2_speed_ratio": 0.882,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": true,
+            "seg2_accel_match": true,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.0259,
+            "seg1_yaw_rear": 0.2128,
+            "seg2_yaw_front": 0.0139,
+            "seg2_yaw_rear": 0.0089,
+            "seg1_speed_recovered_mps": 0.46,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 0.07,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -1.0,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.01,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 3.04,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 15.18,
+              "ssim": 0.7201,
+              "divergence_l1_from_vanilla": 6.6,
+              "mean_optical_flow_magnitude": 0.0022,
+              "trajectory_adherence": 0.5685,
+              "adherence_details": {
+                "adherence": 0.5685,
+                "valid_flow_count": 1,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.3555,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 13.76,
+              "ssim": 0.7052,
+              "divergence_l1_from_vanilla": 6.08,
+              "mean_optical_flow_magnitude": 0.0006,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_right": {
+              "psnr": 16.17,
+              "ssim": 0.7189,
+              "divergence_l1_from_vanilla": 7.14,
+              "mean_optical_flow_magnitude": 0.0005,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear": {
+              "psnr": 18.28,
+              "ssim": 0.7761,
+              "divergence_l1_from_vanilla": 11.23,
+              "mean_optical_flow_magnitude": 0.0034,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_left": {
+              "psnr": 14.68,
+              "ssim": 0.6822,
+              "divergence_l1_from_vanilla": 5.86,
+              "mean_optical_flow_magnitude": 0.0017,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_right": {
+              "psnr": 15.73,
+              "ssim": 0.659,
+              "divergence_l1_from_vanilla": 6.95,
+              "mean_optical_flow_magnitude": 0.0012,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            }
+          },
+          "telemetry_summary": {
+            "front": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999119,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -6.8594,
+                  "latent_max": 3.9238,
+                  "latent_std": 0.3176
+                }
+              ],
+              "initial_latent_rms": 0.999119,
+              "final_latent_rms": 0.999119,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999917,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -7.3516,
+                  "latent_max": 3.9004,
+                  "latent_std": 0.3057
+                }
+              ],
+              "initial_latent_rms": 0.999917,
+              "final_latent_rms": 0.999917,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001112,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -4.8164,
+                  "latent_max": 2.6348,
+                  "latent_std": 0.3198
+                }
+              ],
+              "initial_latent_rms": 1.001112,
+              "final_latent_rms": 1.001112,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.000791,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -11.1641,
+                  "latent_max": 5.8164,
+                  "latent_std": 0.3123
+                }
+              ],
+              "initial_latent_rms": 1.000791,
+              "final_latent_rms": 1.000791,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001369,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -7.7656,
+                  "latent_max": 3.7031,
+                  "latent_std": 0.2852
+                }
+              ],
+              "initial_latent_rms": 1.001369,
+              "final_latent_rms": 1.001369,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001365,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -7.3984,
+                  "latent_max": 4.332,
+                  "latent_std": 0.2849
+                }
+              ],
+              "initial_latent_rms": 1.001365,
+              "final_latent_rms": 1.001365,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 15.15,
+          "mean_ssim": 0.7135,
+          "mean_divergence_l1": 10.29,
+          "mean_optical_flow": 0.0013,
+          "boundary_strip_correlation": 0.874,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.874,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.9064,
+              "front_to_front_right": 0.8917,
+              "rear_to_rear_left": 0.8158,
+              "rear_to_rear_right": 0.7615,
+              "front_left_to_rear_left": 0.9147,
+              "front_right_to_rear_right": 0.954
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.75,
+          "emc_details": {
+            "local_emc_approximation": 0.75,
+            "emc": 0.75,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 3,
+            "seg1_speed_ratio": 0.606,
+            "seg2_speed_ratio": 0.879,
+            "seg1_steering_match": true,
+            "seg1_accel_match": false,
+            "seg2_steering_match": true,
+            "seg2_accel_match": true,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.0454,
+            "seg1_yaw_rear": -0.009,
+            "seg2_yaw_front": 0.0028,
+            "seg2_yaw_rear": -0.0069,
+            "seg1_speed_recovered_mps": 0.33,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 0.07,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.58,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.0,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 1.98,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 14.63,
+              "ssim": 0.724,
+              "divergence_l1_from_vanilla": 11.67,
+              "mean_optical_flow_magnitude": 0.0019,
+              "trajectory_adherence": 0.5337,
+              "adherence_details": {
+                "adherence": 0.5337,
+                "valid_flow_count": 1,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4648,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 13.38,
+              "ssim": 0.6916,
+              "divergence_l1_from_vanilla": 7.72,
+              "mean_optical_flow_magnitude": 0.0006,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_right": {
+              "psnr": 16.08,
+              "ssim": 0.7372,
+              "divergence_l1_from_vanilla": 8.3,
+              "mean_optical_flow_magnitude": 0.0003,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear": {
+              "psnr": 15.99,
+              "ssim": 0.7243,
+              "divergence_l1_from_vanilla": 11.48,
+              "mean_optical_flow_magnitude": 0.0017,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_left": {
+              "psnr": 14.93,
+              "ssim": 0.716,
+              "divergence_l1_from_vanilla": 10.75,
+              "mean_optical_flow_magnitude": 0.0024,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_right": {
+              "psnr": 15.9,
+              "ssim": 0.6882,
+              "divergence_l1_from_vanilla": 11.81,
+              "mean_optical_flow_magnitude": 0.001,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            }
+          },
+          "telemetry_summary": {
+            "front": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999119,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -5.8242,
+                  "latent_max": 3.6641,
+                  "latent_std": 0.3481
+                }
+              ],
+              "initial_latent_rms": 0.999119,
+              "final_latent_rms": 0.999119,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999917,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -5.8086,
+                  "latent_max": 3.5137,
+                  "latent_std": 0.3516
+                }
+              ],
+              "initial_latent_rms": 0.999917,
+              "final_latent_rms": 0.999917,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001112,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -3.4785,
+                  "latent_max": 2.0605,
+                  "latent_std": 0.3296
+                }
+              ],
+              "initial_latent_rms": 1.001112,
+              "final_latent_rms": 1.001112,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.000791,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -13.8203,
+                  "latent_max": 7.4336,
+                  "latent_std": 0.3779
+                }
+              ],
+              "initial_latent_rms": 1.000791,
+              "final_latent_rms": 1.000791,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001369,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -8.9219,
+                  "latent_max": 5.1328,
+                  "latent_std": 0.3752
+                }
+              ],
+              "initial_latent_rms": 1.001369,
+              "final_latent_rms": 1.001369,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001365,
+                  "adapter_residual_rms": 0.0,
+                  "adapter_to_latent_ratio": 0.0,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -7.2695,
+                  "latent_max": 4.3789,
+                  "latent_std": 0.3225
+                }
+              ],
+              "initial_latent_rms": 1.001365,
+              "final_latent_rms": 1.001365,
+              "mean_adapter_ratio": 0.0,
+              "max_adapter_ratio": 0.0,
+              "has_nan": false,
+              "has_inf": false
+            }
+          }
+        },
+        "spatial_adapter_only": {
+          "mean_psnr": 11.32,
+          "mean_ssim": 0.5172,
+          "mean_divergence_l1": 49.72,
+          "mean_optical_flow": 0.0023,
+          "boundary_strip_correlation": 0.9579,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.9579,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.9877,
+              "front_to_front_right": 0.9764,
+              "rear_to_rear_left": 0.9329,
+              "rear_to_rear_right": 0.8975,
+              "front_left_to_rear_left": 0.9812,
+              "front_right_to_rear_right": 0.9716
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 1.0,
+          "emc_details": {
+            "local_emc_approximation": 1.0,
+            "emc": 1.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 4,
+            "seg1_speed_ratio": 0.77,
+            "seg2_speed_ratio": 0.829,
+            "seg1_steering_match": true,
+            "seg1_accel_match": true,
+            "seg2_steering_match": true,
+            "seg2_accel_match": true,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.0445,
+            "seg1_yaw_rear": 0.0166,
+            "seg2_yaw_front": -0.0097,
+            "seg2_yaw_rear": -0.0131,
+            "seg1_speed_recovered_mps": 0.15,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 0.1,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.1,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.0,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 2.47,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 11.53,
+              "ssim": 0.5523,
+              "divergence_l1_from_vanilla": 48.87,
+              "mean_optical_flow_magnitude": 0.0027,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_left": {
+              "psnr": 10.85,
+              "ssim": 0.552,
+              "divergence_l1_from_vanilla": 54.73,
+              "mean_optical_flow_magnitude": 0.0018,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_right": {
+              "psnr": 11.27,
+              "ssim": 0.5024,
+              "divergence_l1_from_vanilla": 52.66,
+              "mean_optical_flow_magnitude": 0.0013,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear": {
+              "psnr": 11.21,
+              "ssim": 0.5102,
+              "divergence_l1_from_vanilla": 52.15,
+              "mean_optical_flow_magnitude": 0.0034,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_left": {
+              "psnr": 11.67,
+              "ssim": 0.5252,
+              "divergence_l1_from_vanilla": 40.65,
+              "mean_optical_flow_magnitude": 0.0028,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_right": {
+              "psnr": 11.4,
+              "ssim": 0.4613,
+              "divergence_l1_from_vanilla": 49.24,
+              "mean_optical_flow_magnitude": 0.0015,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            }
+          },
+          "telemetry_summary": {
+            "front": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999119,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100873,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -2.2832,
+                  "latent_max": 2.0117,
+                  "latent_std": 0.7109
+                }
+              ],
+              "initial_latent_rms": 0.999119,
+              "final_latent_rms": 0.999119,
+              "mean_adapter_ratio": 0.100873,
+              "max_adapter_ratio": 0.100873,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999917,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100793,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -2.4941,
+                  "latent_max": 2.1074,
+                  "latent_std": 0.7065
+                }
+              ],
+              "initial_latent_rms": 0.999917,
+              "final_latent_rms": 0.999917,
+              "mean_adapter_ratio": 0.100793,
+              "max_adapter_ratio": 0.100793,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001112,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100672,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -1.1973,
+                  "latent_max": 1.2363,
+                  "latent_std": 0.7212
+                }
+              ],
+              "initial_latent_rms": 1.001112,
+              "final_latent_rms": 1.001112,
+              "mean_adapter_ratio": 0.100672,
+              "max_adapter_ratio": 0.100672,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.000791,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100705,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -8.1172,
+                  "latent_max": 4.5195,
+                  "latent_std": 0.7031
+                }
+              ],
+              "initial_latent_rms": 1.000791,
+              "final_latent_rms": 1.000791,
+              "mean_adapter_ratio": 0.100705,
+              "max_adapter_ratio": 0.100705,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001369,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100647,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -3.6465,
+                  "latent_max": 2.291,
+                  "latent_std": 0.7051
+                }
+              ],
+              "initial_latent_rms": 1.001369,
+              "final_latent_rms": 1.001369,
+              "mean_adapter_ratio": 0.100647,
+              "max_adapter_ratio": 0.100647,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001365,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100647,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -2.1914,
+                  "latent_max": 1.623,
+                  "latent_std": 0.7124
+                }
+              ],
+              "initial_latent_rms": 1.001365,
+              "final_latent_rms": 1.001365,
+              "mean_adapter_ratio": 0.100647,
+              "max_adapter_ratio": 0.100647,
+              "has_nan": false,
+              "has_inf": false
+            }
+          }
+        },
+        "cssc_plus_spatial_adapter": {
+          "mean_psnr": 11.39,
+          "mean_ssim": 0.5158,
+          "mean_divergence_l1": 51.6,
+          "mean_optical_flow": 0.0018,
+          "boundary_strip_correlation": 0.9635,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.9635,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.9866,
+              "front_to_front_right": 0.9797,
+              "rear_to_rear_left": 0.951,
+              "rear_to_rear_right": 0.9095,
+              "front_left_to_rear_left": 0.9777,
+              "front_right_to_rear_right": 0.9767
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 1.0,
+          "emc_details": {
+            "local_emc_approximation": 1.0,
+            "emc": 1.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 4,
+            "seg1_speed_ratio": 0.761,
+            "seg2_speed_ratio": 0.873,
+            "seg1_steering_match": true,
+            "seg1_accel_match": true,
+            "seg2_steering_match": true,
+            "seg2_accel_match": true,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.0205,
+            "seg1_yaw_rear": 0.0124,
+            "seg2_yaw_front": 0.0007,
+            "seg2_yaw_rear": -0.0172,
+            "seg1_speed_recovered_mps": 0.16,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 0.07,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.2,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.01,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 2.12,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 11.87,
+              "ssim": 0.5585,
+              "divergence_l1_from_vanilla": 46.25,
+              "mean_optical_flow_magnitude": 0.002,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_left": {
+              "psnr": 11.61,
+              "ssim": 0.5658,
+              "divergence_l1_from_vanilla": 44.88,
+              "mean_optical_flow_magnitude": 0.0013,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "front_right": {
+              "psnr": 11.56,
+              "ssim": 0.5027,
+              "divergence_l1_from_vanilla": 52.92,
+              "mean_optical_flow_magnitude": 0.0014,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear": {
+              "psnr": 9.77,
+              "ssim": 0.4748,
+              "divergence_l1_from_vanilla": 69.22,
+              "mean_optical_flow_magnitude": 0.0016,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_left": {
+              "psnr": 11.65,
+              "ssim": 0.5297,
+              "divergence_l1_from_vanilla": 46.73,
+              "mean_optical_flow_magnitude": 0.0029,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            },
+            "rear_right": {
+              "psnr": 11.85,
+              "ssim": 0.4631,
+              "divergence_l1_from_vanilla": 49.56,
+              "mean_optical_flow_magnitude": 0.0018,
+              "trajectory_adherence": null,
+              "adherence_details": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            }
+          },
+          "telemetry_summary": {
+            "front": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999119,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100873,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -1.8125,
+                  "latent_max": 1.7676,
+                  "latent_std": 0.7256
+                }
+              ],
+              "initial_latent_rms": 0.999119,
+              "final_latent_rms": 0.999119,
+              "mean_adapter_ratio": 0.100873,
+              "max_adapter_ratio": 0.100873,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 0.999917,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100793,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -2.668,
+                  "latent_max": 2.3906,
+                  "latent_std": 0.7183
+                }
+              ],
+              "initial_latent_rms": 0.999917,
+              "final_latent_rms": 0.999917,
+              "mean_adapter_ratio": 0.100793,
+              "max_adapter_ratio": 0.100793,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "front_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001112,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100672,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -1.208,
+                  "latent_max": 1.4336,
+                  "latent_std": 0.7344
+                }
+              ],
+              "initial_latent_rms": 1.001112,
+              "final_latent_rms": 1.001112,
+              "mean_adapter_ratio": 0.100672,
+              "max_adapter_ratio": 0.100672,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.000791,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100705,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -6.4531,
+                  "latent_max": 3.9766,
+                  "latent_std": 0.71
+                }
+              ],
+              "initial_latent_rms": 1.000791,
+              "final_latent_rms": 1.000791,
+              "mean_adapter_ratio": 0.100705,
+              "max_adapter_ratio": 0.100705,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_left": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001369,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100647,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -5.5,
+                  "latent_max": 3.3984,
+                  "latent_std": 0.7246
+                }
+              ],
+              "initial_latent_rms": 1.001369,
+              "final_latent_rms": 1.001369,
+              "mean_adapter_ratio": 0.100647,
+              "max_adapter_ratio": 0.100647,
+              "has_nan": false,
+              "has_inf": false
+            },
+            "rear_right": {
+              "step_telemetry": [
+                {
+                  "step": 0,
+                  "timestep": 1,
+                  "cfg_scale": 1.0,
+                  "latent_rms": 1.001365,
+                  "adapter_residual_rms": 0.100785,
+                  "adapter_to_latent_ratio": 0.100647,
+                  "has_nan": false,
+                  "has_inf": false,
+                  "latent_min": -1.6719,
+                  "latent_max": 1.6523,
+                  "latent_std": 0.729
+                }
+              ],
+              "initial_latent_rms": 1.001365,
+              "final_latent_rms": 1.001365,
+              "mean_adapter_ratio": 0.100647,
+              "max_adapter_ratio": 0.100647,
+              "has_nan": false,
+              "has_inf": false
+            }
+          }
+        }
+      }
+    }
+  },
+  "baseline_submission_sha256": "ARCHIVE_MISSING_ON_DISK",
+  "baseline_submission_intact": false,
+  "baseline_submission_meta": {
+    "exists": false,
+    "path": "/kaggle/working/kitscenes-world-model/submissions/videos.zip",
+    "expected_sha256": "26119a957a37123db3f7dac5a74fab50efb7051c8e7312f1cad1c384343ef10e",
+    "actual_sha256": null,
+    "intact": false
+  }
+}
