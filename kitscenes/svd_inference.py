@@ -90,8 +90,6 @@ def encode_image_to_vae_latents(
         shift_factor = getattr(vae.config, "shift_factor", None)
         if shift_factor is not None:
             latent = latent - shift_factor
-        scaling_factor = getattr(vae.config, "scaling_factor", 0.18215)
-        latent = latent * scaling_factor
     return latent.to(dtype=dtype)
 
 
