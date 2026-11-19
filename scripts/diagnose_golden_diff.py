@@ -106,7 +106,16 @@ def main():
     lat_prep_diff = torch.max(torch.abs(pipe_latents.float() - custom_latents.float())).item()
     print(f"Max Absolute Diff (Initial Latents): {lat_prep_diff:.6e}")
 
-    print("\n--- 5. Full 1-Step Execution Comparison ---")
+    print("\n--- 5. Full 1-Step Execution & UNet Forward Hook Comparison ---")
+    hook_data_pipe = {}
+    def unet_hook_pipe(module, args, kwargs, output):
+        hook_data_pipe["sample"] = args[0] if len(args) > 0 else kwargs.get("sample")
+        hook_data_pipe["timestep"] = args[1] if len(args) > 1 else kwargs.get("timestep")
+        hook_data_pipe["encoder_hidden_states"] = kwargs.get("encoder_hidden_states")
+        hook_data_pipe["added_time_ids"] = kwargs.get("added_time_ids")
+        hook_data_pipe["output"] = output.sample if hasattr(output, "sample") else output[0]
+
+    hook_handle_pipe = unet.register_forward_hook(unet_hook_pipe, with_kwargs=True)
     # Run official pipeline for 1 step
     pipe_out = pipe(
         image=padded_img,
@@ -122,13 +131,23 @@ def main():
         latents=z_gold.clone(),
         output_type="latent",
     ).frames
+    hook_handle_pipe.remove()
 
+    hook_data_custom = {}
+    def unet_hook_custom(module, args, kwargs, output):
+        hook_data_custom["sample"] = args[0] if len(args) > 0 else kwargs.get("sample")
+        hook_data_custom["timestep"] = args[1] if len(args) > 1 else kwargs.get("timestep")
+        hook_data_custom["encoder_hidden_states"] = kwargs.get("encoder_hidden_states")
+        hook_data_custom["added_time_ids"] = kwargs.get("added_time_ids")
+        hook_data_custom["output"] = output.sample if hasattr(output, "sample") else output[0]
+
+    hook_handle_custom = unet.register_forward_hook(unet_hook_custom, with_kwargs=True)
     # Run custom rollout for 1 step
     custom_out, telem = run_official_svd_diffusion_rollout(
         unet=unet,
         scheduler=create_default_euler_scheduler(),
-        initial_latent=pipe_vae_lat, # Use exact pipe VAE latent to isolate UNet & Scheduler
-        encoder_hidden_states=pipe_clip, # Use exact pipe CLIP to isolate UNet & Scheduler
+        initial_latent=custom_vae_lat,
+        encoder_hidden_states=custom_clip,
         starting_noise=z_gold.clone(),
         fps=5,
         motion_bucket_id=127,
@@ -138,10 +157,31 @@ def main():
         max_guidance_scale=3.0,
         do_classifier_free_guidance=True,
     )
+    hook_handle_custom.remove()
+
+    print("\n--- Granular Hook Comparison at Step 0 ---")
+    p_s = hook_data_pipe["sample"].float()
+    c_s = hook_data_custom["sample"].float()
+    diff_s_noise = torch.max(torch.abs(p_s[:, :, :4] - c_s[:, :, :4])).item()
+    diff_s_img = torch.max(torch.abs(p_s[:, :, 4:] - c_s[:, :, 4:])).item()
+    print(f"UNet Input Sample (Noise channels 0-3) Diff: {diff_s_noise:.6e}")
+    print(f"UNet Input Sample (Image channels 4-7) Diff: {diff_s_img:.6e}")
+
+    diff_ts = torch.max(torch.abs(hook_data_pipe["timestep"].float() - hook_data_custom["timestep"].float())).item()
+    print(f"UNet Timestep Diff:                         {diff_ts:.6e}")
+
+    diff_emb = torch.max(torch.abs(hook_data_pipe["encoder_hidden_states"].float() - hook_data_custom["encoder_hidden_states"].float())).item()
+    print(f"UNet Encoder Hidden States Diff:             {diff_emb:.6e}")
+
+    diff_tid = torch.max(torch.abs(hook_data_pipe["added_time_ids"].float() - hook_data_custom["added_time_ids"].float())).item()
+    print(f"UNet Added Time IDs Diff:                    {diff_tid:.6e}")
+
+    diff_out = torch.max(torch.abs(hook_data_pipe["output"].float() - hook_data_custom["output"].float())).item()
+    print(f"UNet Raw Output (noise_pred) Diff:           {diff_out:.6e}")
 
     step1_diff = torch.max(torch.abs(pipe_out.float() - custom_out.float())).item()
-    print(f"Max Absolute Diff after 1 Step: {step1_diff:.6e}")
-    print(f"Pipe out RMS: {torch.sqrt(torch.mean(pipe_out.float()**2)).item():.6f}")
+    print(f"Final Latents Diff after Step 1:             {step1_diff:.6e}")
+    print(f"Pipe out RMS:   {torch.sqrt(torch.mean(pipe_out.float()**2)).item():.6f}")
     print(f"Custom out RMS: {torch.sqrt(torch.mean(custom_out.float()**2)).item():.6f}")
 
 if __name__ == "__main__":
