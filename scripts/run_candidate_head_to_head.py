@@ -337,7 +337,11 @@ def run_prediction_stage(
         ).to(device=parsed_device)
         unet.eval()
         unet.requires_grad_(False)
-        unet.enable_forward_chunking()
+        if hasattr(unet, "enable_forward_chunking"):
+            try:
+                unet.enable_forward_chunking(chunk_size=5, dim=0)
+            except Exception:
+                pass
 
         vae = AutoencoderKLTemporalDecoder.from_pretrained(
             model_id, subfolder="vae", torch_dtype=torch.float32, low_cpu_mem_usage=True

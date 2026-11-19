@@ -133,7 +133,11 @@ def run_real_svd_smoke_test(
         ).to(device=parsed_device)
         unet.eval()
         unet.requires_grad_(False)
-        unet.enable_forward_chunking()
+        if hasattr(unet, "enable_forward_chunking"):
+            try:
+                unet.enable_forward_chunking(chunk_size=5, dim=0)
+            except Exception:
+                pass
 
         vae = AutoencoderKLTemporalDecoder.from_pretrained(
             model_id, subfolder="vae", torch_dtype=torch.float32, low_cpu_mem_usage=True
@@ -157,7 +161,7 @@ def run_real_svd_smoke_test(
             unet=unet,
             scheduler=create_default_euler_scheduler(),
             feature_extractor=feature_extractor,
-        )
+        ).to(parsed_device)
         print(f"  [✓] All pretrained SVD-XT components ready in {time.time() - t0:.2f}s")
     else:
         print("\n[*] Initializing Mock SVD-XT components for test...")
