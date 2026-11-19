@@ -258,12 +258,14 @@ def run_real_svd_smoke_test(
         is_golden_passed = True
 
         # CRITICAL VRAM RECLAMATION: Delete official pipeline and verification tensors before Part 2 rollouts
+        video_processor = getattr(pipeline, "video_processor", None)
         del out_official, latents_official, latents_custom, z_gold, pipeline
         if parsed_device.type == "cuda":
             gc.collect()
             torch.cuda.empty_cache()
             print("  [✓] Reclaimed VRAM: Part 1 pipeline and verification tensors purged from GPU.")
     else:
+        video_processor = None
         is_golden_passed = True
         print("  [✓] Mock mode: golden equivalence mathematical identity verified in pytest suite.")
 
@@ -324,7 +326,7 @@ def run_real_svd_smoke_test(
 
             gen_init = torch.Generator(device=parsed_device.type).manual_seed(base_seed + CAMERA_SEED_OFFSETS[cam])
             init_lat = encode_image_to_vae_latents(
-                vae, pil_obs, parsed_device, gen_init, noise_aug_strength=0.02, dtype=dtype, video_processor=getattr(pipeline, "video_processor", None)
+                vae, pil_obs, parsed_device, gen_init, noise_aug_strength=0.02, dtype=dtype, video_processor=video_processor
             )
             initial_latents_dict[cam] = init_lat
         else:
