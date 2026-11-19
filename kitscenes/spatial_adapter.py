@@ -563,7 +563,11 @@ def prepare_clip_image(
         img_np = np.array(image.convert("RGB")).astype(np.float32) / 255.0
         img_t = torch.from_numpy(img_np).permute(2, 0, 1).unsqueeze(0)  # [1, 3, H, W]
         img_norm = img_t * 2.0 - 1.0
-        img_resized = F.interpolate(img_norm, size=(224, 224), mode="bicubic", align_corners=False, antialias=True)
+        try:
+            from diffusers.pipelines.stable_video_diffusion.pipeline_stable_video_diffusion import _resize_with_antialiasing
+            img_resized = _resize_with_antialiasing(img_norm, size=(224, 224))
+        except Exception:
+            img_resized = F.interpolate(img_norm, size=(224, 224), mode="bicubic", align_corners=True, antialias=True)
         image_input = (img_resized + 1.0) / 2.0
     else:
         image_input = image

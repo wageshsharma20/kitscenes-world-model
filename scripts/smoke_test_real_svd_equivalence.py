@@ -97,12 +97,21 @@ def build_side_by_side_preview(
     writer.release()
 
 
+def get_git_commit() -> str:
+    try:
+        import subprocess
+        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT)).decode("utf-8").strip()
+    except Exception:
+        return "unknown"
+
+
 def run_real_svd_smoke_test(
     scenario_id: str = "0000900",
     checkpoint_path: Path = PROJECT_ROOT / "models" / "cssc_pilot_step30.pt",
     device: str = "cuda:0",
     mock: bool = False,
     steps: int = 25,
+    decode_chunk_size: int = 8,
     base_seed: int = 42,
     output_dir: Path = PROJECT_ROOT / "renders" / "smoke_test_phase5_5_1",
     preview_dir: Path = PROJECT_ROOT / "reports" / "previews",
@@ -237,10 +246,13 @@ def run_real_svd_smoke_test(
         )
 
         golden_diff = float(torch.max(torch.abs(latents_official.float() - latents_custom.float())).item())
-        is_golden_passed = golden_diff < 1e-3
-        print(f"  [✓] Golden Equivalence Max Absolute Difference: {golden_diff:.6e} (Target < 1e-3: {'PASS' if is_golden_passed else 'WARN'})")
-        if not is_golden_passed:
-            print(f"  [!] Note: Golden diff {golden_diff:.6e} exceeds 1e-3 strict tolerance. Proceeding to Part 2 full 6-camera 25-step rollouts.")
+        print(f"  [✓] Golden Equivalence Max Absolute Difference: {golden_diff:.6e}")
+        assert golden_diff < 1e-3, (
+            f"FATAL: Golden equivalence verification failed! "
+            f"Max latent difference {golden_diff:.6e} exceeds 1e-3 strict threshold against official Diffusers. "
+            f"Execution halted per Phase 5.5.1 specification."
+        )
+        is_golden_passed = True
     else:
         is_golden_passed = True
         print("  [✓] Mock mode: golden equivalence mathematical identity verified in pytest suite.")
@@ -351,7 +363,7 @@ def run_real_svd_smoke_test(
             assert not telem["has_inf"], f"Inf detected in {cand} {cam}!"
 
             if not mock:
-                decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=2)
+                decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=decode_chunk_size)
                 arr = ((decoded[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
                 cropped = crop_svd_array_to_kitscenes(arr)
             else:
@@ -381,6 +393,16 @@ def run_real_svd_smoke_test(
     nan_detected = any(candidate_telemetry[c][cam]["has_nan"] for c in CANDIDATES for cam in CANONICAL_CAMERAS)
     inf_detected = any(candidate_telemetry[c][cam]["has_inf"] for c in CANDIDATES for cam in CANONICAL_CAMERAS)
 
+    env_metadata = {
+        "git_commit": get_git_commit(),
+        "diffusers_version": getattr(sys.modules.get("diffusers"), "__version__", "mock"),
+        "transformers_version": getattr(sys.modules.get("transformers"), "__version__", "mock"),
+        "torch_version": torch.__version__,
+        "cuda_version": torch.version.cuda if torch.cuda.is_available() else None,
+        "gpu_name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu",
+        "model_id": "stabilityai/stable-video-diffusion-img2vid-xt",
+    }
+
     report: Dict[str, Any] = {
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "status": "REAL_SVD_SMOKE_TEST_PASSED" if (not nan_detected and not inf_detected) else "REAL_SVD_SMOKE_TEST_FAILED",
@@ -388,11 +410,15 @@ def run_real_svd_smoke_test(
         "device": device,
         "mock_mode": mock,
         "denoising_steps": steps,
+        "decode_chunk_size": decode_chunk_size,
         "base_seed": base_seed,
+        "fps_playback": 5,
+        "fps_conditioned": 4,
         "golden_equivalence_max_diff": golden_diff,
         "golden_equivalence_passed": is_golden_passed,
         "nan_detected": nan_detected,
         "inf_detected": inf_detected,
+        "environment_metadata": env_metadata,
         "front_camera_telemetry": {
             cand: {
                 "initial_noise_rms_before_scaling": candidate_telemetry[cand]["front"]["initial_noise_rms_before_scaling"],
@@ -417,9 +443,13 @@ def run_real_svd_smoke_test(
 - **Date/Time (UTC):** {report['timestamp_utc']}
 - **Status:** `{report['status']}`
 - **Device:** `{device}` (Mock: `{mock}`)
+- **Git Commit:** `{env_metadata['git_commit']}`
+- **Dependencies:** diffusers: `{env_metadata['diffusers_version']}`, transformers: `{env_metadata['transformers_version']}`, torch: `{env_metadata['torch_version']}`
 - **Denoising Steps:** {steps} steps (EulerDiscreteScheduler)
+- **Decode Chunk Size:** {decode_chunk_size} frames
+- **FPS Micro-Conditioning:** Playback: 5 FPS -> Conditioned: `4` (`fps - 1`)
 - **Scenario Evaluated:** `{scenario_id}`
-- **Golden Equivalence Max Diff:** `{golden_diff:.6e}` (Status: `{'PASS (<1e-3)' if is_golden_passed else 'WARN (fp16)'}`)
+- **Golden Equivalence Max Diff:** `{golden_diff:.6e}` (Status: `{'PASS (<1e-3)' if is_golden_passed else 'FAIL'}`)
 - **NaN / Inf Detections:** `{nan_detected or inf_detected}`
 
 ---
@@ -457,6 +487,7 @@ def main() -> int:
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--mock", action="store_true")
     parser.add_argument("--steps", type=int, default=25)
+    parser.add_argument("--decode-chunk-size", type=int, default=8)
     parser.add_argument("--scenario", type=str, default="0000900")
     parser.add_argument("--base-seed", type=int, default=42)
     parser.add_argument("--checkpoint-path", type=Path, default=PROJECT_ROOT / "models" / "cssc_pilot_step30.pt")
@@ -471,6 +502,7 @@ def main() -> int:
         device=args.device,
         mock=args.mock,
         steps=args.steps,
+        decode_chunk_size=args.decode_chunk_size,
         base_seed=args.base_seed,
     )
     return 0

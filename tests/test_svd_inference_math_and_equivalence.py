@@ -100,8 +100,9 @@ def test_fps_micro_conditioning():
     )
 
     assert time_ids.shape == (2, 3)
-    assert time_ids[0, 0].item() == 5.0, f"Expected fps_id 5 for 5 FPS, got {time_ids[0, 0].item()}"
-    assert time_ids[1, 0].item() == 5.0
+    # Diffusers SVD converts user playback FPS to fps - 1 micro-conditioning (e.g. 5 -> 4.0)
+    assert time_ids[0, 0].item() == 4.0, f"Expected fps_conditioned 4.0 for 5 FPS, got {time_ids[0, 0].item()}"
+    assert time_ids[1, 0].item() == 4.0
     assert time_ids[0, 1].item() == 127.0
     assert abs(time_ids[0, 2].item() - 0.02) < 1e-4
 
@@ -131,7 +132,8 @@ def test_exact_mathematical_identity_against_official_svd_logic():
     scheduler1.set_timesteps(num_steps, device=device)
     latents_ref = starting_noise.clone() * scheduler1.init_noise_sigma
     image_latents_ref = torch.cat([torch.zeros_like(init_latent), init_latent], dim=0).unsqueeze(1).repeat(1, num_frames, 1, 1, 1)
-    time_ids_ref = torch.tensor([[fps, motion_bucket, noise_aug]], dtype=dtype, device=device).repeat(2, 1)
+    fps_conditioned_ref = fps - 1
+    time_ids_ref = torch.tensor([[fps_conditioned_ref, motion_bucket, noise_aug]], dtype=dtype, device=device).repeat(2, 1)
     hidden_states_ref = torch.cat([torch.zeros_like(clip_emb), clip_emb], dim=0)
     guidance_ref = torch.linspace(min_guidance, max_guidance, num_frames, device=device, dtype=dtype).view(1, num_frames, 1, 1, 1)
 
@@ -163,7 +165,8 @@ def test_exact_mathematical_identity_against_official_svd_logic():
 
     diff = torch.max(torch.abs(latents_ref - latents_custom)).item()
     assert diff == 0.0, f"Mathematical divergence detected: {diff}"
-    assert telem["fps_conditioned"] == 5
+    assert telem["fps_playback"] == 5
+    assert telem["fps_conditioned"] == 4
     assert telem["guidance_frame_0"] == 1.0
     assert telem["guidance_frame_24"] == 3.0
 

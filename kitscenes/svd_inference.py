@@ -110,9 +110,13 @@ def encode_image_to_clip_embedding(
 
     # 2. Antialiased bicubic resize in [-1, 1] space matching Stability AI and diffusers
     tensor_norm = tensor * 2.0 - 1.0
-    tensor_resized = F.interpolate(
-        tensor_norm, size=(224, 224), mode="bicubic", align_corners=False, antialias=True
-    )
+    try:
+        from diffusers.pipelines.stable_video_diffusion.pipeline_stable_video_diffusion import _resize_with_antialiasing
+        tensor_resized = _resize_with_antialiasing(tensor_norm, size=(224, 224))
+    except Exception:
+        tensor_resized = F.interpolate(
+            tensor_norm, size=(224, 224), mode="bicubic", align_corners=True, antialias=True
+        )
     tensor_unnorm = (tensor_resized + 1.0) / 2.0
 
     # 3. Apply CLIP normalization with feature extractor
@@ -141,8 +145,14 @@ def build_svd_added_time_ids(
     device: torch.device,
     do_classifier_free_guidance: bool = True,
 ) -> torch.Tensor:
-    """Construct added time IDs strictly matching the official SVD pipeline."""
-    add_time_ids = torch.tensor([[fps, motion_bucket_id, noise_aug_strength]], dtype=dtype, device=device)
+    """Construct added time IDs strictly matching the official SVD pipeline.
+    
+    NOTE: Diffusers StableVideoDiffusionPipeline accepts the user argument `fps` (e.g. 5)
+    and internally decrements it (`fps = fps - 1`) before passing to `_get_add_time_ids`.
+    Therefore, the first coordinate of the time ID tensor is (fps - 1).
+    """
+    fps_conditioned = fps - 1
+    add_time_ids = torch.tensor([[fps_conditioned, motion_bucket_id, noise_aug_strength]], dtype=dtype, device=device)
     if do_classifier_free_guidance:
         add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0)
     return add_time_ids
@@ -277,7 +287,8 @@ def run_official_svd_diffusion_rollout(
         "initial_latent_rms_after_scaling": round(initial_latent_rms_after, 6),
         "first_timestep": float(timesteps[0].item()) if hasattr(timesteps[0], "item") else float(timesteps[0]),
         "first_sigma": float(scheduler.sigmas[0].item()) if hasattr(scheduler.sigmas[0], "item") else float(scheduler.sigmas[0]),
-        "fps_conditioned": fps,
+        "fps_playback": fps,
+        "fps_conditioned": fps - 1,
         "motion_bucket_id": motion_bucket_id,
         "noise_aug_strength": noise_aug_strength,
         "min_guidance_scale": min_guidance_scale,
