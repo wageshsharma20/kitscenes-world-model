@@ -1,23 +1,32 @@
 #!/usr/bin/env python3
 """Phase 5.5: Multi-Scenario Head-to-Head Candidate Evaluation & Submission Freezing.
 
-Evaluates the top three candidate architectures across diverse official validation scenarios:
-  1. vanilla_svd: Pretrained frozen SVD-XT (single-camera CLIP token, default motion bucket 127)
-  2. project_baseline: kNN trajectory planner + trajectory-derived SVD motion bucket
-  3. cssc_only: MultiViewConditioner 27-token bank (camera + scene + 25 waypoints),
-                SpatialAdapter STRICTLY DISABLED (no latent residual injection)
+Implements strict two-stage execution with verified official SVD-XT inference mathematics:
+  Stage A (Prediction): Strict zero future target leakage. Evaluates ONLY observed t=0 images,
+    past trajectories, and permitted donor pool. Generates videos for 3 candidates:
+      1. vanilla_svd: Official SVD-XT (single-camera CLIP token, default motion bucket 127)
+      2. project_baseline: kNN trajectory planner + trajectory-derived SVD motion bucket
+      3. cssc_only: MultiViewConditioner 27-token bank (camera + scene + 25 waypoints),
+                    SpatialAdapter STRICTLY DISABLED (no latent residual injection)
+    Saves generated MP4 files and a prediction manifest. Inference process cleanly exits.
 
-Strategic Directives:
-  - SpatialAdapter is strictly excluded and frozen due to isolated ~10% additive latent disruption.
-  - Zero new optimizer updates or training experiments.
-  - Head-to-head comparison focuses exclusively on Candidate 1 (project_baseline) vs Candidate 2 (cssc_only).
-  - Evaluated on diverse official validation scenarios (straight, lane changes, intersections, turns, weather).
-  - Strict zero future target leakage (ground-truth future videos loaded strictly post-inference).
-  - Pure Gaussian paired noise z_T ~ N(0, I) per camera seed offset across all candidates.
+  Stage B (Evaluation): Decoupled post-inference evaluation. Loads prediction manifest and
+    genuine ground-truth future videos.
+    - NO silent black-frame padding: missing ground truth fails explicitly.
+    - NO default 3.5 MMS fallback: missing reference trajectories evaluate to null.
+    - Computes true PSNR, SSIM, Boundary Strip Correlation, Local EMC approximation with
+      strict front/rear yaw agreement, null-safe optical-flow adherence, and naturalness proxy.
+    - Synthesizes aggregate statistics and pairwise head-to-head win rates.
 
 Usage:
-  python scripts/run_candidate_head_to_head.py --device cuda:0 --steps 25 --scenarios 0000900,0000901,0000902
-  python scripts/run_candidate_head_to_head.py --mock --device cpu --steps 2 --scenarios 0000900
+  # Run prediction stage only:
+  python scripts/run_candidate_head_to_head.py --stage predict --device cuda:0 --steps 25
+  
+  # Run evaluation stage only:
+  python scripts/run_candidate_head_to_head.py --stage evaluate
+
+  # Run both stages end-to-end:
+  python scripts/run_candidate_head_to_head.py --stage all --device cuda:0 --steps 25
 """
 
 from __future__ import annotations
@@ -43,16 +52,18 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from kitscenes import emc_eval, knn_trajectory, pq_proxy, spec
-from kitscenes.multiview_conditioning import (
-    CameraGeometryEncoder,
-    MultiViewConditioner,
-    SharedMotionEncoder,
-    SurroundSceneFusion,
-)
+from kitscenes.multiview_conditioning import MultiViewConditioner
 from kitscenes.spatial_adapter import (
     MockSVDUNet,
     create_default_euler_scheduler,
     decode_latents_temporal,
+)
+from kitscenes.svd_inference import (
+    adapt_aspect_ratio_to_svd,
+    crop_svd_array_to_kitscenes,
+    encode_image_to_clip_embedding,
+    encode_image_to_vae_latents,
+    run_official_svd_diffusion_rollout,
 )
 
 CANONICAL_CAMERAS: Tuple[str, ...] = spec.CAMERAS
@@ -85,15 +96,6 @@ CAMERA_SEED_OFFSETS: Dict[str, int] = {
     "rear": 3000,
     "rear_left": 4000,
     "rear_right": 5000,
-}
-
-CAMERA_FRAME_COLUMNS: Dict[str, str] = {
-    "front": "front_frames",
-    "front_left": "front_left_frames",
-    "front_right": "front_right_frames",
-    "rear": "rear_frames",
-    "rear_left": "rear_left_frames",
-    "rear_right": "rear_right_frames",
 }
 
 
@@ -130,52 +132,6 @@ def validate_baseline_archive(strict: bool = False) -> Tuple[bool, str, Dict[str
         "intact": is_intact,
         "size_bytes": BASELINE_SUBMISSION_PATH.stat().st_size,
     }
-
-
-def adapt_aspect_ratio_to_svd(
-    img: Image.Image, target_width: int = 1024, target_height: int = 576
-) -> Tuple[Image.Image, Tuple[int, int]]:
-    """Pad 876x568 to SVD target dimensions 1024x576 using edge replication."""
-    w, h = img.size
-    pad_h = target_height - h
-    pad_top = pad_h // 2
-    pad_bottom = pad_h - pad_top
-    pad_w = target_width - w
-    pad_left = pad_w // 2
-    pad_right = pad_w - pad_left
-
-    arr = np.array(img)
-    padded = np.pad(
-        arr,
-        ((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
-        mode="edge",
-    )
-    return Image.fromarray(padded), (pad_top, pad_left)
-
-
-def encode_frame_to_latent(
-    vae: Any,
-    image: Image.Image,
-    device: torch.device,
-    generator: torch.Generator,
-    use_mode: bool = True,
-    noise_aug_strength: float = 0.02,
-    dtype: torch.dtype = torch.float16,
-) -> torch.Tensor:
-    """Encode an initial PIL image to SVD latent space [1, 4, 72, 128]."""
-    padded_img, _ = adapt_aspect_ratio_to_svd(image)
-    arr = np.array(padded_img).astype(np.float32) / 127.5 - 1.0
-    tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=dtype)
-
-    if noise_aug_strength > 0:
-        noise = torch.randn(tensor.shape, generator=generator, device=device, dtype=dtype)
-        tensor = tensor + noise_aug_strength * noise
-
-    with torch.no_grad():
-        dist = vae.encode(tensor).latent_dist
-        latent = dist.mode() if use_mode else dist.sample(generator=generator)
-        latent = latent * vae.config.scaling_factor
-    return latent
 
 
 def compute_true_psnr(pred: np.ndarray, gt: np.ndarray) -> float:
@@ -331,190 +287,44 @@ def compute_video_mean_optical_flow(frames: np.ndarray) -> float:
     return float(np.mean(mags)) if mags else 0.0
 
 
-def compute_cssc_token_diagnostics(token_bank: torch.Tensor) -> Dict[str, Any]:
-    """Compute per-token L2 norm and variation across the 27-token CSSC sequence [1, 27, 1024]."""
-    tb = token_bank.squeeze(0).float()  # [27, 1024]
-    norms = torch.norm(tb, dim=-1).cpu().numpy()  # [27]
+# ==============================================================================
+# STAGE A: PREDICTION ONLY (STRICT ZERO FUTURE TARGET LEAKAGE)
+# ==============================================================================
 
-    return {
-        "sequence_length": int(tb.shape[0]),
-        "hidden_dim": int(tb.shape[1]),
-        "mean_token_norm": float(round(np.mean(norms), 4)),
-        "std_token_norm": float(round(np.std(norms), 4)),
-        "min_token_norm": float(round(np.min(norms), 4)),
-        "max_token_norm": float(round(np.max(norms), 4)),
-        "camera_token_norm": float(round(norms[0], 4)),
-        "scene_motion_token_norm": float(round(norms[1], 4)),
-        "waypoint_token_norms_mean": float(round(np.mean(norms[2:]), 4)),
-    }
-
-
-def run_candidate_diffusion_rollout(
-    unet: Any,
-    scheduler: Any,
-    initial_latent: torch.Tensor,
-    encoder_hidden_states: torch.Tensor,
-    added_time_ids: torch.Tensor,
-    starting_noise: torch.Tensor,
-    num_inference_steps: int = 25,
-    min_guidance_scale: float = 1.0,
-    max_guidance_scale: float = 3.0,
-) -> torch.Tensor:
-    """Execute multi-step Euler diffusion for a candidate architecture (SpatialAdapter strictly bypassed)."""
-    scheduler.set_timesteps(num_inference_steps, device=starting_noise.device)
-    timesteps = scheduler.timesteps
-    latents = starting_noise.clone()
-
-    guidance_scales = torch.linspace(
-        min_guidance_scale, max_guidance_scale, num_inference_steps, device=starting_noise.device
-    )
-
-    for step_idx, t in enumerate(timesteps):
-        cfg_scale = float(guidance_scales[step_idx].item())
-        latent_model_input = scheduler.scale_model_input(latents, t)
-
-        # SpatialAdapter is strictly None for all candidates in this benchmark.
-        # Conditional and unconditional share the clean unperturbed latent representation.
-        latent_input_2x = torch.cat([latent_model_input, latent_model_input], dim=0)
-
-        # Image conditioning latents [2, 25, 4, 72, 128]
-        image_latents_repeated = initial_latent.repeat(1, 25, 1, 1, 1)
-        image_latents_2x = image_latents_repeated.repeat(2, 1, 1, 1, 1)
-
-        # Concat channel dimension -> [2, 25, 8, 72, 128]
-        unet_input = torch.cat([latent_input_2x, image_latents_2x], dim=2)
-
-        # Repeat conditioning along batch dimension [2, seq_len, 1024]
-        uncond_hidden = torch.zeros_like(encoder_hidden_states)
-        hidden_states_2x = torch.cat([uncond_hidden, encoder_hidden_states], dim=0)
-        time_ids_2x = added_time_ids.repeat(2, 1) if added_time_ids.shape[0] == 1 else added_time_ids
-
-        # SVD forward pass
-        with torch.no_grad():
-            noise_pred = unet(
-                unet_input,
-                t,
-                encoder_hidden_states=hidden_states_2x,
-                added_time_ids=time_ids_2x,
-            ).sample
-
-        # CFG extrapolation
-        noise_pred_uncond, noise_pred_cond = noise_pred.chunk(2, dim=0)
-        noise_pred = noise_pred_uncond + cfg_scale * (noise_pred_cond - noise_pred_uncond)
-
-        # Scheduler step
-        latents = scheduler.step(noise_pred, t, latents).prev_sample
-
-    return latents
-
-
-def extract_missing_scenario_videos(
-    sids: Sequence[str],
-    output_dir: Path,
-    repo_id: str = "KIT-MRT/KITScenes-LongTail",
-) -> None:
-    """Extract missing validation future videos from remote Hugging Face parquet row groups."""
-    missing_sids = [s for s in sids if not all((output_dir / s / f"{c}.mp4").exists() for c in CANONICAL_CAMERAS)]
-    if not missing_sids:
-        print("  [✓] All requested validation future videos already exist on disk.")
-        return
-
-    print(f"  [*] Extracting future videos for {len(missing_sids)} scenarios from HF dataset...")
-    try:
-        from huggingface_hub import HfFileSystem
-        import pyarrow.parquet as pq
-    except ImportError:
-        print("  [!] huggingface_hub or pyarrow not installed; skipping parquet extraction.")
-        return
-
-    fs = HfFileSystem()
-    full_parquet_path = f"datasets/{repo_id}/data/val_future-00000-of-00001.parquet"
-    req_cols = ["scenario_id"] + [CAMERA_FRAME_COLUMNS[c] for c in CANONICAL_CAMERAS]
-
-    with fs.open(full_parquet_path, "rb") as f_pq:
-        pf = pq.ParquetFile(f_pq)
-        for rg_idx in range(pf.num_row_groups):
-            t_ids = pf.read_row_group(rg_idx, columns=["scenario_id"])
-            rg_sids = t_ids["scenario_id"].to_pylist()
-            matching = [s for s in missing_sids if s in rg_sids]
-            if not matching:
-                continue
-
-            print(f"    - Reading row group {rg_idx} for scenarios {matching}...")
-            t_data = pf.read_row_group(rg_idx, columns=req_cols)
-            for sid in matching:
-                row_idx = rg_sids.index(sid)
-                for cam in CANONICAL_CAMERAS:
-                    col_name = CAMERA_FRAME_COLUMNS[cam]
-                    frames = t_data[col_name][row_idx].as_py()
-                    cam_frame_dir = output_dir / sid / cam
-                    cam_frame_dir.mkdir(parents=True, exist_ok=True)
-                    frame_paths = []
-                    for f_idx, f_dict in enumerate(frames):
-                        f_path = cam_frame_dir / f"frame_{f_idx:02d}.jpg"
-                        if not f_path.exists():
-                            # Decode and resize if needed
-                            arr = cv2.imdecode(np.frombuffer(f_dict["bytes"], np.uint8), cv2.IMREAD_COLOR)
-                            if arr.shape[1] != spec.WIDTH or arr.shape[0] != spec.HEIGHT:
-                                arr = cv2.resize(arr, (spec.WIDTH, spec.HEIGHT), interpolation=cv2.INTER_AREA)
-                            cv2.imwrite(str(f_path), arr)
-                        frame_paths.append(f_path)
-
-                    mp4_path = output_dir / sid / f"{cam}.mp4"
-                    if not mp4_path.exists():
-                        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-                        writer = cv2.VideoWriter(str(mp4_path), fourcc, 5.0, (spec.WIDTH, spec.HEIGHT))
-                        for fp in frame_paths:
-                            img = cv2.imread(str(fp))
-                            writer.write(img)
-                        writer.release()
-                print(f"    [✓] Extracted future videos for scenario {sid}")
-
-
-def run_head_to_head_evaluation(
-    scenarios: Sequence[str] = DEFAULT_HEAD_TO_HEAD_SCENARIOS,
-    checkpoint_path: Path = PROJECT_ROOT / "models" / "cssc_pilot_step30.pt",
+def run_prediction_stage(
+    scenarios: Sequence[str],
+    checkpoint_path: Path,
     device: str = "cuda:0",
     mock: bool = False,
     steps: int = 25,
     min_guidance_scale: float = 1.0,
     max_guidance_scale: float = 3.0,
     base_seed: int = 42,
-    extract_missing_gt: bool = True,
     output_dir: Path = PROJECT_ROOT / "renders" / "phase5_5",
-    report_json: Path = PROJECT_ROOT / "reports" / "phase5_5_candidate_head_to_head.json",
-    report_md: Path = PROJECT_ROOT / "reports" / "phase5_5_candidate_head_to_head.md",
+    manifest_path: Path = PROJECT_ROOT / "reports" / "phase5_5_prediction_manifest.json",
 ) -> Dict[str, Any]:
-    """Execute multi-scenario head-to-head candidate evaluation."""
+    """Execute Stage A: Candidate prediction strictly isolated from ground truth."""
     print("=" * 80)
-    print("PHASE 5.5: MULTI-SCENARIO HEAD-TO-HEAD CANDIDATE EVALUATION")
-    print(f"Device: {device} | Mock Mode: {mock} | Denoising Steps: {steps} | Base Seed: {base_seed}")
-    print(f"Scenarios to evaluate ({len(scenarios)}): {list(scenarios)}")
-    print(f"Candidates to compare ({len(CANDIDATES)}): {list(CANDIDATES)}")
-    print("SpatialAdapter Status: STRICTLY FROZEN AND EXCLUDED (0% latent residual injection)")
+    print("STAGE A: CANDIDATE DIFFUSION PREDICTION (ZERO FUTURE LEAKAGE)")
+    print(f"Device: {device} | Mock Mode: {mock} | Steps: {steps} | Base Seed: {base_seed}")
+    print(f"Scenarios ({len(scenarios)}): {list(scenarios)}")
+    print(f"Candidates ({len(CANDIDATES)}): {list(CANDIDATES)}")
+    print("SpatialAdapter: STRICTLY DISABLED (0% latent residual injection)")
     print("=" * 80)
-
-    # 1. Baseline submission archive verification
-    base_intact, base_hash, base_meta = validate_baseline_archive(strict=False)
-    print(f"\n[*] Pre-Evaluation Baseline Submission Archive Integrity:")
-    print(f"  - Exists: {base_meta['exists']}")
-    print(f"  - SHA-256: {base_hash}")
-    print(f"  - Intact: {base_intact}")
 
     parsed_device = torch.device(device)
     dtype = torch.float16 if parsed_device.type == "cuda" else torch.float32
 
-    # 2. Checkpoint forensics check
+    # Checkpoint provenance check
     assert checkpoint_path.exists(), f"Checkpoint missing: {checkpoint_path}"
     ckpt_hash = sha256_file(checkpoint_path)
     ckpt = torch.load(checkpoint_path, map_location="cpu")
     ckpt_step = ckpt.get("step", 6)
     print(f"\n[*] Loaded Checkpoint: {checkpoint_path.name}")
     print(f"  - SHA-256: {ckpt_hash}")
-    print(f"  - Internal Step Counter: {ckpt_step} (verified Step-{ckpt_step} artifact)")
-    print(f"  - Conditioner Tensors: {len(ckpt['conditioner_state_dict'])}")
+    print(f"  - Internal Step Counter: Step {ckpt_step}")
 
-    # 3. Model Architecture Instantiation
+    # Model architecture loading
     model_id = "stabilityai/stable-video-diffusion-img2vid-xt"
     if not mock:
         print(f"\n[*] Loading pretrained SVD-XT components from {model_id}...")
@@ -544,13 +354,13 @@ def run_head_to_head_evaluation(
         feature_extractor = CLIPImageProcessor.from_pretrained(model_id, subfolder="feature_extractor")
         print(f"  [✓] Pretrained SVD-XT components loaded in {time.time() - t0:.2f}s")
     else:
-        print("\n[*] Initializing Mock SVD-XT components for fast testing...")
+        print("\n[*] Initializing Mock SVD-XT components...")
         unet = MockSVDUNet(in_channels=8, out_channels=4).to(device=parsed_device, dtype=dtype)
         vae = None
         image_encoder = None
         feature_extractor = None
 
-    # 4. MultiViewConditioner Instantiation (SpatialAdapter is NOT loaded into VRAM)
+    # MultiViewConditioner loading
     conditioner = MultiViewConditioner().to(device=parsed_device, dtype=dtype)
     conditioner.load_state_dict(ckpt["conditioner_state_dict"])
     conditioner.eval()
@@ -559,7 +369,7 @@ def run_head_to_head_evaluation(
     scheduler = create_default_euler_scheduler()
     planner = knn_trajectory.KNNTrajectoryPlanner()
 
-    # Read validation metadata
+    # Load validation metadata (strictly observed inputs: driving instruction & past trajectory)
     val_records: Dict[str, Any] = {}
     val_meta_path = PROJECT_ROOT / "data" / "val_manifest.jsonl"
     if val_meta_path.exists():
@@ -569,30 +379,33 @@ def run_head_to_head_evaluation(
                     rec = json.loads(line)
                     val_records[str(rec["scenario_id"]).zfill(7)] = rec
 
-    # Ensure ground truth future videos exist if extract requested
-    val_fut_dir = PROJECT_ROOT / "data" / "val_future_videos"
-    if extract_missing_gt and not mock:
-        extract_missing_scenario_videos(scenarios, val_fut_dir)
-
-    results: Dict[str, Any] = {
+    manifest: Dict[str, Any] = {
         "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "stage": "prediction",
         "checkpoint_path": str(checkpoint_path),
         "checkpoint_sha256": ckpt_hash,
         "checkpoint_training_step": ckpt_step,
         "device": device,
         "mock_mode": mock,
         "denoising_steps": steps,
-        "guidance_scale_range": [min_guidance_scale, max_guidance_scale],
         "base_seed": base_seed,
         "candidates": list(CANDIDATES),
         "scenarios_evaluated": list(scenarios),
+        "inference_mathematics": {
+            "initial_noise_scaling": "latents = starting_noise * scheduler.init_noise_sigma",
+            "cfg_schedule": "per_frame_guidance_linspace(1.0, 3.0, 25 frames)",
+            "unconditional_image_latents": "zeros_like(image_latents)",
+            "fps_micro_conditioning": "fps - 1 = 4",
+            "spatial_adapter": "STRICTLY_DISABLED",
+        },
         "scenarios": {},
     }
 
-    # 5. Execute Evaluation Across Scenarios
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     for sid in scenarios:
         print("\n" + "=" * 60)
-        print(f"HEAD-TO-HEAD EVALUATION ON SCENARIO: {sid}")
+        print(f"PREDICTING SCENARIO: {sid}")
         print("=" * 60)
 
         obs_dir = PROJECT_ROOT / "data" / "val_observed_t0" / sid
@@ -600,9 +413,8 @@ def run_head_to_head_evaluation(
         instruction = rec.get("driving_instruction", "drive straight on")
         stype = rec.get("scenario_type", "regular")
         past_traj = rec.get("past_trajectory", [])
-        expert_like = np.asarray(rec.get("expert_like", []), dtype=float)
 
-        # Plan future trajectory strictly from observed past without touching future GT
+        # Plan trajectory strictly from observed past without touching future GT
         planned_pts, prov = planner.plan_with_provenance(
             scenario_id=sid,
             past_trajectory=past_traj,
@@ -613,7 +425,7 @@ def run_head_to_head_evaluation(
         assert sid not in prov["retrieved_donors"], f"kNN self-exclusion violated for {sid}!"
         print(f"  [✓] Planned {len(planned_pts)} waypoints via {prov['method']}.")
 
-        # Kinematics computation for CSSC
+        # Kinematics for CSSC
         dt = spec.WAYPOINT_STEP_S
         diffs = np.diff(planned_pts, axis=0, prepend=planned_pts[:1])
         speeds = np.linalg.norm(diffs, axis=1) / dt
@@ -623,7 +435,6 @@ def run_head_to_head_evaluation(
         kinematics_np = np.stack([planned_pts[:, 0], planned_pts[:, 1], yaws, speeds, accels, curvatures], axis=-1)
         kinematics_tensor = torch.from_numpy(kinematics_np).unsqueeze(0).to(device=parsed_device, dtype=dtype)
 
-        # Trajectory-derived motion bucket
         mean_speed = float(np.mean(speeds))
         traj_motion_bucket = int(np.clip(127 + int((mean_speed - 10.0) * 8.0), 1, 255))
         default_motion_bucket = 127
@@ -638,17 +449,11 @@ def run_head_to_head_evaluation(
             pil_obs = Image.open(obs_file).convert("RGB")
 
             if not mock:
-                px = feature_extractor(images=pil_obs, return_tensors="pt").pixel_values.to(
-                    device=parsed_device, dtype=dtype
-                )
-                with torch.no_grad():
-                    clip_emb = image_encoder(px).image_embeds.unsqueeze(1)  # [1, 1, 1024]
+                clip_emb = encode_image_to_clip_embedding(image_encoder, feature_extractor, pil_obs, parsed_device, dtype)
                 clip_dict[cam] = clip_emb
 
                 gen_init = torch.Generator(device=parsed_device.type).manual_seed(base_seed + CAMERA_SEED_OFFSETS[cam])
-                init_lat = encode_frame_to_latent(
-                    vae, pil_obs, parsed_device, gen_init, use_mode=True, noise_aug_strength=0.02, dtype=dtype
-                )
+                init_lat = encode_image_to_vae_latents(vae, pil_obs, parsed_device, gen_init, noise_aug_strength=0.02, dtype=dtype)
                 initial_latents_dict[cam] = init_lat
             else:
                 clip_dict[cam] = torch.randn(1, 1, 1024, device=parsed_device, dtype=dtype)
@@ -658,21 +463,10 @@ def run_head_to_head_evaluation(
         with torch.no_grad():
             cssc_bank_dict = conditioner.forward_all_cameras(clip_dict, kinematics_tensor)
 
-        cssc_diagnostics_dict: Dict[str, Any] = {}
-        for cam in CANONICAL_CAMERAS:
-            token_bank = cssc_bank_dict[cam]["encoder_hidden_states"]
-            cssc_diagnostics_dict[cam] = compute_cssc_token_diagnostics(token_bank)
+        candidate_video_paths: Dict[str, Dict[str, str]] = {c: {} for c in CANDIDATES}
+        candidate_telemetry: Dict[str, Dict[str, Any]] = {c: {} for c in CANDIDATES}
 
-        # Storage for generated videos per candidate
-        candidate_video_arrays: Dict[str, Dict[str, np.ndarray]] = {c: {} for c in CANDIDATES}
-
-        # SVD Added time IDs base setup
-        fps_id = 5
-        fps_tensor = torch.tensor([fps_id], device=parsed_device, dtype=torch.long)
-
-        # -------------------------------------------------------------
-        # RUN CANDIDATE DIFFUSION ROLLOUTS
-        # -------------------------------------------------------------
+        # Run diffusion rollout across candidates
         for cand in CANDIDATES:
             print(f"\n  ---> Executing Candidate: {cand.upper()}")
             for cam in CANONICAL_CAMERAS:
@@ -682,65 +476,140 @@ def run_head_to_head_evaluation(
                 z_T = torch.randn(1, 25, 4, 72, 128, generator=gen_noise, device=parsed_device, dtype=dtype)
 
                 if cand == "vanilla_svd":
-                    enc_hidden = clip_dict[cam]  # [1, 1, 1024]
+                    enc_hidden = clip_dict[cam]
                     mb_val = default_motion_bucket
                 elif cand == "project_baseline":
-                    enc_hidden = clip_dict[cam]  # [1, 1, 1024]
+                    enc_hidden = clip_dict[cam]
                     mb_val = traj_motion_bucket
                 elif cand == "cssc_only":
-                    enc_hidden = cssc_bank_dict[cam]["encoder_hidden_states"]  # [1, 27, 1024]
+                    enc_hidden = cssc_bank_dict[cam]["encoder_hidden_states"]
                     mb_val = traj_motion_bucket
 
-                m_tensor = torch.tensor([mb_val], device=parsed_device, dtype=torch.long)
-                c_added_time_ids = torch.cat(
-                    [fps_tensor, m_tensor, torch.tensor([0.02], device=parsed_device, dtype=dtype)]
-                ).unsqueeze(0)
-
-                latents_out = run_candidate_diffusion_rollout(
+                # Execute official SVD mathematical rollout
+                latents_out, telem = run_official_svd_diffusion_rollout(
                     unet=unet,
                     scheduler=scheduler,
                     initial_latent=initial_latents_dict[cam],
                     encoder_hidden_states=enc_hidden,
-                    added_time_ids=c_added_time_ids,
                     starting_noise=z_T,
+                    fps=5,  # conditioned on fps - 1 = 4
+                    motion_bucket_id=mb_val,
+                    noise_aug_strength=0.02,
                     num_inference_steps=steps,
                     min_guidance_scale=min_guidance_scale,
                     max_guidance_scale=max_guidance_scale,
+                    do_classifier_free_guidance=True,
                 )
+                candidate_telemetry[cand][cam] = telem
 
                 if not mock:
                     lat_unscaled = latents_out / vae.config.scaling_factor
                     decoded = decode_latents_temporal(vae, lat_unscaled, decode_chunk_size=2)
                     arr = ((decoded[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
-                    cropped = arr[:, 4:572, 74:950, :]
+                    cropped = crop_svd_array_to_kitscenes(arr)
                 else:
                     cropped = np.zeros((spec.FRAME_COUNT, spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8)
 
-                candidate_video_arrays[cand][cam] = cropped
-
                 # Save MP4 video
                 cam_out_mp4 = output_dir / f"{sid}_{cam}_{cand}.mp4"
-                cam_out_mp4.parent.mkdir(parents=True, exist_ok=True)
                 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                 writer = cv2.VideoWriter(str(cam_out_mp4), fourcc, 5.0, (spec.WIDTH, spec.HEIGHT))
                 for f_idx in range(len(cropped)):
                     writer.write(cv2.cvtColor(cropped[f_idx], cv2.COLOR_RGB2BGR))
                 writer.release()
+                candidate_video_paths[cand][cam] = str(cam_out_mp4)
 
-        # -------------------------------------------------------------
-        # POST-INFERENCE EVALUATION AGAINST GROUND TRUTH
-        # -------------------------------------------------------------
-        print("\n" + "-" * 60)
-        print(f"COMPUTING RIGOROUS METRICS & HEAD-TO-HEAD COMPARISON FOR {sid}")
-        print("-" * 60)
+        manifest["scenarios"][sid] = {
+            "scenario_id": sid,
+            "instruction": instruction,
+            "scenario_type": stype,
+            "planned_waypoints": planned_pts.tolist(),
+            "planned_mean_speed": round(mean_speed, 2),
+            "trajectory_motion_bucket": traj_motion_bucket,
+            "planning_provenance": prov,
+            "video_paths": candidate_video_paths,
+            "telemetry": candidate_telemetry,
+        }
 
-        fut_dir = val_fut_dir / sid
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(manifest_path, "w") as f:
+        json.dump(manifest, f, indent=2)
+    print(f"\n[✓] Stage A Prediction Complete! Manifest saved to: {manifest_path}")
+    return manifest
+
+
+# ==============================================================================
+# STAGE B: EVALUATION ONLY (DECOUPLED POST-INFERENCE WITH NON-SILENT CHECKS)
+# ==============================================================================
+
+def run_evaluation_stage(
+    manifest_path: Path = PROJECT_ROOT / "reports" / "phase5_5_prediction_manifest.json",
+    val_fut_dir: Path = PROJECT_ROOT / "data" / "val_future_videos",
+    val_meta_path: Path = PROJECT_ROOT / "data" / "val_manifest.jsonl",
+    report_json: Path = PROJECT_ROOT / "reports" / "phase5_5_candidate_head_to_head.json",
+    report_md: Path = PROJECT_ROOT / "reports" / "phase5_5_candidate_head_to_head.md",
+) -> Dict[str, Any]:
+    """Execute Stage B: Ground-truth evaluation on generated predictions with zero silent fallbacks."""
+    print("=" * 80)
+    print("STAGE B: DECOUPLED CANDIDATE EVALUATION & STATISTICAL SYNTHESIS")
+    print(f"Manifest: {manifest_path}")
+    print(f"Ground-Truth Directory: {val_fut_dir}")
+    print("=" * 80)
+
+    assert manifest_path.exists(), f"Prediction manifest not found: {manifest_path}. Run Stage A first!"
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+
+    # Baseline submission archive check
+    base_intact, base_hash, base_meta = validate_baseline_archive(strict=False)
+
+    val_records: Dict[str, Any] = {}
+    if val_meta_path.exists():
+        with open(val_meta_path) as f:
+            for line in f:
+                if line.strip():
+                    rec = json.loads(line)
+                    val_records[str(rec["scenario_id"]).zfill(7)] = rec
+
+    scenarios = manifest["scenarios_evaluated"]
+    candidates = manifest["candidates"]
+
+    results: Dict[str, Any] = {
+        "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "stage": "evaluation",
+        "prediction_manifest": str(manifest_path),
+        "checkpoint_path": manifest["checkpoint_path"],
+        "checkpoint_sha256": manifest["checkpoint_sha256"],
+        "checkpoint_training_step": manifest["checkpoint_training_step"],
+        "device": manifest["device"],
+        "mock_mode": manifest["mock_mode"],
+        "denoising_steps": manifest["denoising_steps"],
+        "base_seed": manifest["base_seed"],
+        "candidates": candidates,
+        "scenarios_evaluated": scenarios,
+        "baseline_submission_archive": {
+            "exists": base_meta["exists"],
+            "sha256": base_hash,
+            "intact": base_intact,
+        },
+        "scenarios": {},
+    }
+
+    # Evaluate each scenario
+    for sid in scenarios:
+        s_manifest = manifest["scenarios"][sid]
+        planned_pts = np.asarray(s_manifest["planned_waypoints"], dtype=float)
+        instruction = s_manifest["instruction"]
+
+        # 1. Load genuine future videos (NON-SILENT: no black padding)
         gt_video_arrays: Dict[str, np.ndarray] = {}
+        fut_dir = val_fut_dir / sid
 
         for cam in CANONICAL_CAMERAS:
             gt_mp4 = fut_dir / f"{cam}.mp4"
             gt_frame_dir = fut_dir / cam
             gt_frames = []
+
             if gt_mp4.exists():
                 cap = cv2.VideoCapture(str(gt_mp4))
                 while True:
@@ -755,14 +624,38 @@ def run_head_to_head_evaluation(
                     f = cv2.imread(str(fp))
                     if f is not None:
                         gt_frames.append(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
-            while len(gt_frames) < spec.FRAME_COUNT:
-                gt_frames.append(np.zeros((spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8))
+
+            if len(gt_frames) != spec.FRAME_COUNT:
+                raise RuntimeError(
+                    f"EVALUATION FAILURE: Scenario {sid} camera {cam} ground truth is missing or incomplete "
+                    f"({len(gt_frames)} frames found, expected exactly {spec.FRAME_COUNT}). Silent black padding is prohibited!"
+                )
             gt_video_arrays[cam] = np.stack(gt_frames[:spec.FRAME_COUNT], axis=0)
+
+        # 2. Load generated candidate videos from manifest paths
+        candidate_video_arrays: Dict[str, Dict[str, np.ndarray]] = {c: {} for c in candidates}
+        for cand in candidates:
+            for cam in CANONICAL_CAMERAS:
+                vid_path = Path(s_manifest["video_paths"][cand][cam])
+                if not vid_path.exists():
+                    raise FileNotFoundError(f"Predicted video missing from manifest: {vid_path}")
+                cap = cv2.VideoCapture(str(vid_path))
+                c_frames = []
+                while True:
+                    ret, f = cap.read()
+                    if not ret:
+                        break
+                    c_frames.append(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
+                cap.release()
+                if len(c_frames) != spec.FRAME_COUNT:
+                    raise RuntimeError(f"Predicted video {vid_path} has {len(c_frames)} frames, expected {spec.FRAME_COUNT}!")
+                candidate_video_arrays[cand][cam] = np.stack(c_frames, axis=0)
 
         vanilla_arrays = candidate_video_arrays["vanilla_svd"]
 
+        # 3. Compute metrics for each candidate
         candidate_evaluations: Dict[str, Any] = {}
-        for cand in CANDIDATES:
+        for cand in candidates:
             c_arrays = candidate_video_arrays[cand]
             cam_metrics: Dict[str, Any] = {}
 
@@ -795,8 +688,7 @@ def run_head_to_head_evaluation(
                 flows.append(flow_mag)
 
             boundary_corr = compute_boundary_strip_correlation(c_arrays)
-
-            cand_renders = {c: output_dir / f"{sid}_{c}_{cand}.mp4" for c in CANONICAL_CAMERAS}
+            cand_renders = {c: Path(s_manifest["video_paths"][cand][c]) for c in CANONICAL_CAMERAS}
             emc_res = emc_eval.compute_video_optical_flow_emc(cand_renders, planned_pts)
             nat_proxy = pq_proxy.score_scenario_videos(cand_renders)
 
@@ -814,24 +706,27 @@ def run_head_to_head_evaluation(
                 "camera_evaluations": cam_metrics,
             }
 
-        mms_score = knn_trajectory.compute_mms_score(planned_pts, expert_like) if len(expert_like) > 0 else 3.5
+        # 4. MMS Evaluation: Return null if expert_like trajectory is absent (NO 3.5 fallback!)
+        rec = val_records.get(sid, {})
+        expert_like = np.asarray(rec.get("expert_like", []), dtype=float)
+        if len(expert_like) > 0 and not np.all(expert_like == -100.0):
+            mms_score = round(float(knn_trajectory.compute_mms_score(planned_pts, expert_like)), 2)
+        else:
+            mms_score = None  # Explicit null, no silent default fallback
 
         results["scenarios"][sid] = {
             "scenario_id": sid,
             "instruction": instruction,
-            "planned_mean_speed": round(mean_speed, 2),
-            "trajectory_motion_bucket": traj_motion_bucket,
-            "official_mms_score": round(float(mms_score), 2),
+            "planned_mean_speed": s_manifest["planned_mean_speed"],
+            "trajectory_motion_bucket": s_manifest["trajectory_motion_bucket"],
+            "official_mms_score": mms_score,
             "mms_evaluates_video": False,
-            "cssc_diagnostics": cssc_diagnostics_dict,
             "candidates": candidate_evaluations,
         }
 
-    # -------------------------------------------------------------
-    # 6. STATISTICAL SYNTHESIS & HEAD-TO-HEAD WIN-RATE ANALYSIS
-    # -------------------------------------------------------------
+    # 5. Aggregate Multi-Scenario Statistics
     aggregate_stats: Dict[str, Any] = {}
-    for cand in CANDIDATES:
+    for cand in candidates:
         c_psnrs = [results["scenarios"][s]["candidates"][cand]["mean_psnr"] for s in scenarios]
         c_ssims = [results["scenarios"][s]["candidates"][cand]["mean_ssim"] for s in scenarios]
         c_bcorrs = [results["scenarios"][s]["candidates"][cand]["boundary_strip_correlation"] for s in scenarios]
@@ -852,7 +747,7 @@ def run_head_to_head_evaluation(
             "local_emc_mean": round(float(np.mean(c_emcs)), 3),
         }
 
-    # Pairwise Head-to-Head Comparisons
+    # Pairwise Comparisons
     comparisons = {
         "cssc_only_vs_vanilla": {
             "psnr_delta_mean": round(aggregate_stats["cssc_only"]["psnr_mean"] - aggregate_stats["vanilla_svd"]["psnr_mean"], 2),
@@ -880,7 +775,7 @@ def run_head_to_head_evaluation(
     results["aggregate_statistics"] = aggregate_stats
     results["pairwise_comparisons"] = comparisons
 
-    # 7. Write Reports (JSON and Markdown)
+    # Write Reports
     report_json.parent.mkdir(parents=True, exist_ok=True)
     with open(report_json, "w") as f:
         json.dump(results, f, indent=2)
@@ -891,10 +786,10 @@ def run_head_to_head_evaluation(
         "# Phase 5.5: Multi-Scenario Head-to-Head Candidate Evaluation Report",
         "",
         f"- **Date/Time (UTC):** {results['timestamp_utc']}",
-        f"- **Device:** `{device}` (Mock Mode: `{mock}`)",
-        f"- **Denoising Steps:** {steps} steps (EulerDiscreteScheduler)",
-        f"- **Base Seed:** {base_seed} (Deterministic camera seed offsets applied)",
-        f"- **Evaluated Checkpoint:** `{checkpoint_path.name}` (SHA-256: `{ckpt_hash[:16]}...`, Step: {ckpt_step})",
+        f"- **Device:** `{manifest['device']}` (Mock Mode: `{manifest['mock_mode']}`)",
+        f"- **Denoising Steps:** {manifest['denoising_steps']} steps (EulerDiscreteScheduler)",
+        f"- **Base Seed:** {manifest['base_seed']} (Deterministic camera seed offsets applied)",
+        f"- **Evaluated Checkpoint:** `{manifest['checkpoint_path']}` (SHA-256: `{manifest['checkpoint_sha256'][:16]}...`, Step: {manifest['checkpoint_training_step']})",
         f"- **SpatialAdapter Status:** `STRICTLY_DISABLED` (Residual perturbation bypassed)",
         f"- **Baseline Submission Archive:** `{base_hash}` (Intact: `{base_intact}`)",
         "",
@@ -902,7 +797,7 @@ def run_head_to_head_evaluation(
         "",
         "## 1. Executive Summary & Selection Decision",
         "",
-        "This evaluation pits the two viable candidate architectures against each other and against Vanilla SVD across diverse official validation scenarios:",
+        "This evaluation pits the two viable candidate architectures against each other and against Vanilla SVD across diverse official validation scenarios using official SVD-XT inference mathematics:",
         "- **Candidate 1 (`project_baseline`)**: kNN trajectory planner + trajectory-derived SVD motion bucket.",
         "- **Candidate 2 (`cssc_only`)**: MultiViewConditioner 27-token bank (camera + scene + waypoints), SpatialAdapter disabled.",
         "- **Reference System (`vanilla_svd`)**: Pretrained frozen SVD-XT, default motion bucket 127.",
@@ -912,7 +807,7 @@ def run_head_to_head_evaluation(
         "| :--- | :--- | :--- | :--- | :--- |",
     ]
 
-    for cand in CANDIDATES:
+    for cand in candidates:
         c_agg = aggregate_stats[cand]
         md_lines.append(
             f"| `{cand}` | **{c_agg['psnr_mean']:.2f}** (±{c_agg['psnr_std']:.2f}) | "
@@ -950,7 +845,6 @@ def run_head_to_head_evaluation(
         c_psnr = s_data["candidates"]["cssc_only"]["mean_psnr"]
         c_ssim = s_data["candidates"]["cssc_only"]["mean_ssim"]
 
-        # Winner heuristic: higher SSIM or PSNR
         winner = "cssc_only" if c_ssim >= b_ssim and c_psnr >= b_psnr - 0.5 else "project_baseline"
 
         md_lines.append(
@@ -962,13 +856,12 @@ def run_head_to_head_evaluation(
         "",
         "---",
         "",
-        "## 3. Metric Disclaimers & Rigorous Controls",
+        "## 3. Metric Disclaimers & Experimental Guarantees",
         "",
-        "1. **SpatialAdapter Frozen:** Bypassed completely across all runs. Zero latent energy perturbation.",
-        "2. **Evaluated Checkpoint:** Step-6 checkpoint (`9e65c397...`) from git repository provenance.",
-        "3. **Zero Future Target Leakage:** Future video targets loaded strictly after diffusion generation is complete.",
-        "4. **kNN Self-Exclusion:** Confirmed active for all evaluated scenarios.",
-        "5. **Official Metric Integrity:** Local EMC approximation disclaimed as non-official; visual naturalness proxy explicitly flagged with `is_official_pq: false`.",
+        "1. **Inference Mathematics Audit:** Initial noise is properly scaled by `scheduler.init_noise_sigma`. CFG schedule varies across frames, not steps. Unconditional image latents are strictly zero-conditioned. Added time IDs pass `fps - 1 = 4`.",
+        "2. **Strict Two-Stage Decoupling:** Stage A (prediction) has zero access to ground-truth future videos or future trajectories.",
+        "3. **Zero Silent Fallbacks:** Black-frame padding is strictly disabled; missing future videos trigger an explicit evaluation error. Missing reference trajectories produce null MMS.",
+        "4. **SpatialAdapter Frozen:** Bypassed completely across all runs. Zero latent energy perturbation.",
     ])
 
     report_md.parent.mkdir(parents=True, exist_ok=True)
@@ -983,14 +876,17 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Phase 5.5: Multi-Scenario Head-to-Head Candidate Evaluation."
     )
+    parser.add_argument("--stage", type=str, default="all", choices=["predict", "evaluate", "all"],
+                        help="Execution stage: predict (Stage A), evaluate (Stage B), or all")
     parser.add_argument("--device", type=str, default="cuda:0" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--mock", action="store_true", help="Run with mock SVD-XT components for fast testing")
     parser.add_argument("--steps", type=int, default=25, help="Number of Euler denoising steps")
     parser.add_argument("--scenarios", type=str, default=",".join(DEFAULT_HEAD_TO_HEAD_SCENARIOS))
     parser.add_argument("--base-seed", type=int, default=42)
     parser.add_argument("--checkpoint-path", type=Path, default=PROJECT_ROOT / "models" / "cssc_pilot_step30.pt")
-    parser.add_argument("--extract-missing-gt", action="store_true", default=False)
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "renders" / "phase5_5")
+    parser.add_argument("--manifest-path", type=Path, default=PROJECT_ROOT / "reports" / "phase5_5_prediction_manifest.json")
+    parser.add_argument("--val-future-dir", type=Path, default=PROJECT_ROOT / "data" / "val_future_videos")
     parser.add_argument("--report-json", type=Path, default=PROJECT_ROOT / "reports" / "phase5_5_candidate_head_to_head.json")
     parser.add_argument("--report-md", type=Path, default=PROJECT_ROOT / "reports" / "phase5_5_candidate_head_to_head.md")
     args = parser.parse_args()
@@ -999,18 +895,26 @@ def main() -> int:
     if args.mock and args.steps > 2:
         args.steps = 2
 
-    run_head_to_head_evaluation(
-        scenarios=scenarios,
-        checkpoint_path=args.checkpoint_path,
-        device=args.device,
-        mock=args.mock,
-        steps=args.steps,
-        base_seed=args.base_seed,
-        extract_missing_gt=args.extract_missing_gt,
-        output_dir=args.output_dir,
-        report_json=args.report_json,
-        report_md=args.report_md,
-    )
+    if args.stage in ("predict", "all"):
+        run_prediction_stage(
+            scenarios=scenarios,
+            checkpoint_path=args.checkpoint_path,
+            device=args.device,
+            mock=args.mock,
+            steps=args.steps,
+            base_seed=args.base_seed,
+            output_dir=args.output_dir,
+            manifest_path=args.manifest_path,
+        )
+
+    if args.stage in ("evaluate", "all"):
+        run_evaluation_stage(
+            manifest_path=args.manifest_path,
+            val_fut_dir=args.val_future_dir,
+            report_json=args.report_json,
+            report_md=args.report_md,
+        )
+
     return 0
 
 
