@@ -75,16 +75,24 @@ def encode_image_to_vae_latents(
     """Encode initial PIL image to mode-extracted VAE latent [1, 4, 72, 128] with noise augmentation."""
     padded_img, _ = adapt_aspect_ratio_to_svd(image)
     arr = np.array(padded_img).astype(np.float32) / 127.5 - 1.0  # [-1, 1]
-    tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=dtype)
+    
+    # Safely match VAE parameter dtype (e.g. float32 to avoid half-precision conv bias mismatch)
+    vae_dtype = next(vae.parameters()).dtype if hasattr(vae, "parameters") and list(vae.parameters()) else dtype
+    tensor = torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(device=device, dtype=vae_dtype)
 
     if noise_aug_strength > 0:
-        noise = torch.randn(tensor.shape, generator=generator, device=device, dtype=dtype)
+        noise = torch.randn(tensor.shape, generator=generator, device=device, dtype=vae_dtype)
         tensor = tensor + noise_aug_strength * noise
 
     with torch.no_grad():
         dist = vae.encode(tensor).latent_dist
-        latent = dist.mode() * vae.config.scaling_factor
-    return latent
+        latent = dist.mode()
+        shift_factor = getattr(vae.config, "shift_factor", None)
+        if shift_factor is not None:
+            latent = latent - shift_factor
+        scaling_factor = getattr(vae.config, "scaling_factor", 0.18215)
+        latent = latent * scaling_factor
+    return latent.to(dtype=dtype)
 
 
 def encode_image_to_clip_embedding(

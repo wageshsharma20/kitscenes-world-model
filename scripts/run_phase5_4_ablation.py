@@ -725,8 +725,7 @@ def run_phase5_4_ablation(
 
                 # Decode latents
                 if not mock:
-                    lat_unscaled = latents_out / vae.config.scaling_factor
-                    decoded = decode_latents_temporal(vae, lat_unscaled, decode_chunk_size=2)
+                    decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=2)
                     arr = ((decoded[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
                     cropped = arr[:, 4:572, 74:950, :]
                 else:

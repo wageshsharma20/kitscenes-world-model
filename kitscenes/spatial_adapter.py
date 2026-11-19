@@ -531,6 +531,10 @@ def decode_latents_temporal(
     scaling_factor = getattr(vae.config, "scaling_factor", 0.18215)
     latents_flat = (1.0 / scaling_factor) * latents_flat
 
+    # Ensure latents match VAE parameters dtype (e.g. float32 if VAE is float32)
+    vae_dtype = next(vae.parameters()).dtype if hasattr(vae, "parameters") and list(vae.parameters()) else latents.dtype
+    latents_flat = latents_flat.to(dtype=vae_dtype)
+
     frames = []
     for i in range(0, latents_flat.shape[0], decode_chunk_size):
         chunk = latents_flat[i : i + decode_chunk_size]

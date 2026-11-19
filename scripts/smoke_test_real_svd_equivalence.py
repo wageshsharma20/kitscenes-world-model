@@ -195,7 +195,7 @@ def run_real_svd_smoke_test(
     golden_diff = 0.0
     if not mock and pipeline is not None:
         print("  [*] Running official StableVideoDiffusionPipeline forward pass (2 steps)...")
-        # Direct execution of official pipeline
+        # Direct execution of official pipeline with zero noise augmentation to isolate sampler math
         out_official = pipeline(
             image=pil_front,
             height=576,
@@ -206,29 +206,25 @@ def run_real_svd_smoke_test(
             max_guidance_scale=3.0,
             fps=5,
             motion_bucket_id=127,
-            noise_aug_strength=0.02,
-            generator=torch.Generator(device=parsed_device.type).manual_seed(base_seed),
+            noise_aug_strength=0.0,
+            latents=z_gold,
             output_type="latent",
         )
         latents_official = out_official.frames
 
         # Execution of our corrected custom sampler with identical parameters
-        gen_custom = torch.Generator(device=parsed_device.type).manual_seed(base_seed)
-        init_lat_custom = encode_image_to_vae_latents(vae, pil_front, parsed_device, gen_custom, noise_aug_strength=0.02, dtype=dtype)
+        init_lat_custom = encode_image_to_vae_latents(vae, pil_front, parsed_device, noise_aug_strength=0.0, dtype=dtype)
         clip_custom = encode_image_to_clip_embedding(image_encoder, feature_extractor, pil_front, parsed_device, dtype)
-        
-        gen_noise = torch.Generator(device=parsed_device.type).manual_seed(base_seed)
-        z_custom = torch.randn(1, 25, 4, 72, 128, generator=gen_noise, device=parsed_device, dtype=dtype)
 
         latents_custom, telem_custom = run_official_svd_diffusion_rollout(
             unet=unet,
             scheduler=create_default_euler_scheduler(),
             initial_latent=init_lat_custom,
             encoder_hidden_states=clip_custom,
-            starting_noise=z_custom,
+            starting_noise=z_gold,
             fps=5,
             motion_bucket_id=127,
-            noise_aug_strength=0.02,
+            noise_aug_strength=0.0,
             num_inference_steps=min(steps, 2),
             min_guidance_scale=1.0,
             max_guidance_scale=3.0,
@@ -347,8 +343,7 @@ def run_real_svd_smoke_test(
             assert not telem["has_inf"], f"Inf detected in {cand} {cam}!"
 
             if not mock:
-                lat_unscaled = latents_out / vae.config.scaling_factor
-                decoded = decode_latents_temporal(vae, lat_unscaled, decode_chunk_size=2)
+                decoded = decode_latents_temporal(vae, latents_out, decode_chunk_size=2)
                 arr = ((decoded[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
                 cropped = crop_svd_array_to_kitscenes(arr)
             else:
