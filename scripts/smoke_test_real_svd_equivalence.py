@@ -195,13 +195,14 @@ def run_real_svd_smoke_test(
 
     gen_gold = torch.Generator(device=parsed_device.type).manual_seed(base_seed)
     z_gold = torch.randn(1, 25, 4, 72, 128, generator=gen_gold, device=parsed_device, dtype=dtype)
+    padded_front, _ = adapt_aspect_ratio_to_svd(pil_front)
 
     golden_diff = 0.0
     if not mock and pipeline is not None:
         print("  [*] Running official StableVideoDiffusionPipeline forward pass (2 steps)...")
         # Direct execution of official pipeline with zero noise augmentation to isolate sampler math
         out_official = pipeline(
-            image=pil_front,
+            image=padded_front,
             height=576,
             width=1024,
             num_frames=25,
@@ -217,8 +218,8 @@ def run_real_svd_smoke_test(
         latents_official = out_official.frames
 
         # Execution of our corrected custom sampler with identical parameters
-        init_lat_custom = encode_image_to_vae_latents(vae, pil_front, parsed_device, noise_aug_strength=0.0, dtype=dtype)
-        clip_custom = encode_image_to_clip_embedding(image_encoder, feature_extractor, pil_front, parsed_device, dtype)
+        init_lat_custom = encode_image_to_vae_latents(vae, padded_front, parsed_device, noise_aug_strength=0.0, dtype=dtype)
+        clip_custom = encode_image_to_clip_embedding(image_encoder, feature_extractor, padded_front, parsed_device, dtype)
 
         latents_custom, telem_custom = run_official_svd_diffusion_rollout(
             unet=unet,

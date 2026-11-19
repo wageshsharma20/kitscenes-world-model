@@ -120,12 +120,8 @@ def build_svd_added_time_ids(
     device: torch.device,
     do_classifier_free_guidance: bool = True,
 ) -> torch.Tensor:
-    """Construct added time IDs strictly matching the official SVD pipeline.
-    
-    NOTE: Stable Video Diffusion UNet was micro-conditioned on (fps - 1) during training.
-    """
-    fps_conditioned = fps - 1
-    add_time_ids = torch.tensor([[fps_conditioned, motion_bucket_id, noise_aug_strength]], dtype=dtype, device=device)
+    """Construct added time IDs strictly matching the official SVD pipeline."""
+    add_time_ids = torch.tensor([[fps, motion_bucket_id, noise_aug_strength]], dtype=dtype, device=device)
     if do_classifier_free_guidance:
         add_time_ids = torch.cat([add_time_ids, add_time_ids], dim=0)
     return add_time_ids
@@ -258,7 +254,7 @@ def run_official_svd_diffusion_rollout(
         "initial_latent_rms_after_scaling": round(initial_latent_rms_after, 6),
         "first_timestep": float(timesteps[0].item()) if hasattr(timesteps[0], "item") else float(timesteps[0]),
         "first_sigma": float(scheduler.sigmas[0].item()) if hasattr(scheduler.sigmas[0], "item") else float(scheduler.sigmas[0]),
-        "fps_conditioned": fps - 1,
+        "fps_conditioned": fps,
         "motion_bucket_id": motion_bucket_id,
         "noise_aug_strength": noise_aug_strength,
         "min_guidance_scale": min_guidance_scale,

@@ -59,14 +59,12 @@ def main():
     z_gold = torch.randn(1, 25, 4, 72, 128, generator=gen, device=device, dtype=dtype)
 
     print("\n--- 1. VAE Image Latents Comparison ---")
+    padded_img, _ = adapt_aspect_ratio_to_svd(pil_front)
     # Custom VAE latent
-    custom_vae_lat = encode_image_to_vae_latents(vae, pil_front, device, noise_aug_strength=0.0, dtype=dtype)
+    custom_vae_lat = encode_image_to_vae_latents(vae, padded_img, device, noise_aug_strength=0.0, dtype=dtype)
     print(f"Custom VAE Latent: shape={custom_vae_lat.shape}, rms={torch.sqrt(torch.mean(custom_vae_lat.float()**2)).item():.6f}")
 
     # Official Pipeline VAE latent
-    # Notice: In pipe._encode_vae_image, what does pipe do?
-    padded_img, _ = adapt_aspect_ratio_to_svd(pil_front)
-    # pipe.video_processor.preprocess:
     pipe_preprocessed = pipe.video_processor.preprocess(padded_img, height=576, width=1024).to(device)
     pipe_vae_lat = pipe._encode_vae_image(pipe_preprocessed, device=device, num_videos_per_prompt=1, do_classifier_free_guidance=False)
     print(f"Pipe VAE Latent:   shape={pipe_vae_lat.shape}, rms={torch.sqrt(torch.mean(pipe_vae_lat.float()**2)).item():.6f}")
@@ -74,7 +72,7 @@ def main():
     print(f"Max Absolute Diff (VAE Latents): {vae_diff:.6e}")
 
     print("\n--- 2. CLIP Image Embedding Comparison ---")
-    custom_clip = encode_image_to_clip_embedding(image_encoder, feature_extractor, pil_front, device, dtype)
+    custom_clip = encode_image_to_clip_embedding(image_encoder, feature_extractor, padded_img, device, dtype)
     pipe_clip = pipe._encode_image(padded_img, device=device, num_videos_per_prompt=1, do_classifier_free_guidance=False)
     print(f"Custom CLIP: shape={custom_clip.shape}, rms={torch.sqrt(torch.mean(custom_clip.float()**2)).item():.6f}")
     print(f"Pipe CLIP:   shape={pipe_clip.shape}, rms={torch.sqrt(torch.mean(pipe_clip.float()**2)).item():.6f}")
