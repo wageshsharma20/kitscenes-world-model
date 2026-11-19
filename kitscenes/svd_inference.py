@@ -76,7 +76,14 @@ def encode_image_to_vae_latents(
 ) -> torch.Tensor:
     """Encode initial PIL image to mode-extracted VAE latent [1, 4, 72, 128] with noise augmentation."""
     padded_img, _ = adapt_aspect_ratio_to_svd(image)
-    vae_dtype = next(vae.parameters()).dtype if hasattr(vae, "parameters") and list(vae.parameters()) else dtype
+    needs_upcasting = (
+        hasattr(vae, "dtype")
+        and vae.dtype == torch.float16
+        and hasattr(vae, "config")
+        and getattr(vae.config, "force_upcast", False)
+    )
+    if needs_upcasting:
+        vae.to(dtype=torch.float32)
 
     if video_processor is None:
         try:
@@ -90,22 +97,27 @@ def encode_image_to_vae_latents(
                 video_processor = None
 
     if video_processor is not None:
-        tensor = video_processor.preprocess(padded_img, height=576, width=1024).to(device=device, dtype=vae_dtype)
+        tensor = video_processor.preprocess(padded_img, height=576, width=1024).to(device=device)
     else:
         arr = np.array(padded_img.convert("RGB")).astype(np.float32) / 255.0
-        tensor = (torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0) * 2.0 - 1.0).to(device=device, dtype=vae_dtype)
+        tensor = (torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0) * 2.0 - 1.0).to(device=device)
 
     if noise_aug_strength > 0:
-        noise = torch.randn(tensor.shape, generator=generator, device=device, dtype=vae_dtype)
+        noise = torch.randn(tensor.shape, generator=generator, device=device, dtype=tensor.dtype)
         tensor = tensor + noise_aug_strength * noise
+
+    if not needs_upcasting:
+        vae_dtype = next(vae.parameters()).dtype if hasattr(vae, "parameters") and list(vae.parameters()) else dtype
+        tensor = tensor.to(dtype=vae_dtype)
 
     with torch.no_grad():
         dist = vae.encode(tensor).latent_dist
         latent = dist.mode()
-        shift_factor = getattr(vae.config, "shift_factor", None)
-        if shift_factor is not None:
-            latent = latent - shift_factor
-    return latent.to(dtype=dtype)
+
+    if needs_upcasting:
+        vae.to(dtype=torch.float16)
+
+    return latent.to(device=device, dtype=dtype)
 
 
 def encode_image_to_clip_embedding(
@@ -248,11 +260,10 @@ def run_official_svd_diffusion_rollout(
         do_classifier_free_guidance=do_classifier_free_guidance,
     )
 
-    # 6. Prepare per-frame guidance scale tensor [1, num_frames, 1, 1, 1]
-    guidance_schedule = torch.linspace(
-        min_guidance_scale, max_guidance_scale, num_frames, device=device, dtype=dtype
-    )
-    guidance_tensor = guidance_schedule.view(1, num_frames, 1, 1, 1)
+    # 6. Prepare per-frame guidance scale tensor strictly matching Diffusers linspace float32 casting
+    guidance_schedule = torch.linspace(min_guidance_scale, max_guidance_scale, num_frames)
+    guidance_scale = guidance_schedule.unsqueeze(0).to(device, dtype=dtype)
+    guidance_tensor = guidance_scale.view(1, num_frames, 1, 1, 1)
 
     # 7. Execute Denoising Loop
     step_telemetry: List[Dict[str, Any]] = []

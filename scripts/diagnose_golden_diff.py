@@ -132,7 +132,12 @@ def main():
     print("\n--- 1. VAE Image Latents Comparison ---")
     custom_vae_lat = encode_image_to_vae_latents(vae, padded_img, device, noise_aug_strength=0.0, dtype=dtype, video_processor=pipe.video_processor)
     pipe_preprocessed = pipe.video_processor.preprocess(padded_img, height=576, width=1024).to(device)
-    pipe_vae_lat = pipe._encode_vae_image(pipe_preprocessed, device=device, num_videos_per_prompt=1, do_classifier_free_guidance=False)
+    needs_upcasting = pipe.vae.dtype == torch.float16 and pipe.vae.config.force_upcast
+    if needs_upcasting:
+        pipe.vae.to(dtype=torch.float32)
+    pipe_vae_lat = pipe._encode_vae_image(pipe_preprocessed, device=device, num_videos_per_prompt=1, do_classifier_free_guidance=False).to(dtype)
+    if needs_upcasting:
+        pipe.vae.to(dtype=torch.float16)
     vae_diff = float(torch.max(torch.abs(custom_vae_lat.float() - pipe_vae_lat.float())).item())
     print(f"Custom VAE Latent RMS: {torch.sqrt(torch.mean(custom_vae_lat.float()**2)).item():.6f}")
     print(f"Pipe VAE Latent RMS:   {torch.sqrt(torch.mean(pipe_vae_lat.float()**2)).item():.6f}")
