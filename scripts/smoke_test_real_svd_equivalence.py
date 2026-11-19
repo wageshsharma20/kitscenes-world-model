@@ -144,11 +144,6 @@ def run_real_svd_smoke_test(
         ).to(device=parsed_device)
         unet.eval()
         unet.requires_grad_(False)
-        if hasattr(unet, "enable_forward_chunking"):
-            try:
-                unet.enable_forward_chunking(chunk_size=1, dim=1)
-            except Exception:
-                pass
 
         vae = AutoencoderKLTemporalDecoder.from_pretrained(
             model_id, subfolder="vae", torch_dtype=torch.float32, low_cpu_mem_usage=True

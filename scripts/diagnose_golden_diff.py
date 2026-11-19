@@ -82,11 +82,6 @@ def main():
         model_id, subfolder="unet", torch_dtype=dtype, low_cpu_mem_usage=True
     ).to(device)
     unet.eval().requires_grad_(False)
-    if hasattr(unet, "enable_forward_chunking"):
-        try:
-            unet.enable_forward_chunking(chunk_size=1, dim=1)
-        except Exception:
-            pass
 
     vae = AutoencoderKLTemporalDecoder.from_pretrained(
         model_id, subfolder="vae", torch_dtype=torch.float32, low_cpu_mem_usage=True
