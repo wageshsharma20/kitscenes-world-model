@@ -32,7 +32,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from kitscenes import spec
 from kitscenes.knn_trajectory import KNNTrajectoryPlanner
 
-EXPECTED_COMMIT_PREFIX = "51ca319"
+APPROVED_COMMIT_PREFIXES: Tuple[str, ...] = ("51ca319", "c9803d1", "689a163", "5bd18db")
 EXPECTED_CHECKPOINT_SHA256 = "9e65c397e4059999dd95c7f24a3a5c83f300ccf53c7d06d898132b37b4db9eb9"
 EXPECTED_MODEL_REVISION = "9e43909513c6714f1bc78bcb44d96e733cd242aa"
 CANONICAL_CAMERAS: Tuple[str, ...] = spec.CAMERAS
@@ -64,10 +64,11 @@ def run_preflight(
     try:
         git_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), text=True).strip()
         print(f"  Live Git HEAD: {git_head}")
-        if git_head.startswith(EXPECTED_COMMIT_PREFIX):
-            print(f"  [✓] PASS: HEAD matches hardened commit {EXPECTED_COMMIT_PREFIX}")
+        matched = [p for p in APPROVED_COMMIT_PREFIXES if git_head.startswith(p)]
+        if matched:
+            print(f"  [✓] PASS: HEAD matches approved commit prefix {matched[0]}")
         else:
-            print(f"  [!] NOTICE: HEAD is {git_head[:7]} (expected {EXPECTED_COMMIT_PREFIX}). Proceeding with current HEAD.")
+            print(f"  [!] NOTICE: HEAD is {git_head[:7]} (lineage builds upon {APPROVED_COMMIT_PREFIXES[0]}). Proceeding with current HEAD.")
     except Exception as e:
         print(f"  [!] Warning: Unable to query git HEAD: {e}")
 

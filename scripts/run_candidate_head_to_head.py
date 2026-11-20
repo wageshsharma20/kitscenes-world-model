@@ -40,6 +40,7 @@ import os
 import subprocess
 import sys
 import time
+import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -107,6 +108,21 @@ def sha256_file(path: Path) -> str:
         while chunk := f.read(65536):
             h.update(chunk)
     return h.hexdigest()
+
+
+def is_valid_mp4(path: Path, expected_frames: int = spec.FRAME_COUNT) -> bool:
+    """Check if an MP4 file exists, has non-zero size, and decodes to expected frame count."""
+    if not path.exists() or path.stat().st_size < 1000:
+        return False
+    try:
+        cap = cv2.VideoCapture(str(path))
+        if not cap.isOpened():
+            return False
+        fc = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+        return fc == expected_frames
+    except Exception:
+        return False
 
 
 def validate_baseline_archive(strict: bool = False) -> Tuple[bool, str, Dict[str, Any]]:
@@ -302,6 +318,9 @@ def run_prediction_stage(
     min_guidance_scale: float = 1.0,
     max_guidance_scale: float = 3.0,
     base_seed: int = 42,
+    resume: bool = True,
+    auto_zip: bool = True,
+    zip_path: Optional[Path] = None,
     output_dir: Path = PROJECT_ROOT / "renders" / "phase5_5",
     manifest_path: Path = PROJECT_ROOT / "reports" / "phase5_5_prediction_manifest.json",
 ) -> Dict[str, Any]:
@@ -311,6 +330,7 @@ def run_prediction_stage(
     print(f"Device: {device} | Mock Mode: {mock} | Steps: {steps} | Base Seed: {base_seed}")
     print(f"Scenarios ({len(scenarios)}): {list(scenarios)}")
     print(f"Candidates ({len(CANDIDATES)}): {list(CANDIDATES)}")
+    print(f"Resume: {resume} | Auto-Zip: {auto_zip}")
     print("SpatialAdapter: STRICTLY DISABLED (0% latent residual injection)")
     print("=" * 80)
 
@@ -414,6 +434,17 @@ def run_prediction_stage(
         "scenarios": {},
     }
 
+    # Load prior manifest scenarios if resuming
+    if resume and manifest_path.exists():
+        try:
+            with open(manifest_path, "r") as f:
+                prior_manifest = json.load(f)
+            if "scenarios" in prior_manifest:
+                manifest["scenarios"].update(prior_manifest["scenarios"])
+                print(f"[*] Resuming: loaded existing records for {len(prior_manifest['scenarios'])} scenario(s) from {manifest_path.name}")
+        except Exception as e:
+            print(f"[!] Warning: Could not read prior manifest ({e}), starting fresh.")
+
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for sid in scenarios:
@@ -452,6 +483,43 @@ def run_prediction_stage(
         traj_motion_bucket = int(np.clip(127 + int((mean_speed - 10.0) * 8.0), 1, 255))
         default_motion_bucket = 127
 
+        # Check if all candidate videos for this scenario already exist and are valid
+        all_videos_exist = False
+        if resume:
+            existing_count = sum(
+                1 for cand in CANDIDATES for cam in CANONICAL_CAMERAS
+                if is_valid_mp4(output_dir / f"{sid}_{cam}_{cand}.mp4", expected_frames=spec.FRAME_COUNT)
+            )
+            if existing_count == len(CANDIDATES) * len(CANONICAL_CAMERAS):
+                all_videos_exist = True
+
+        if all_videos_exist:
+            print(f"  [✓] All 18 candidate videos already exist on disk with 25 frames. Skipping generation for {sid}.")
+            candidate_video_paths = {
+                cand: {cam: str(output_dir / f"{sid}_{cam}_{cand}.mp4") for cam in CANONICAL_CAMERAS}
+                for cand in CANDIDATES
+            }
+            prior_telem = manifest.get("scenarios", {}).get(sid, {}).get("telemetry", {})
+            candidate_telemetry = prior_telem if prior_telem else {
+                cand: {cam: {"skipped_cached": True} for cam in CANONICAL_CAMERAS}
+                for cand in CANDIDATES
+            }
+            manifest["scenarios"][sid] = {
+                "scenario_id": sid,
+                "instruction": instruction,
+                "scenario_type": stype,
+                "planned_waypoints": planned_pts.tolist(),
+                "planned_mean_speed": round(mean_speed, 2),
+                "trajectory_motion_bucket": traj_motion_bucket,
+                "planning_provenance": prov,
+                "video_paths": candidate_video_paths,
+                "telemetry": candidate_telemetry,
+            }
+            manifest_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2)
+            continue
+
         # Encode observed initial frames at t=0
         clip_dict: Dict[str, torch.Tensor] = {}
         initial_latents_dict: Dict[str, torch.Tensor] = {}
@@ -483,6 +551,20 @@ def run_prediction_stage(
         for cand in CANDIDATES:
             print(f"\n  ---> Executing Candidate: {cand.upper()}")
             for cam in CANONICAL_CAMERAS:
+                cam_out_mp4 = output_dir / f"{sid}_{cam}_{cand}.mp4"
+                if resume and is_valid_mp4(cam_out_mp4, expected_frames=spec.FRAME_COUNT):
+                    print(f"    [SKIP] Found valid video: {cam_out_mp4.name} (25 frames)")
+                    candidate_video_paths[cand][cam] = str(cam_out_mp4)
+                    prior_t = (
+                        manifest.get("scenarios", {})
+                        .get(sid, {})
+                        .get("telemetry", {})
+                        .get(cand, {})
+                        .get(cam)
+                    )
+                    candidate_telemetry[cand][cam] = prior_t or {"skipped_cached": True}
+                    continue
+
                 # Deterministic camera-specific paired noise stream
                 cam_seed = base_seed + CAMERA_SEED_OFFSETS[cam]
                 gen_noise = torch.Generator(device=parsed_device.type).manual_seed(cam_seed)
@@ -523,7 +605,6 @@ def run_prediction_stage(
                     cropped = np.zeros((spec.FRAME_COUNT, spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8)
 
                 # Save MP4 video
-                cam_out_mp4 = output_dir / f"{sid}_{cam}_{cand}.mp4"
                 fourcc = cv2.VideoWriter_fourcc(*"mp4v")
                 writer = cv2.VideoWriter(str(cam_out_mp4), fourcc, 5.0, (spec.WIDTH, spec.HEIGHT))
                 for f_idx in range(len(cropped)):
@@ -543,10 +624,39 @@ def run_prediction_stage(
             "telemetry": candidate_telemetry,
         }
 
+        # Incremental save after each scenario
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(manifest_path, "w") as f:
+            json.dump(manifest, f, indent=2)
+        print(f"  [✓] Manifest incrementally saved to: {manifest_path} ({len(manifest['scenarios'])} total scenarios)")
+
+    # Final manifest save
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     with open(manifest_path, "w") as f:
         json.dump(manifest, f, indent=2)
     print(f"\n[✓] Stage A Prediction Complete! Manifest saved to: {manifest_path}")
+
+    # Automatic ZIP packaging of batch predictions
+    if auto_zip:
+        if zip_path is None:
+            batch_tag = f"{scenarios[0]}_{scenarios[-1]}" if len(scenarios) > 1 else scenarios[0]
+            zip_path = output_dir / f"batch_predictions_{batch_tag}.zip"
+        zip_path.parent.mkdir(parents=True, exist_ok=True)
+        print(f"\n[*] Packaging batch predictions into ZIP archive: {zip_path}...")
+        packaged_count = 0
+        with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+            if manifest_path.exists():
+                zf.write(manifest_path, arcname=manifest_path.name)
+            for s in scenarios:
+                for c in CANDIDATES:
+                    for cam in CANONICAL_CAMERAS:
+                        mp4_file = output_dir / f"{s}_{cam}_{c}.mp4"
+                        if mp4_file.exists():
+                            zf.write(mp4_file, arcname=mp4_file.name)
+                            packaged_count += 1
+        zip_mb = zip_path.stat().st_size / (1024 * 1024)
+        print(f"  [✓] Created ZIP archive: {zip_path.name} ({packaged_count} videos + manifest, {zip_mb:.2f} MB)")
+
     return manifest
 
 
@@ -897,6 +1007,11 @@ def main() -> int:
     parser.add_argument("--scenarios", type=str, default=",".join(DEFAULT_HEAD_TO_HEAD_SCENARIOS))
     parser.add_argument("--base-seed", type=int, default=42)
     parser.add_argument("--checkpoint-path", type=Path, default=PROJECT_ROOT / "models" / "cssc_pilot_step30.pt")
+    parser.add_argument("--resume", dest="resume", action="store_true", default=True, help="Skip already completed 25-frame videos (default: True)")
+    parser.add_argument("--no-resume", dest="resume", action="store_false", help="Disable resume and overwrite existing videos")
+    parser.add_argument("--auto-zip", dest="auto_zip", action="store_true", default=True, help="Automatically package generated videos into a zip archive (default: True)")
+    parser.add_argument("--no-auto-zip", dest="auto_zip", action="store_false", help="Disable automatic zip packaging")
+    parser.add_argument("--zip-path", type=Path, default=None, help="Custom destination path for batch predictions zip archive")
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "renders" / "phase5_5")
     parser.add_argument("--manifest-path", type=Path, default=PROJECT_ROOT / "reports" / "phase5_5_prediction_manifest.json")
     parser.add_argument("--val-future-dir", type=Path, default=PROJECT_ROOT / "data" / "val_future_videos")
@@ -917,6 +1032,9 @@ def main() -> int:
             steps=args.steps,
             decode_chunk_size=args.decode_chunk_size,
             base_seed=args.base_seed,
+            resume=args.resume,
+            auto_zip=args.auto_zip,
+            zip_path=args.zip_path,
             output_dir=args.output_dir,
             manifest_path=args.manifest_path,
         )
