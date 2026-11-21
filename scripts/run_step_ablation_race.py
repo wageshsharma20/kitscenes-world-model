@@ -194,17 +194,23 @@ def run_stage_predict(
                     val_meta[rec["scenario_id"]] = rec
 
     # Import existing 25-step project_baseline videos if available
-    phase5_5_dir = PROJECT_ROOT / "renders" / "phase5_5"
+    ref_search_dirs = [
+        PROJECT_ROOT / "data" / "ref_phase5_5",
+        PROJECT_ROOT / "renders" / "phase5_5",
+    ]
     imported_count = 0
-    if import_phase5_5_ref and 25 in steps_list and phase5_5_dir.exists():
+    if import_phase5_5_ref and 25 in steps_list:
         print("[+] Checking for existing 25-step project_baseline videos to import as reference...")
         for sid in scenarios:
             for cam in cameras:
-                src_v = phase5_5_dir / f"{sid}_{cam}_project_baseline.mp4"
                 dst_v = output_dir / f"{sid}_{cam}_steps25.mp4"
-                if src_v.exists() and not dst_v.exists():
-                    shutil.copy2(src_v, dst_v)
-                    imported_count += 1
+                if not dst_v.exists():
+                    for ref_dir in ref_search_dirs:
+                        src_v = ref_dir / f"{sid}_{cam}_project_baseline.mp4"
+                        if src_v.exists():
+                            shutil.copy2(src_v, dst_v)
+                            imported_count += 1
+                            break
         if imported_count > 0:
             print(f"[+] Successfully imported {imported_count} existing 25-step reference videos from phase 5.5!")
 
@@ -217,7 +223,7 @@ def run_stage_predict(
         feature_extractor = None
     else:
         print("[+] Loading official pretrained SVD-XT weights (fp16)...")
-        from diffusers import AutoencoderKL
+        from diffusers import AutoencoderKLTemporalDecoder
         from diffusers.models.unets.unet_spatio_temporal_condition import (
             UNetSpatioTemporalConditionModel,
         )
@@ -229,15 +235,16 @@ def run_stage_predict(
             subfolder="unet",
             torch_dtype=torch.float16,
             variant="fp16",
+            low_cpu_mem_usage=True,
         ).to(device)
         unet.eval()
         unet.enable_forward_chunking()
 
-        vae = AutoencoderKL.from_pretrained(
+        vae = AutoencoderKLTemporalDecoder.from_pretrained(
             model_id,
             subfolder="vae",
-            torch_dtype=torch.float16,
-            variant="fp16",
+            torch_dtype=torch.float32,
+            low_cpu_mem_usage=True,
         ).to(device)
         vae.eval()
 
@@ -246,6 +253,7 @@ def run_stage_predict(
             subfolder="image_encoder",
             torch_dtype=torch.float16,
             variant="fp16",
+            low_cpu_mem_usage=True,
         ).to(device)
         image_encoder.eval()
 

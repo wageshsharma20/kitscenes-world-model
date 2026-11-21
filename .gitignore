@@ -17,9 +17,15 @@ data/*
 !data/train_future_videos/*/*.mp4
 !data/val_future_videos/
 !data/val_future_videos/0000900/*.mp4
+!data/val_future_videos/0000902/*.mp4
+!data/val_future_videos/0000905/*.mp4
 data/*_future_videos/*/*/
 data/val_future_videos/*/*.mp4
 !data/val_future_videos/0000900/*.mp4
+!data/val_future_videos/0000902/*.mp4
+!data/val_future_videos/0000905/*.mp4
+!data/ref_phase5_5/
+!data/ref_phase5_5/*.mp4
 !data/train_latents/
 !data/train_latents/0000400.pt
 !data/train_latents/manifest.json
