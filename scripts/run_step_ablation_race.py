@@ -382,10 +382,11 @@ def run_stage_predict(
 
                 # Decode latents
                 if not mock_mode and device_str != "cpu":
-                    frames_uint8 = decode_latents_temporal(vae, latents, decode_chunk_size=decode_chunk_size)
+                    frames_raw = decode_latents_temporal(vae, latents, decode_chunk_size=decode_chunk_size)
+                    frames_uint8 = ((frames_raw[0].permute(0, 2, 3, 1).cpu().float().numpy() + 1.0) * 127.5).clip(0, 255).astype(np.uint8)
                     peak_alloc = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
                     peak_res = torch.cuda.max_memory_reserved(device) / (1024 ** 2)
-                    del latents
+                    del latents, frames_raw
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
                 else:
