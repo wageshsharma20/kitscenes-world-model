@@ -1,0 +1,63 @@
+{
+  "archive_audit": {
+    "path": "submissions/videos.zip",
+    "sha256": "26119a957a37123db3f7dac5a74fab50efb7051c8e7312f1cad1c384343ef10e",
+    "size_bytes": 89571657,
+    "size_mib": 85.42,
+    "generator_backbone": "GeometricWorldModel (procedural raster canvas)",
+    "is_svd_diffusion": false,
+    "diffusion_denoising_steps": 0,
+    "average_video_size_kib": 36.45,
+    "expected_svd_archive_size_gib": "0.5 to 1.2 GiB",
+    "format_validation_status": "VALID (0 errors, 0 warnings)",
+    "competition_pq_verdict": "Low perceptual quality expected on Q-Align (~10-25 PQ) due to procedural geometric line rendering"
+  },
+  "trajectories_audit": {
+    "original_file": "submissions/trajectories_vlm_fallback.jsonl",
+    "original_generator": "kitscenes.vlm_planner.plan_vlm_trajectory (Gemini VLM heuristic fallback, Nov 14)",
+    "updated_file": "submissions/trajectories.jsonl",
+    "updated_generator": "kitscenes.knn_trajectory.KNNTrajectoryPlanner (k=5 training donors, constant velocity blend)",
+    "scenario_count": 400,
+    "validation_status": "VALID (0 errors, 1 stationary warning)"
+  },
+  "statistical_qualification": {
+    "n_scenarios": 10,
+    "degrees_of_freedom": 9,
+    "baseline_minus_vanilla_psnr": {
+      "differences": [
+        -0.0097,
+        0.0147,
+        0.3461,
+        0.0496,
+        -0.1472,
+        0.9464,
+        0.1295,
+        0.2252,
+        -0.1463,
+        0.4483
+      ],
+      "mean_delta_psnr": 0.18566683491015556,
+      "std_delta_psnr": 0.3308430125096798,
+      "se_delta_psnr": 0.1046217467482168,
+      "t_statistic": 1.7746485857952867,
+      "p_value_two_tailed": 0.10969902156941025,
+      "p_value_one_tailed": 0.054849510784705124,
+      "parametric_student_t_95_ci": [
+        -0.0510039988866306,
+        0.4223376687069417
+      ],
+      "wilcoxon_w": 12.0,
+      "wilcoxon_p": 0.130859375,
+      "percentile_bootstrap_95_ci": [
+        0.011014403019905396,
+        0.39904277117271547
+      ],
+      "bca_bootstrap_95_ci": [
+        0.03502766377113531,
+        0.45392725989127175
+      ],
+      "win_rate": "7/10 (70%)",
+      "rigorous_conclusion": "The +0.186 dB mean PSNR improvement is an operational engineering advantage with a 70% scenario win rate, but it is NOT statistically significant at the conventional alpha = 0.05 level (two-tailed p = 0.1097, Student-t 95% CI includes zero [-0.051, +0.422] dB)."
+    }
+  }
+}
