@@ -572,6 +572,16 @@ def auto_zip_results(output_dir: Path, zip_dest: Path) -> Path:
 
     size_mb = zip_dest.stat().st_size / (1024 * 1024)
     print(f"[+] Successfully packaged {len(mp4_files)} videos into {zip_dest} ({size_mb:.2f} MiB)")
+    
+    # Kaggle output directory convenience copy
+    kaggle_working = Path("/kaggle/working")
+    if kaggle_working.exists() and kaggle_working != zip_dest.parent:
+        try:
+            kw_dest = kaggle_working / zip_dest.name
+            shutil.copy2(zip_dest, kw_dest)
+            print(f"[+] Also copied archive to Kaggle root: {kw_dest}")
+        except Exception:
+            pass
     return zip_dest
 
 
