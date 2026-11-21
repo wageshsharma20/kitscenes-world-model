@@ -1,0 +1,2236 @@
+{
+  "total_expected": 180,
+  "total_present": 179,
+  "total_missing": 1,
+  "missing_files": [
+    "0000984_rear_right_cssc_only.mp4"
+  ],
+  "audit_matrix": [
+    {
+      "scenario": "0000900",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000900_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 184869
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000900_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 152756
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000900_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 218197
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000900_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 269465
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000900_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 228308
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000900_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 426483
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000900_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 179905
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000900_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 138070
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000900_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 228132
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000900_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 267511
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000900_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 202698
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000900_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 415175
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000900_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 293497
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000900_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 177385
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000900_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 263887
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000900_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 357264
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000900_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 200927
+    },
+    {
+      "scenario": "0000900",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000900_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 506771
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000901_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 543718
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000901_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 449781
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000901_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 881061
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000901_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 474152
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000901_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 435967
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000901_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 702085
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000901_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 494837
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000901_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 445882
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000901_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 889784
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000901_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 473759
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000901_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 328840
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000901_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 590347
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000901_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 407065
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000901_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 449946
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000901_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 868111
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000901_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 512318
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000901_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 185577
+    },
+    {
+      "scenario": "0000901",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000901_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 475532
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000902_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 573341
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000902_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 672282
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000902_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 567788
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000902_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 971017
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000902_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 572831
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000902_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 556895
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000902_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 583665
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000902_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 359207
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000902_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 639015
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000902_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 907418
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000902_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 343637
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000902_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 648203
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000902_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 458535
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000902_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 694359
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000902_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 698945
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000902_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 977175
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000902_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 440454
+    },
+    {
+      "scenario": "0000902",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000902_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 723894
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000903_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 148341
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000903_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 209296
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000903_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 215026
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000903_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 138017
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000903_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 129572
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000903_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 198534
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000903_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 145012
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000903_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 175861
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000903_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 237355
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000903_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 122410
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000903_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 124626
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000903_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 202759
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000903_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 117092
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000903_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 198092
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000903_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 338190
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000903_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 128654
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000903_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 103106
+    },
+    {
+      "scenario": "0000903",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000903_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 304279
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000904_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 689736
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000904_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 850476
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000904_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 462294
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000904_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 884204
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000904_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 285068
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000904_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 830178
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000904_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 574924
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000904_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 609551
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000904_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 510661
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000904_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 368808
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000904_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 292160
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000904_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 838714
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000904_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 578648
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000904_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 553857
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000904_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 577661
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000904_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 920036
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000904_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 282400
+    },
+    {
+      "scenario": "0000904",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000904_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 810056
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000905_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 941241
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000905_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1170280
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000905_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1015881
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000905_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1076044
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000905_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1132999
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000905_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 762301
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000905_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 370079
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000905_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1164117
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000905_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 881946
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000905_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 742716
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000905_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1169776
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000905_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 973874
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000905_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 833530
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000905_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 995450
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000905_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 778989
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000905_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 1160730
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000905_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 1344293
+    },
+    {
+      "scenario": "0000905",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000905_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 825488
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000906_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 120119
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000906_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 141814
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000906_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 166729
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000906_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 242165
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000906_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 169481
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000906_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 155852
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000906_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 117171
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000906_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 132644
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000906_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 142997
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000906_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 197880
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000906_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 187915
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000906_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 153321
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000906_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 118807
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000906_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 86163
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000906_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 107929
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000906_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 167333
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000906_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 122757
+    },
+    {
+      "scenario": "0000906",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000906_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 72016
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000911_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 590105
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000911_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 422017
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000911_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1230629
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000911_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 984551
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000911_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 989800
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000911_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1943155
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000911_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 306534
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000911_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 330767
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000911_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1273296
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000911_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1021589
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000911_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 861562
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000911_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 2076473
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000911_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 486121
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000911_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 294157
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000911_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 1189295
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000911_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 1178188
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000911_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 907175
+    },
+    {
+      "scenario": "0000911",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000911_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 2016669
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000919_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 388069
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000919_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 522343
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000919_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1057262
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000919_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 351694
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000919_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 429252
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000919_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1339771
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000919_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 295138
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000919_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 565997
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000919_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1080521
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000919_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 347019
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000919_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 463525
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000919_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1084518
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000919_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 291274
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000919_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 553846
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000919_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 745113
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000919_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 391620
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000919_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 492699
+    },
+    {
+      "scenario": "0000919",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000919_rear_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 1278271
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "vanilla_svd",
+      "camera": "front",
+      "file": "0000984_front_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 909825
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "vanilla_svd",
+      "camera": "front_left",
+      "file": "0000984_front_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1425202
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "vanilla_svd",
+      "camera": "front_right",
+      "file": "0000984_front_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1964995
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "vanilla_svd",
+      "camera": "rear",
+      "file": "0000984_rear_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 856209
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "vanilla_svd",
+      "camera": "rear_left",
+      "file": "0000984_rear_left_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 1347408
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "vanilla_svd",
+      "camera": "rear_right",
+      "file": "0000984_rear_right_vanilla_svd.mp4",
+      "status": "PRESENT",
+      "bytes": 889308
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "project_baseline",
+      "camera": "front",
+      "file": "0000984_front_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 508356
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "project_baseline",
+      "camera": "front_left",
+      "file": "0000984_front_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1284635
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "project_baseline",
+      "camera": "front_right",
+      "file": "0000984_front_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1622773
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "project_baseline",
+      "camera": "rear",
+      "file": "0000984_rear_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 672697
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "project_baseline",
+      "camera": "rear_left",
+      "file": "0000984_rear_left_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 1289457
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "project_baseline",
+      "camera": "rear_right",
+      "file": "0000984_rear_right_project_baseline.mp4",
+      "status": "PRESENT",
+      "bytes": 812456
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "cssc_only",
+      "camera": "front",
+      "file": "0000984_front_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 925780
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "cssc_only",
+      "camera": "front_left",
+      "file": "0000984_front_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 1440951
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "cssc_only",
+      "camera": "front_right",
+      "file": "0000984_front_right_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 1820533
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "cssc_only",
+      "camera": "rear",
+      "file": "0000984_rear_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 713905
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "cssc_only",
+      "camera": "rear_left",
+      "file": "0000984_rear_left_cssc_only.mp4",
+      "status": "PRESENT",
+      "bytes": 553744
+    },
+    {
+      "scenario": "0000984",
+      "candidate": "cssc_only",
+      "camera": "rear_right",
+      "file": "0000984_rear_right_cssc_only.mp4",
+      "status": "MISSING",
+      "bytes": 0
+    }
+  ],
+  "per_scenario": {
+    "0000900": {
+      "vanilla_svd": {
+        "mean_psnr_common": 20.82551436855897,
+        "mean_ssim_common": 0.8065969920566155,
+        "mean_psnr_all": 20.82551436855897,
+        "mean_ssim_all": 0.8065969920566155,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          22.306295191353783,
+          20.418904334664877,
+          22.415617766806566,
+          21.21155296341022,
+          19.44417098381751,
+          19.156544971300857
+        ],
+        "ssim_common_list": [
+          0.8508368178658945,
+          0.8603508181930928,
+          0.8485284591850136,
+          0.773789568135589,
+          0.7885691486859375,
+          0.7175071402741662
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 20.815814697616034,
+        "mean_ssim_common": 0.7886838164784793,
+        "mean_psnr_all": 20.815814697616034,
+        "mean_ssim_all": 0.7886838164784793,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          22.740508671735967,
+          20.443412321573874,
+          21.982076217510027,
+          21.248995611781694,
+          19.71697035522237,
+          18.762925007872266
+        ],
+        "ssim_common_list": [
+          0.8464563622631676,
+          0.852981604752945,
+          0.8180989359635005,
+          0.7619544465879332,
+          0.7808719118531571,
+          0.6717396374501723
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 20.18259402560484,
+        "mean_ssim_common": 0.7609753154913522,
+        "mean_psnr_all": 20.18259402560484,
+        "mean_ssim_all": 0.7609753154913522,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          20.216208045378586,
+          19.7452804197505,
+          21.666172336354062,
+          21.24966721355069,
+          19.612902913852984,
+          18.605333224742196
+        ],
+        "ssim_common_list": [
+          0.7774781436716398,
+          0.8274215167443307,
+          0.7919049921509513,
+          0.753779310256717,
+          0.7659474868436529,
+          0.6493204432808216
+        ]
+      }
+    },
+    "0000901": {
+      "vanilla_svd": {
+        "mean_psnr_common": 16.873241615779225,
+        "mean_ssim_common": 0.6752915369055588,
+        "mean_psnr_all": 16.873241615779225,
+        "mean_ssim_all": 0.6752915369055588,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          18.339324542863643,
+          18.36624626294038,
+          13.888638021605937,
+          18.5102874894164,
+          18.356463944739914,
+          13.778489433109076
+        ],
+        "ssim_common_list": [
+          0.7377166418255164,
+          0.6802325202553124,
+          0.6153449564821476,
+          0.7383320244270566,
+          0.6800337473617085,
+          0.6000893310816113
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 16.88792451315284,
+        "mean_ssim_common": 0.6613937658701979,
+        "mean_psnr_all": 16.88792451315284,
+        "mean_ssim_all": 0.6613937658701979,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          18.16525170794579,
+          18.116941534445022,
+          13.621450837563492,
+          18.596997373627822,
+          18.6522177985799,
+          14.174687826755019
+        ],
+        "ssim_common_list": [
+          0.7355066082330576,
+          0.6592390168845265,
+          0.5677283095310345,
+          0.7388540350565173,
+          0.6803576343028594,
+          0.5866769912131923
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 16.473432548339215,
+        "mean_ssim_common": 0.6345786320227486,
+        "mean_psnr_all": 16.473432548339215,
+        "mean_ssim_all": 0.6345786320227486,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          17.704345202746104,
+          17.52638994172405,
+          13.354762302910121,
+          17.935790059611172,
+          18.31515297076075,
+          14.004154812283074
+        ],
+        "ssim_common_list": [
+          0.7112298254114627,
+          0.6279140238291804,
+          0.5243230600199111,
+          0.7134329669664106,
+          0.6727647613754977,
+          0.5578071545340288
+        ]
+      }
+    },
+    "0000902": {
+      "vanilla_svd": {
+        "mean_psnr_common": 15.714565263588971,
+        "mean_ssim_common": 0.5782303842860063,
+        "mean_psnr_all": 15.714565263588971,
+        "mean_ssim_all": 0.5782303842860063,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          14.786629560958747,
+          15.557245915148911,
+          15.387439411091009,
+          15.925393802035707,
+          15.086970212218658,
+          17.543712680080795
+        ],
+        "ssim_common_list": [
+          0.6601807070914378,
+          0.5717425423946352,
+          0.6321446037222195,
+          0.5756388982646267,
+          0.5354025573809608,
+          0.4942729968621572
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 16.060655676004732,
+        "mean_ssim_common": 0.5692758363748045,
+        "mean_psnr_all": 16.060655676004732,
+        "mean_ssim_all": 0.5692758363748045,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          16.269191728884657,
+          15.917225289102914,
+          15.01172158475586,
+          16.102683045609815,
+          15.348927768055,
+          17.71418463962014
+        ],
+        "ssim_common_list": [
+          0.6504153764753191,
+          0.571146393282587,
+          0.5943238798569528,
+          0.5757016213043278,
+          0.5378622265620722,
+          0.4862055207675679
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 15.832474943884131,
+        "mean_ssim_common": 0.5519159020352287,
+        "mean_psnr_all": 15.832474943884131,
+        "mean_ssim_all": 0.5519159020352287,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          17.386224554153696,
+          14.890194160417604,
+          14.860244039680392,
+          15.30286341635656,
+          15.323476401998338,
+          17.23184709069821
+        ],
+        "ssim_common_list": [
+          0.6780376266524223,
+          0.5277788740928431,
+          0.5493841857740961,
+          0.5607471019011704,
+          0.5385031174492246,
+          0.45704450634161603
+        ]
+      }
+    },
+    "0000903": {
+      "vanilla_svd": {
+        "mean_psnr_common": 24.21962414201555,
+        "mean_ssim_common": 0.8574594969957131,
+        "mean_psnr_all": 24.21962414201555,
+        "mean_ssim_all": 0.8574594969957131,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          25.43958288951455,
+          22.374944942636894,
+          23.554595845866864,
+          26.955718689028657,
+          24.690224220644197,
+          22.30267826440216
+        ],
+        "ssim_common_list": [
+          0.8877712305735295,
+          0.8061617372045675,
+          0.8192061538452539,
+          0.9171085851974433,
+          0.8833068619081277,
+          0.8312024132453577
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 24.269194000524156,
+        "mean_ssim_common": 0.8550251331797508,
+        "mean_psnr_all": 24.269194000524156,
+        "mean_ssim_all": 0.8550251331797508,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          25.506322041254492,
+          22.405596475732924,
+          23.132129731006277,
+          27.495587912029574,
+          24.802887666529475,
+          22.272640176592212
+        ],
+        "ssim_common_list": [
+          0.8857681594782356,
+          0.8094240412024353,
+          0.8071849874549167,
+          0.9187435013665183,
+          0.8805721476158007,
+          0.8284579619605982
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 23.013889122985233,
+        "mean_ssim_common": 0.8239663007147108,
+        "mean_psnr_all": 23.013889122985233,
+        "mean_ssim_all": 0.8239663007147108,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          25.419574438939662,
+          21.442412770429957,
+          20.204580951386085,
+          26.368940346351405,
+          25.021938077086205,
+          19.625888153718087
+        ],
+        "ssim_common_list": [
+          0.8842222112883508,
+          0.7975713005067118,
+          0.7074457704691294,
+          0.9014530479494212,
+          0.8840272720908261,
+          0.7690782019838253
+        ]
+      }
+    },
+    "0000904": {
+      "vanilla_svd": {
+        "mean_psnr_common": 13.806748341219597,
+        "mean_ssim_common": 0.48312675394492427,
+        "mean_psnr_all": 13.806748341219597,
+        "mean_ssim_all": 0.48312675394492427,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          13.690974520936441,
+          14.72994249608245,
+          10.58484157135888,
+          15.768894091893566,
+          15.584392501051475,
+          12.481444865994774
+        ],
+        "ssim_common_list": [
+          0.520349312959388,
+          0.4020174979151148,
+          0.5291556003357667,
+          0.529687791538329,
+          0.39364215164758876,
+          0.523908169273358
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 13.659533602647599,
+        "mean_ssim_common": 0.45464758513547565,
+        "mean_psnr_all": 13.659533602647599,
+        "mean_ssim_all": 0.45464758513547565,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          13.312996741237999,
+          15.17033797056394,
+          10.401431721547603,
+          15.290363601960182,
+          15.617630041461165,
+          12.164441539114705
+        ],
+        "ssim_common_list": [
+          0.5058760496363205,
+          0.4044445645667223,
+          0.4799722087049496,
+          0.48471568818610455,
+          0.3959797285289077,
+          0.4568972711898489
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 13.621327725099087,
+        "mean_ssim_common": 0.44778577678628056,
+        "mean_psnr_all": 13.621327725099087,
+        "mean_ssim_all": 0.44778577678628056,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          13.304619135911524,
+          14.840576586187504,
+          10.344506355985043,
+          15.445152268637447,
+          15.705519535835897,
+          12.087592468037114
+        ],
+        "ssim_common_list": [
+          0.49368730819243134,
+          0.38451637516272563,
+          0.4616737833706581,
+          0.5019247731720737,
+          0.39803742662993513,
+          0.44687499418985943
+        ]
+      }
+    },
+    "0000905": {
+      "vanilla_svd": {
+        "mean_psnr_common": 14.543571688280304,
+        "mean_ssim_common": 0.49827306041009756,
+        "mean_psnr_all": 14.543571688280304,
+        "mean_ssim_all": 0.49827306041009756,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          17.618671989869167,
+          15.473121916888342,
+          14.281706145390876,
+          13.958974502803326,
+          12.81241220559812,
+          13.116543369131993
+        ],
+        "ssim_common_list": [
+          0.6033297754286566,
+          0.4657624750213914,
+          0.5625444506635678,
+          0.47210890572193875,
+          0.4042127998446732,
+          0.48167995578035766
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 15.489985106568112,
+        "mean_ssim_common": 0.48806154446465166,
+        "mean_psnr_all": 15.489985106568112,
+        "mean_ssim_all": 0.48806154446465166,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          19.25168043572762,
+          14.314077717746121,
+          16.555400383204958,
+          14.200437926467682,
+          12.644867265318089,
+          15.973446910944187
+        ],
+        "ssim_common_list": [
+          0.6317529393862863,
+          0.4120790865840522,
+          0.5995862700623981,
+          0.4274932185338678,
+          0.3904636677971339,
+          0.46699408442417173
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 15.077432926767086,
+        "mean_ssim_common": 0.47748133023413314,
+        "mean_psnr_all": 15.077432926767086,
+        "mean_ssim_all": 0.47748133023413314,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          17.70170530050111,
+          14.901303579906111,
+          15.87009600269809,
+          13.691312961416365,
+          12.451411658784068,
+          15.848768057296772
+        ],
+        "ssim_common_list": [
+          0.5782344310208515,
+          0.42896754334131393,
+          0.5930884557352676,
+          0.4295270551372205,
+          0.3629696581486233,
+          0.4721008380215222
+        ]
+      }
+    },
+    "0000906": {
+      "vanilla_svd": {
+        "mean_psnr_common": 24.418656477241417,
+        "mean_ssim_common": 0.8404443315423529,
+        "mean_psnr_all": 24.418656477241417,
+        "mean_ssim_all": 0.8404443315423529,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          25.783022908907903,
+          26.00532409601851,
+          28.85921264822034,
+          20.215923902649223,
+          26.85531045580776,
+          18.79314485184476
+        ],
+        "ssim_common_list": [
+          0.8530764454022206,
+          0.862724109639426,
+          0.8533315927399897,
+          0.798870550054177,
+          0.8422829320944608,
+          0.832380359323843
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 24.548174376895663,
+        "mean_ssim_common": 0.8378584502501482,
+        "mean_psnr_all": 24.548174376895663,
+        "mean_ssim_all": 0.8378584502501482,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          24.40494457475566,
+          26.80236970774482,
+          30.12099846603568,
+          20.920329010409265,
+          26.99685383642308,
+          18.043550666005487
+        ],
+        "ssim_common_list": [
+          0.8502814161170075,
+          0.8599261795070495,
+          0.8588278093186102,
+          0.7950381110323083,
+          0.8317326792254771,
+          0.8313445063004368
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 26.557431687810922,
+        "mean_ssim_common": 0.8462036934846822,
+        "mean_psnr_all": 26.557431687810922,
+        "mean_ssim_all": 0.8462036934846822,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          20.838987403223,
+          31.059415252577107,
+          31.092313840697994,
+          18.819148264465795,
+          31.474797268065746,
+          26.059928097835897
+        ],
+        "ssim_common_list": [
+          0.8413075502181209,
+          0.8812479465725747,
+          0.8561919561861606,
+          0.7809411735297703,
+          0.8561831709586001,
+          0.8613503634428671
+        ]
+      }
+    },
+    "0000911": {
+      "vanilla_svd": {
+        "mean_psnr_common": 14.529183781828053,
+        "mean_ssim_common": 0.4954718826266138,
+        "mean_psnr_all": 14.529183781828053,
+        "mean_ssim_all": 0.4954718826266138,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          18.158817105725035,
+          17.418976584521594,
+          11.57296047130309,
+          14.261119374366476,
+          14.01007885088289,
+          11.753150304169226
+        ],
+        "ssim_common_list": [
+          0.655530507173639,
+          0.6150290952805486,
+          0.4128064825146023,
+          0.4614774547912061,
+          0.5041807130792878,
+          0.3238070429203986
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 14.754418992410768,
+        "mean_ssim_common": 0.47972020873110055,
+        "mean_psnr_all": 14.754418992410768,
+        "mean_ssim_all": 0.47972020873110055,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          18.213860957049143,
+          17.80832316711495,
+          11.770218149734873,
+          14.598436996595991,
+          14.373056231769485,
+          11.762618452200151
+        ],
+        "ssim_common_list": [
+          0.6121539082816324,
+          0.6196793647786554,
+          0.4088357585015764,
+          0.4480122503220521,
+          0.496919735820315,
+          0.2927202346823719
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 14.632667502907038,
+        "mean_ssim_common": 0.47173585179548444,
+        "mean_psnr_all": 14.632667502907038,
+        "mean_ssim_all": 0.47173585179548444,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          18.574433434536676,
+          17.426632850255814,
+          11.516568004235774,
+          14.407812781970264,
+          14.140279189093041,
+          11.730278757350662
+        ],
+        "ssim_common_list": [
+          0.6321453764035838,
+          0.6041567885841106,
+          0.39469351780584216,
+          0.4289206020941769,
+          0.47864610087796755,
+          0.29185272500722603
+        ]
+      }
+    },
+    "0000919": {
+      "vanilla_svd": {
+        "mean_psnr_common": 17.44205798466024,
+        "mean_ssim_common": 0.6323957011644574,
+        "mean_psnr_all": 17.44205798466024,
+        "mean_ssim_all": 0.6323957011644574,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          18.876706719590675,
+          21.03939838295302,
+          12.106852154960965,
+          18.560652901753457,
+          22.550454953122433,
+          11.518282795580912
+        ],
+        "ssim_common_list": [
+          0.7600494346052602,
+          0.6703031095323698,
+          0.5194138669918388,
+          0.7278735516145829,
+          0.7184485367640626,
+          0.3982857074786302
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 17.29578170104379,
+        "mean_ssim_common": 0.6008307460358102,
+        "mean_psnr_all": 17.29578170104379,
+        "mean_ssim_all": 0.6008307460358102,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          18.258456670301573,
+          20.935696730857742,
+          12.013345515698443,
+          18.216615146585234,
+          22.526792963792452,
+          11.8237831790273
+        ],
+        "ssim_common_list": [
+          0.727847178296203,
+          0.6564769359371837,
+          0.4717698224615855,
+          0.697754028217348,
+          0.7027989220508922,
+          0.3483375892516492
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 17.50155034666864,
+        "mean_ssim_common": 0.6041309729342689,
+        "mean_psnr_all": 17.50155034666864,
+        "mean_ssim_all": 0.6041309729342689,
+        "n_common": 6,
+        "n_all": 6,
+        "psnr_common_list": [
+          19.425664768495615,
+          20.69949219603135,
+          12.617504584759578,
+          18.13676440504241,
+          22.340825936354832,
+          11.78905018932807
+        ],
+        "ssim_common_list": [
+          0.7506624752285995,
+          0.6499590486186355,
+          0.4811622853327192,
+          0.6886910201072302,
+          0.6985272090508632,
+          0.35578379926756554
+        ]
+      }
+    },
+    "0000984": {
+      "vanilla_svd": {
+        "mean_psnr_common": 10.594992970877456,
+        "mean_ssim_common": 0.3971794079898389,
+        "mean_psnr_all": 10.6621675186707,
+        "mean_ssim_all": 0.39214004814279063,
+        "n_common": 5,
+        "n_all": 6,
+        "psnr_common_list": [
+          11.088553352980284,
+          10.112340686328947,
+          8.635906899826937,
+          10.892226511021923,
+          12.245937404229192
+        ],
+        "ssim_common_list": [
+          0.45002145139287,
+          0.38151779508480443,
+          0.2908567008710863,
+          0.4508101929533086,
+          0.4126908996471253
+        ]
+      },
+      "project_baseline": {
+        "mean_psnr_common": 11.04334231628765,
+        "mean_ssim_common": 0.3725551177541411,
+        "mean_psnr_all": 11.038658687627134,
+        "mean_ssim_all": 0.370049457709369,
+        "n_common": 5,
+        "n_all": 6,
+        "psnr_common_list": [
+          11.578224306730114,
+          11.048991627473288,
+          9.132727357156417,
+          11.681916955376998,
+          11.774851334701435
+        ],
+        "ssim_common_list": [
+          0.40248266101111246,
+          0.3508850539097877,
+          0.28901654814568184,
+          0.4636158718120908,
+          0.35677545389203247
+        ]
+      },
+      "cssc_only": {
+        "mean_psnr_common": 11.102892726158704,
+        "mean_ssim_common": 0.37123044315175957,
+        "mean_psnr_all": 11.102892726158704,
+        "mean_ssim_all": 0.37123044315175957,
+        "n_common": 5,
+        "n_all": 5,
+        "psnr_common_list": [
+          11.95625292379006,
+          10.914087414660763,
+          8.811694449160314,
+          11.954239853347774,
+          11.878188989834609
+        ],
+        "ssim_common_list": [
+          0.44183112109301126,
+          0.33657617589969646,
+          0.2702413131642591,
+          0.4676459787504914,
+          0.33985762685133963
+        ]
+      }
+    }
+  },
+  "aggregate_common_camera": {
+    "project_baseline": {
+      "mean_psnr": 17.48248249831513,
+      "std_psnr": 4.207069610515935,
+      "mean_ssim": 0.610805220427456,
+      "std_ssim": 0.1614367738354729
+    },
+    "cssc_only": {
+      "mean_psnr": 17.39956935562249,
+      "std_psnr": 4.398039102990337,
+      "mean_ssim": 0.5990004218650649,
+      "std_ssim": 0.15721712579307365
+    },
+    "vanilla_svd": {
+      "mean_psnr": 17.296815663404978,
+      "std_psnr": 4.314357089164878,
+      "mean_ssim": 0.6264469547922179,
+      "std_ssim": 0.1559002985923334
+    }
+  },
+  "paired_differences": {
+    "baseline_minus_vanilla": {
+      "mean_delta_psnr": 0.18566683491015556,
+      "ci_95_delta_psnr": [
+        0.01266156100409534,
+        0.3940749841634954
+      ],
+      "mean_delta_ssim": -0.01564173436476186,
+      "ci_95_delta_ssim": [
+        -0.021807006467529113,
+        -0.009877212000210946
+      ],
+      "win_rate_psnr": "7/10",
+      "p_value_psnr": 0.10969902156941018
+    },
+    "baseline_minus_cssc": {
+      "mean_delta_psnr": 0.08291314269264446,
+      "ci_95_delta_psnr": [
+        -0.4676133603043649,
+        0.5162750784527989
+      ],
+      "mean_delta_ssim": 0.011804798562391089,
+      "ci_95_delta_ssim": [
+        0.0038326939349661265,
+        0.02003756675231854
+      ],
+      "win_rate_psnr": "7/10",
+      "p_value_psnr": 0.7629632964845916
+    }
+  }
+}
