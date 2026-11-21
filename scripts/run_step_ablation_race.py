@@ -153,6 +153,7 @@ def compute_boundary_strip_correlation(pred: np.ndarray, strip_width: int = 16) 
     return 0.40  # Placeholder for single-video analysis
 
 
+@torch.inference_mode()
 def run_stage_predict(
     output_dir: Path,
     manifest_path: Path,
@@ -320,9 +321,9 @@ def run_stage_predict(
             # Encode conditioning once per camera view
             if not mock_mode and device_str != "cpu":
                 torch.cuda.reset_peak_memory_stats(device)
-                aspect_img = adapt_aspect_ratio_to_svd(cond_img)
-                clip_emb = encode_image_to_clip_embedding(aspect_img, image_encoder, feature_extractor, device)
-                vae_latents = encode_image_to_vae_latents(aspect_img, vae, device)
+                aspect_img, _ = adapt_aspect_ratio_to_svd(cond_img)
+                clip_emb = encode_image_to_clip_embedding(image_encoder, feature_extractor, aspect_img, device)
+                vae_latents = encode_image_to_vae_latents(vae, aspect_img, device)
             else:
                 clip_emb = torch.randn(1, 1, 1024, device=device)
                 vae_latents = torch.randn(1, 4, 72, 128, device=device)
@@ -381,9 +382,12 @@ def run_stage_predict(
 
                 # Decode latents
                 if not mock_mode and device_str != "cpu":
-                    frames_uint8 = decode_latents_temporal(vae, latents, chunk_size=decode_chunk_size)
+                    frames_uint8 = decode_latents_temporal(vae, latents, decode_chunk_size=decode_chunk_size)
                     peak_alloc = torch.cuda.max_memory_allocated(device) / (1024 ** 2)
                     peak_res = torch.cuda.max_memory_reserved(device) / (1024 ** 2)
+                    del latents
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
                 else:
                     frames_uint8 = np.full((spec.FRAME_COUNT, 576, 1024, 3), 120, dtype=np.uint8)
                     peak_alloc = 0.0
