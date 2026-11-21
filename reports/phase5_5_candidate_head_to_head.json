@@ -1,0 +1,3729 @@
+{
+  "timestamp_utc": "2026-11-21T07:00:01.506149+00:00",
+  "stage": "evaluation",
+  "prediction_manifest": "/Users/wageshsharma/.gemini/antigravity/scratch/kitscenes-world-model/reports/phase5_5_prediction_manifest.json",
+  "checkpoint_path": "/kaggle/working/repo/models/cssc_pilot_step30.pt",
+  "checkpoint_sha256": "9e65c397e4059999dd95c7f24a3a5c83f300ccf53c7d06d898132b37b4db9eb9",
+  "checkpoint_training_step": 6,
+  "device": "cuda:0",
+  "mock_mode": false,
+  "denoising_steps": 25,
+  "base_seed": 42,
+  "candidates": [
+    "vanilla_svd",
+    "project_baseline",
+    "cssc_only"
+  ],
+  "scenarios_evaluated": [
+    "0000900",
+    "0000901",
+    "0000902",
+    "0000903",
+    "0000904",
+    "0000905",
+    "0000906",
+    "0000911",
+    "0000919"
+  ],
+  "baseline_submission_archive": {
+    "exists": true,
+    "sha256": "26119a957a37123db3f7dac5a74fab50efb7051c8e7312f1cad1c384343ef10e",
+    "intact": true
+  },
+  "scenarios": {
+    "0000900": {
+      "scenario_id": "0000900",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 20.83,
+          "mean_ssim": 0.8066,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 1.2614,
+          "boundary_strip_correlation": 0.5514,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.5514,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.532,
+              "front_to_front_right": 0.58,
+              "rear_to_rear_left": 0.2705,
+              "rear_to_rear_right": 0.3121,
+              "front_left_to_rear_left": 0.7872,
+              "front_right_to_rear_right": 0.8269
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.032,
+            "seg2_speed_ratio": 0.037,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 4.6631,
+            "seg1_yaw_rear": 6.6523,
+            "seg2_yaw_front": 3.0764,
+            "seg2_yaw_rear": 4.084,
+            "seg1_speed_recovered_mps": 15.23,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 12.89,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -1.51,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 1.55,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 4.71,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 22.31,
+              "ssim": 0.8508,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.6125,
+              "trajectory_adherence": {
+                "adherence": 0.6116,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.2201,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 20.42,
+              "ssim": 0.8604,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.7122,
+              "trajectory_adherence": {
+                "adherence": 0.4633,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.6862,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 22.42,
+              "ssim": 0.8485,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.7334,
+              "trajectory_adherence": {
+                "adherence": 0.4978,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.5776,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 21.21,
+              "ssim": 0.7738,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.6749,
+              "trajectory_adherence": {
+                "adherence": 0.5303,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4756,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 19.44,
+              "ssim": 0.7886,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.7391,
+              "trajectory_adherence": {
+                "adherence": 0.4794,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.6355,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 19.16,
+              "ssim": 0.7175,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.0963,
+              "trajectory_adherence": {
+                "adherence": 0.4998,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.5715,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 20.82,
+          "mean_ssim": 0.7887,
+          "mean_divergence_l1": 7.54,
+          "mean_optical_flow": 0.8626,
+          "boundary_strip_correlation": 0.5755,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.5755,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.5035,
+              "front_to_front_right": 0.8256,
+              "rear_to_rear_left": 0.173,
+              "rear_to_rear_right": 0.376,
+              "front_left_to_rear_left": 0.7246,
+              "front_right_to_rear_right": 0.8499
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.063,
+            "seg2_speed_ratio": 0.065,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 3.1618,
+            "seg1_yaw_rear": 3.3075,
+            "seg2_yaw_front": 1.9509,
+            "seg2_yaw_rear": 1.3459,
+            "seg1_speed_recovered_mps": 7.43,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 7.23,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 1.02,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.82,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 5.71,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 22.74,
+              "ssim": 0.8465,
+              "divergence_l1": 3.61,
+              "mean_optical_flow": 0.7008,
+              "trajectory_adherence": {
+                "adherence": 0.5866,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.2989,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 20.44,
+              "ssim": 0.853,
+              "divergence_l1": 5.01,
+              "mean_optical_flow": 0.5532,
+              "trajectory_adherence": {
+                "adherence": 0.7544,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.7717,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 21.98,
+              "ssim": 0.8181,
+              "divergence_l1": 10.02,
+              "mean_optical_flow": 1.0924,
+              "trajectory_adherence": {
+                "adherence": 0.702,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.9362,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 21.25,
+              "ssim": 0.762,
+              "divergence_l1": 6.81,
+              "mean_optical_flow": 1.0214,
+              "trajectory_adherence": {
+                "adherence": 0.5671,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.3599,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 19.72,
+              "ssim": 0.7809,
+              "divergence_l1": 7.98,
+              "mean_optical_flow": 0.8443,
+              "trajectory_adherence": {
+                "adherence": 0.4672,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.6738,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 18.76,
+              "ssim": 0.6717,
+              "divergence_l1": 11.83,
+              "mean_optical_flow": 0.9633,
+              "trajectory_adherence": {
+                "adherence": 0.4737,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.6535,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 20.18,
+          "mean_ssim": 0.761,
+          "mean_divergence_l1": 9.31,
+          "mean_optical_flow": 0.7944,
+          "boundary_strip_correlation": 0.5749,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.5749,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.489,
+              "front_to_front_right": 0.8349,
+              "rear_to_rear_left": 0.3098,
+              "rear_to_rear_right": 0.3306,
+              "front_left_to_rear_left": 0.6986,
+              "front_right_to_rear_right": 0.7867
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.073,
+            "seg2_speed_ratio": 0.103,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": 2.2745,
+            "seg1_yaw_rear": -4.3642,
+            "seg2_yaw_front": 1.9504,
+            "seg2_yaw_rear": -4.8251,
+            "seg1_speed_recovered_mps": 6.34,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 4.36,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 0.09,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -1.12,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 7.35,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 20.22,
+              "ssim": 0.7775,
+              "divergence_l1": 9.61,
+              "mean_optical_flow": 0.6303,
+              "trajectory_adherence": {
+                "adherence": 0.3827,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.9393,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 19.75,
+              "ssim": 0.8274,
+              "divergence_l1": 6.32,
+              "mean_optical_flow": 0.3998,
+              "trajectory_adherence": {
+                "adherence": 0.9399,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.1887,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 21.67,
+              "ssim": 0.7919,
+              "divergence_l1": 11.12,
+              "mean_optical_flow": 0.3528,
+              "trajectory_adherence": {
+                "adherence": 0.9742,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.081,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 21.25,
+              "ssim": 0.7538,
+              "divergence_l1": 9.06,
+              "mean_optical_flow": 1.3492,
+              "trajectory_adherence": {
+                "adherence": 0.3419,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -2.0674,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 19.61,
+              "ssim": 0.7659,
+              "divergence_l1": 7.29,
+              "mean_optical_flow": 0.8363,
+              "trajectory_adherence": {
+                "adherence": 0.6632,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.0582,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 18.61,
+              "ssim": 0.6493,
+              "divergence_l1": 12.46,
+              "mean_optical_flow": 1.1982,
+              "trajectory_adherence": {
+                "adherence": 0.3943,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.9029,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000901": {
+      "scenario_id": "0000901",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 16.87,
+          "mean_ssim": 0.6753,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 2.0971,
+          "boundary_strip_correlation": 0.5302,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.5302,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.6799,
+              "front_to_front_right": 0.6123,
+              "rear_to_rear_left": 0.5381,
+              "rear_to_rear_right": 0.237,
+              "front_left_to_rear_left": 0.7733,
+              "front_right_to_rear_right": 0.3408
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.031,
+            "seg2_speed_ratio": 0.034,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 2.2868,
+            "seg1_yaw_rear": 6.0261,
+            "seg2_yaw_front": 2.6074,
+            "seg2_yaw_rear": 4.8256,
+            "seg1_speed_recovered_mps": 15.46,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 14.3,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.13,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.73,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 9.2,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 18.34,
+              "ssim": 0.7377,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.7004,
+              "trajectory_adherence": {
+                "adherence": 0.78,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.691,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 18.37,
+              "ssim": 0.6802,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 3.2838,
+              "trajectory_adherence": {
+                "adherence": 0.5045,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.5565,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 13.89,
+              "ssim": 0.6153,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.5139,
+              "trajectory_adherence": {
+                "adherence": 0.4737,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.6534,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 18.51,
+              "ssim": 0.7383,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.991,
+              "trajectory_adherence": {
+                "adherence": 0.8883,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.3509,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 18.36,
+              "ssim": 0.68,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.9846,
+              "trajectory_adherence": {
+                "adherence": 0.9061,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.295,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 13.78,
+              "ssim": 0.6001,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.1087,
+              "trajectory_adherence": {
+                "adherence": 0.5368,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.455,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 16.89,
+          "mean_ssim": 0.6614,
+          "mean_divergence_l1": 9.74,
+          "mean_optical_flow": 1.1138,
+          "boundary_strip_correlation": 0.5448,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.5448,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.6872,
+              "front_to_front_right": 0.775,
+              "rear_to_rear_left": 0.5603,
+              "rear_to_rear_right": 0.2844,
+              "front_left_to_rear_left": 0.7486,
+              "front_right_to_rear_right": 0.2134
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.075,
+            "seg2_speed_ratio": 0.108,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 1.2168,
+            "seg1_yaw_rear": 7.0244,
+            "seg2_yaw_front": 1.9304,
+            "seg2_yaw_rear": 5.6421,
+            "seg1_speed_recovered_mps": 6.14,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 4.12,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 0.21,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -1.7,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 13.01,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 18.17,
+              "ssim": 0.7355,
+              "divergence_l1": 7.26,
+              "mean_optical_flow": 0.9404,
+              "trajectory_adherence": {
+                "adherence": 0.6523,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.0922,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 18.12,
+              "ssim": 0.6592,
+              "divergence_l1": 9.23,
+              "mean_optical_flow": 0.7123,
+              "trajectory_adherence": {
+                "adherence": 0.2418,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.382,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 13.62,
+              "ssim": 0.5677,
+              "divergence_l1": 17.49,
+              "mean_optical_flow": 1.8157,
+              "trajectory_adherence": {
+                "adherence": 0.5115,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.5347,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 18.6,
+              "ssim": 0.7389,
+              "divergence_l1": 3.79,
+              "mean_optical_flow": 1.6936,
+              "trajectory_adherence": {
+                "adherence": 0.7764,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.7023,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 18.65,
+              "ssim": 0.6804,
+              "divergence_l1": 4.89,
+              "mean_optical_flow": 0.5441,
+              "trajectory_adherence": {
+                "adherence": 0.7158,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.8928,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 14.17,
+              "ssim": 0.5867,
+              "divergence_l1": 15.82,
+              "mean_optical_flow": 0.9767,
+              "trajectory_adherence": {
+                "adherence": 0.4404,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.758,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 16.47,
+          "mean_ssim": 0.6346,
+          "mean_divergence_l1": 14.03,
+          "mean_optical_flow": 0.7109,
+          "boundary_strip_correlation": 0.5589,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.5589,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7746,
+              "front_to_front_right": 0.7709,
+              "rear_to_rear_left": 0.5926,
+              "rear_to_rear_right": 0.2471,
+              "front_left_to_rear_left": 0.7345,
+              "front_right_to_rear_right": 0.2338
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.154,
+            "seg2_speed_ratio": 0.163,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 0.8129,
+            "seg1_yaw_rear": 1.6052,
+            "seg2_yaw_front": 0.62,
+            "seg2_yaw_rear": 2.5884,
+            "seg1_speed_recovered_mps": 2.75,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 2.57,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.92,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.39,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 16.95,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 17.7,
+              "ssim": 0.7112,
+              "divergence_l1": 11.73,
+              "mean_optical_flow": 0.455,
+              "trajectory_adherence": {
+                "adherence": 0.4536,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.7164,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 17.53,
+              "ssim": 0.6279,
+              "divergence_l1": 14.37,
+              "mean_optical_flow": 0.8366,
+              "trajectory_adherence": {
+                "adherence": 0.3225,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.1286,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 13.35,
+              "ssim": 0.5243,
+              "divergence_l1": 23.59,
+              "mean_optical_flow": 0.9858,
+              "trajectory_adherence": {
+                "adherence": 0.6048,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.2414,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 17.94,
+              "ssim": 0.7134,
+              "divergence_l1": 10.98,
+              "mean_optical_flow": 1.3519,
+              "trajectory_adherence": {
+                "adherence": 0.4269,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.8004,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 18.32,
+              "ssim": 0.6728,
+              "divergence_l1": 6.87,
+              "mean_optical_flow": 0.0411,
+              "trajectory_adherence": {
+                "adherence": 0.1911,
+                "valid_flow_count": 7,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.5414,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 14.0,
+              "ssim": 0.5578,
+              "divergence_l1": 16.62,
+              "mean_optical_flow": 0.5953,
+              "trajectory_adherence": {
+                "adherence": 0.2254,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.4335,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000902": {
+      "scenario_id": "0000902",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 15.71,
+          "mean_ssim": 0.5782,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 2.8721,
+          "boundary_strip_correlation": 0.2799,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.2799,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.5239,
+              "front_to_front_right": 0.3578,
+              "rear_to_rear_left": 0.0,
+              "rear_to_rear_right": 0.1534,
+              "front_left_to_rear_left": 0.4498,
+              "front_right_to_rear_right": 0.1948
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.037,
+            "seg2_speed_ratio": 0.021,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 0.959,
+            "seg1_yaw_rear": 7.3442,
+            "seg2_yaw_front": 1.1636,
+            "seg2_yaw_rear": 6.1031,
+            "seg1_speed_recovered_mps": 13.07,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 23.11,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 2.17,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 4.4,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 18.83,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 14.79,
+              "ssim": 0.6602,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.4953,
+              "trajectory_adherence": {
+                "adherence": 0.6444,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.1171,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 15.56,
+              "ssim": 0.5717,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.0507,
+              "trajectory_adherence": {
+                "adherence": 0.2486,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -2.3607,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 15.39,
+              "ssim": 0.6321,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 3.3831,
+              "trajectory_adherence": {
+                "adherence": 0.4703,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.6641,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 15.93,
+              "ssim": 0.5756,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 3.9459,
+              "trajectory_adherence": {
+                "adherence": 0.8791,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.3797,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 15.09,
+              "ssim": 0.5354,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.8749,
+              "trajectory_adherence": {
+                "adherence": 0.5674,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.359,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 17.54,
+              "ssim": 0.4943,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 3.4824,
+              "trajectory_adherence": {
+                "adherence": 0.9993,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.0023,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 16.06,
+          "mean_ssim": 0.5693,
+          "mean_divergence_l1": 18.48,
+          "mean_optical_flow": 1.5582,
+          "boundary_strip_correlation": 0.2152,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.2152,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.485,
+              "front_to_front_right": 0.2176,
+              "rear_to_rear_left": 0.0,
+              "rear_to_rear_right": 0.1148,
+              "front_left_to_rear_left": 0.3617,
+              "front_right_to_rear_right": 0.1119
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.05,
+            "seg2_speed_ratio": 0.08,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 5.5506,
+            "seg1_yaw_rear": 3.3433,
+            "seg2_yaw_front": 2.4181,
+            "seg2_yaw_rear": 3.6251,
+            "seg1_speed_recovered_mps": 9.51,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 5.73,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -2.23,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.27,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 27.04,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 16.27,
+              "ssim": 0.6504,
+              "divergence_l1": 24.43,
+              "mean_optical_flow": 1.4606,
+              "trajectory_adherence": {
+                "adherence": 0.6472,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.1085,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 15.92,
+              "ssim": 0.5711,
+              "divergence_l1": 22.45,
+              "mean_optical_flow": 0.689,
+              "trajectory_adherence": {
+                "adherence": 0.524,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.4953,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 15.01,
+              "ssim": 0.5943,
+              "divergence_l1": 17.69,
+              "mean_optical_flow": 2.1122,
+              "trajectory_adherence": {
+                "adherence": 0.7833,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.6808,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 16.1,
+              "ssim": 0.5757,
+              "divergence_l1": 14.12,
+              "mean_optical_flow": 3.029,
+              "trajectory_adherence": {
+                "adherence": 0.6267,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.1727,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 15.35,
+              "ssim": 0.5379,
+              "divergence_l1": 12.99,
+              "mean_optical_flow": 0.4456,
+              "trajectory_adherence": {
+                "adherence": 0.7151,
+                "valid_flow_count": 9,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.895,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 17.71,
+              "ssim": 0.4862,
+              "divergence_l1": 19.18,
+              "mean_optical_flow": 1.6125,
+              "trajectory_adherence": {
+                "adherence": 0.641,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.1279,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 15.83,
+          "mean_ssim": 0.5519,
+          "mean_divergence_l1": 21.48,
+          "mean_optical_flow": 1.79,
+          "boundary_strip_correlation": 0.2753,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.2753,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7015,
+              "front_to_front_right": 0.4622,
+              "rear_to_rear_left": 0.0,
+              "rear_to_rear_right": 0.0449,
+              "front_left_to_rear_left": 0.3453,
+              "front_right_to_rear_right": 0.0978
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.102,
+            "seg2_speed_ratio": 0.206,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 2.1464,
+            "seg1_yaw_rear": 2.3661,
+            "seg2_yaw_front": 0.9628,
+            "seg2_yaw_rear": 1.9946,
+            "seg1_speed_recovered_mps": 4.39,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 1.92,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.02,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.41,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 26.2,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 17.39,
+              "ssim": 0.678,
+              "divergence_l1": 28.68,
+              "mean_optical_flow": 0.8312,
+              "trajectory_adherence": {
+                "adherence": 0.7742,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.7094,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 14.89,
+              "ssim": 0.5278,
+              "divergence_l1": 26.59,
+              "mean_optical_flow": 1.6605,
+              "trajectory_adherence": {
+                "adherence": 0.0334,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -3.0366,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 14.86,
+              "ssim": 0.5494,
+              "divergence_l1": 21.74,
+              "mean_optical_flow": 2.6163,
+              "trajectory_adherence": {
+                "adherence": 0.0091,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -3.113,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 15.3,
+              "ssim": 0.5607,
+              "divergence_l1": 23.02,
+              "mean_optical_flow": 2.3216,
+              "trajectory_adherence": {
+                "adherence": 0.4009,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.8821,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 15.32,
+              "ssim": 0.5385,
+              "divergence_l1": 13.06,
+              "mean_optical_flow": 0.7754,
+              "trajectory_adherence": {
+                "adherence": 0.7252,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.8634,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 17.23,
+              "ssim": 0.457,
+              "divergence_l1": 15.81,
+              "mean_optical_flow": 2.5347,
+              "trajectory_adherence": {
+                "adherence": 0.9968,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.0099,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000903": {
+      "scenario_id": "0000903",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 24.22,
+          "mean_ssim": 0.8575,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 0.3251,
+          "boundary_strip_correlation": 0.7607,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.7607,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7181,
+              "front_to_front_right": 0.8095,
+              "rear_to_rear_left": 0.6408,
+              "rear_to_rear_right": 0.697,
+              "front_left_to_rear_left": 0.8327,
+              "front_right_to_rear_right": 0.8663
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.102,
+            "seg2_speed_ratio": 0.114,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.8278,
+            "seg1_yaw_rear": 0.3971,
+            "seg2_yaw_front": 0.1052,
+            "seg2_yaw_rear": 0.5201,
+            "seg1_speed_recovered_mps": 4.41,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 3.87,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.04,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.25,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 5.09,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 25.44,
+              "ssim": 0.8878,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.254,
+              "trajectory_adherence": {
+                "adherence": 0.4488,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.7318,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 22.37,
+              "ssim": 0.8062,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.4025,
+              "trajectory_adherence": {
+                "adherence": 0.906,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.2952,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 23.55,
+              "ssim": 0.8192,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.645,
+              "trajectory_adherence": {
+                "adherence": 0.6652,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.0519,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 26.96,
+              "ssim": 0.9171,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.1817,
+              "trajectory_adherence": {
+                "adherence": 0.966,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.1069,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 24.69,
+              "ssim": 0.8833,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.1283,
+              "trajectory_adherence": {
+                "adherence": 0.7668,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.7325,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 22.3,
+              "ssim": 0.8312,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.3392,
+              "trajectory_adherence": {
+                "adherence": 0.5049,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.5553,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 24.27,
+          "mean_ssim": 0.855,
+          "mean_divergence_l1": 3.15,
+          "mean_optical_flow": 0.2999,
+          "boundary_strip_correlation": 0.7519,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.7519,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7088,
+              "front_to_front_right": 0.7924,
+              "rear_to_rear_left": 0.6444,
+              "rear_to_rear_right": 0.6632,
+              "front_left_to_rear_left": 0.8225,
+              "front_right_to_rear_right": 0.8803
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.08,
+            "seg2_speed_ratio": 0.074,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": -0.2916,
+            "seg1_yaw_rear": 0.3764,
+            "seg2_yaw_front": -0.6271,
+            "seg2_yaw_rear": 0.4634,
+            "seg1_speed_recovered_mps": 5.78,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 6.26,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 0.21,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.48,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 5.27,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 25.51,
+              "ssim": 0.8858,
+              "divergence_l1": 2.02,
+              "mean_optical_flow": 0.2251,
+              "trajectory_adherence": {
+                "adherence": 0.4218,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.8166,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 22.41,
+              "ssim": 0.8094,
+              "divergence_l1": 3.89,
+              "mean_optical_flow": 0.1748,
+              "trajectory_adherence": {
+                "adherence": 0.6163,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.2053,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 23.13,
+              "ssim": 0.8072,
+              "divergence_l1": 5.46,
+              "mean_optical_flow": 0.8556,
+              "trajectory_adherence": {
+                "adherence": 0.8058,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.61,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 27.5,
+              "ssim": 0.9187,
+              "divergence_l1": 2.24,
+              "mean_optical_flow": 0.1232,
+              "trajectory_adherence": {
+                "adherence": 0.5925,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.2803,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 24.8,
+              "ssim": 0.8806,
+              "divergence_l1": 2.04,
+              "mean_optical_flow": 0.122,
+              "trajectory_adherence": {
+                "adherence": 0.6858,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.9871,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 22.27,
+              "ssim": 0.8285,
+              "divergence_l1": 3.24,
+              "mean_optical_flow": 0.2987,
+              "trajectory_adherence": {
+                "adherence": 0.4862,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.6142,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 23.01,
+          "mean_ssim": 0.824,
+          "mean_divergence_l1": 7.81,
+          "mean_optical_flow": 0.3007,
+          "boundary_strip_correlation": 0.7316,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.7316,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7367,
+              "front_to_front_right": 0.7758,
+              "rear_to_rear_left": 0.639,
+              "rear_to_rear_right": 0.6123,
+              "front_left_to_rear_left": 0.8067,
+              "front_right_to_rear_right": 0.819
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.044,
+            "seg2_speed_ratio": 0.089,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": 0.3254,
+            "seg1_yaw_rear": -0.0319,
+            "seg2_yaw_front": 0.2315,
+            "seg2_yaw_rear": -0.0225,
+            "seg1_speed_recovered_mps": 10.77,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 5.12,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -2.18,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.83,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 7.24,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 25.42,
+              "ssim": 0.8842,
+              "divergence_l1": 5.07,
+              "mean_optical_flow": 0.1987,
+              "trajectory_adherence": {
+                "adherence": 0.5836,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.3082,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 21.44,
+              "ssim": 0.7976,
+              "divergence_l1": 7.75,
+              "mean_optical_flow": 0.5558,
+              "trajectory_adherence": {
+                "adherence": 0.3807,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.9456,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 20.2,
+              "ssim": 0.7074,
+              "divergence_l1": 12.65,
+              "mean_optical_flow": 0.3439,
+              "trajectory_adherence": {
+                "adherence": 0.8693,
+                "valid_flow_count": 9,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.4107,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 26.37,
+              "ssim": 0.9015,
+              "divergence_l1": 4.78,
+              "mean_optical_flow": 0.1833,
+              "trajectory_adherence": {
+                "adherence": 0.205,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.4977,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 25.02,
+              "ssim": 0.884,
+              "divergence_l1": 2.85,
+              "mean_optical_flow": 0.1376,
+              "trajectory_adherence": {
+                "adherence": 0.5358,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4585,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 19.63,
+              "ssim": 0.7691,
+              "divergence_l1": 13.74,
+              "mean_optical_flow": 0.3849,
+              "trajectory_adherence": {
+                "adherence": 0.9998,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.0005,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000904": {
+      "scenario_id": "0000904",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 13.81,
+          "mean_ssim": 0.4831,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 2.1327,
+          "boundary_strip_correlation": 0.3771,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.3771,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.6731,
+              "front_to_front_right": 0.6654,
+              "rear_to_rear_left": 0.0857,
+              "rear_to_rear_right": 0.0809,
+              "front_left_to_rear_left": 0.363,
+              "front_right_to_rear_right": 0.3947
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.042,
+            "seg2_speed_ratio": 0.052,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.6918,
+            "seg1_yaw_rear": 4.7092,
+            "seg2_yaw_front": 0.4151,
+            "seg2_yaw_rear": 4.1114,
+            "seg1_speed_recovered_mps": 11.33,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 9.07,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -1.03,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 2.76,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 38.78,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 13.69,
+              "ssim": 0.5203,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.5428,
+              "trajectory_adherence": {
+                "adherence": 0.7589,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.7575,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 14.73,
+              "ssim": 0.402,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 3.7289,
+              "trajectory_adherence": {
+                "adherence": 0.5233,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4977,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 10.58,
+              "ssim": 0.5292,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.1283,
+              "trajectory_adherence": {
+                "adherence": 0.5916,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.2831,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 15.77,
+              "ssim": 0.5297,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.8856,
+              "trajectory_adherence": {
+                "adherence": 0.9279,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.2264,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 15.58,
+              "ssim": 0.3936,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.0767,
+              "trajectory_adherence": {
+                "adherence": 0.6594,
+                "valid_flow_count": 5,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.07,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 12.48,
+              "ssim": 0.5239,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.4338,
+              "trajectory_adherence": {
+                "adherence": 0.5765,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.3304,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 13.66,
+          "mean_ssim": 0.4546,
+          "mean_divergence_l1": 15.34,
+          "mean_optical_flow": 1.2807,
+          "boundary_strip_correlation": 0.3157,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.3157,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.6525,
+              "front_to_front_right": 0.5444,
+              "rear_to_rear_left": 0.008,
+              "rear_to_rear_right": 0.0797,
+              "front_left_to_rear_left": 0.3943,
+              "front_right_to_rear_right": 0.2154
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.074,
+            "seg2_speed_ratio": 0.064,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.6549,
+            "seg1_yaw_rear": -0.3122,
+            "seg2_yaw_front": -0.5171,
+            "seg2_yaw_rear": -0.8882,
+            "seg1_speed_recovered_mps": 6.26,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 7.36,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.09,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 1.06,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 46.03,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 13.31,
+              "ssim": 0.5059,
+              "divergence_l1": 14.4,
+              "mean_optical_flow": 1.8262,
+              "trajectory_adherence": {
+                "adherence": 0.3357,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.0869,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 15.17,
+              "ssim": 0.4044,
+              "divergence_l1": 20.54,
+              "mean_optical_flow": 0.9862,
+              "trajectory_adherence": {
+                "adherence": 0.8191,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.5684,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 10.4,
+              "ssim": 0.48,
+              "divergence_l1": 18.49,
+              "mean_optical_flow": 2.0689,
+              "trajectory_adherence": {
+                "adherence": 0.5068,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.5496,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 15.29,
+              "ssim": 0.4847,
+              "divergence_l1": 19.67,
+              "mean_optical_flow": 0.1763,
+              "trajectory_adherence": {
+                "adherence": 0.821,
+                "valid_flow_count": 2,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.5623,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 15.62,
+              "ssim": 0.396,
+              "divergence_l1": 1.81,
+              "mean_optical_flow": 0.092,
+              "trajectory_adherence": {
+                "adherence": 0.9118,
+                "valid_flow_count": 5,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.2771,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 12.16,
+              "ssim": 0.4569,
+              "divergence_l1": 17.12,
+              "mean_optical_flow": 2.5346,
+              "trajectory_adherence": {
+                "adherence": 0.5105,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.5379,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 13.62,
+          "mean_ssim": 0.4478,
+          "mean_divergence_l1": 15.57,
+          "mean_optical_flow": 1.3003,
+          "boundary_strip_correlation": 0.3585,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.3585,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.6877,
+              "front_to_front_right": 0.6897,
+              "rear_to_rear_left": 0.0,
+              "rear_to_rear_right": 0.0859,
+              "front_left_to_rear_left": 0.4553,
+              "front_right_to_rear_right": 0.2321
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.121,
+            "seg2_speed_ratio": 0.16,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": -1.7332,
+            "seg1_yaw_rear": 0.5297,
+            "seg2_yaw_front": -1.0532,
+            "seg2_yaw_rear": 0.3693,
+            "seg1_speed_recovered_mps": 3.62,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 2.63,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.9,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.86,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 46.14,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 13.3,
+              "ssim": 0.4937,
+              "divergence_l1": 15.28,
+              "mean_optical_flow": 1.575,
+              "trajectory_adherence": {
+                "adherence": 0.3259,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.1178,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 14.84,
+              "ssim": 0.3845,
+              "divergence_l1": 22.35,
+              "mean_optical_flow": 0.7808,
+              "trajectory_adherence": {
+                "adherence": 0.8036,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.617,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 10.34,
+              "ssim": 0.4617,
+              "divergence_l1": 18.79,
+              "mean_optical_flow": 1.8729,
+              "trajectory_adherence": {
+                "adherence": 0.1287,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -2.7374,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 15.45,
+              "ssim": 0.5019,
+              "divergence_l1": 17.34,
+              "mean_optical_flow": 1.9141,
+              "trajectory_adherence": {
+                "adherence": 0.676,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.0178,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 15.71,
+              "ssim": 0.398,
+              "divergence_l1": 2.13,
+              "mean_optical_flow": 0.0739,
+              "trajectory_adherence": {
+                "adherence": 0.8601,
+                "valid_flow_count": 5,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.4394,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 12.09,
+              "ssim": 0.4469,
+              "divergence_l1": 17.55,
+              "mean_optical_flow": 1.5849,
+              "trajectory_adherence": {
+                "adherence": 0.5143,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.526,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000905": {
+      "scenario_id": "0000905",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 14.54,
+          "mean_ssim": 0.4983,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 4.0371,
+          "boundary_strip_correlation": 0.0835,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.0835,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.0304,
+              "front_to_front_right": 0.101,
+              "rear_to_rear_left": 0.1859,
+              "rear_to_rear_right": 0.0,
+              "front_left_to_rear_left": 0.1374,
+              "front_right_to_rear_right": 0.0463
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.031,
+            "seg2_speed_ratio": 0.031,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -1.6941,
+            "seg1_yaw_rear": -6.0954,
+            "seg2_yaw_front": -1.6019,
+            "seg2_yaw_rear": -9.0406,
+            "seg1_speed_recovered_mps": 15.64,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 15.62,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.19,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 3.06,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 36.7,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 17.62,
+              "ssim": 0.6033,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.13,
+              "trajectory_adherence": {
+                "adherence": 0.9724,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.0868,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 15.47,
+              "ssim": 0.4658,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 6.1199,
+              "trajectory_adherence": {
+                "adherence": 0.5719,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.3448,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 14.28,
+              "ssim": 0.5625,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.6672,
+              "trajectory_adherence": {
+                "adherence": 0.7803,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.6903,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 13.96,
+              "ssim": 0.4721,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 5.4878,
+              "trajectory_adherence": {
+                "adherence": 0.7168,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.8899,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 12.81,
+              "ssim": 0.4042,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 4.3352,
+              "trajectory_adherence": {
+                "adherence": 0.9247,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.2367,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 13.12,
+              "ssim": 0.4817,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 3.4824,
+              "trajectory_adherence": {
+                "adherence": 0.7657,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.736,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 15.49,
+          "mean_ssim": 0.4881,
+          "mean_divergence_l1": 25.52,
+          "mean_optical_flow": 1.5586,
+          "boundary_strip_correlation": 0.0435,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.0435,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.1609,
+              "front_to_front_right": 0.0543,
+              "rear_to_rear_left": 0.0459,
+              "rear_to_rear_right": 0.0,
+              "front_left_to_rear_left": 0.0,
+              "front_right_to_rear_right": 0.0
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.068,
+            "seg2_speed_ratio": 0.091,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 0.0014,
+            "seg1_yaw_rear": -0.2891,
+            "seg2_yaw_front": -0.0103,
+            "seg2_yaw_rear": -0.0014,
+            "seg1_speed_recovered_mps": 6.85,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 4.97,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.16,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.11,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 46.27,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 19.25,
+              "ssim": 0.6318,
+              "divergence_l1": 17.29,
+              "mean_optical_flow": 0.3185,
+              "trajectory_adherence": {
+                "adherence": 0.7749,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.707,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 14.31,
+              "ssim": 0.4121,
+              "divergence_l1": 28.03,
+              "mean_optical_flow": 1.4574,
+              "trajectory_adherence": {
+                "adherence": 0.6843,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.9918,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 16.56,
+              "ssim": 0.5996,
+              "divergence_l1": 21.6,
+              "mean_optical_flow": 1.7736,
+              "trajectory_adherence": {
+                "adherence": 0.8847,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.3621,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 14.2,
+              "ssim": 0.4275,
+              "divergence_l1": 25.46,
+              "mean_optical_flow": 1.1017,
+              "trajectory_adherence": {
+                "adherence": 0.873,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.3991,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 12.64,
+              "ssim": 0.3905,
+              "divergence_l1": 26.8,
+              "mean_optical_flow": 2.6409,
+              "trajectory_adherence": {
+                "adherence": 0.7126,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.9029,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 15.97,
+              "ssim": 0.467,
+              "divergence_l1": 33.96,
+              "mean_optical_flow": 2.0594,
+              "trajectory_adherence": {
+                "adherence": 0.9409,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.1857,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 15.08,
+          "mean_ssim": 0.4775,
+          "mean_divergence_l1": 27.74,
+          "mean_optical_flow": 1.9053,
+          "boundary_strip_correlation": 0.0841,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.0841,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.1974,
+              "front_to_front_right": 0.0904,
+              "rear_to_rear_left": 0.1267,
+              "rear_to_rear_right": 0.0,
+              "front_left_to_rear_left": 0.0763,
+              "front_right_to_rear_right": 0.0137
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.071,
+            "seg2_speed_ratio": 0.081,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": -0.5887,
+            "seg1_yaw_rear": -2.7038,
+            "seg2_yaw_front": -0.4015,
+            "seg2_yaw_rear": -1.8498,
+            "seg1_speed_recovered_mps": 6.58,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 5.64,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.54,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.49,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 44.56,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 17.7,
+              "ssim": 0.5782,
+              "divergence_l1": 18.54,
+              "mean_optical_flow": 1.6415,
+              "trajectory_adherence": {
+                "adherence": 0.6213,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.1898,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 14.9,
+              "ssim": 0.429,
+              "divergence_l1": 26.36,
+              "mean_optical_flow": 1.1352,
+              "trajectory_adherence": {
+                "adherence": 0.5129,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.5303,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 15.87,
+              "ssim": 0.5931,
+              "divergence_l1": 31.71,
+              "mean_optical_flow": 1.4626,
+              "trajectory_adherence": {
+                "adherence": 0.5454,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.4281,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 13.69,
+              "ssim": 0.4295,
+              "divergence_l1": 21.6,
+              "mean_optical_flow": 2.497,
+              "trajectory_adherence": {
+                "adherence": 0.6561,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.0804,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 12.45,
+              "ssim": 0.363,
+              "divergence_l1": 31.84,
+              "mean_optical_flow": 2.7286,
+              "trajectory_adherence": {
+                "adherence": 0.5682,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.3566,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 15.85,
+              "ssim": 0.4721,
+              "divergence_l1": 36.39,
+              "mean_optical_flow": 1.9669,
+              "trajectory_adherence": {
+                "adherence": 0.4868,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.6122,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000906": {
+      "scenario_id": "0000906",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 24.42,
+          "mean_ssim": 0.8404,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 0.4758,
+          "boundary_strip_correlation": 0.2541,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.2541,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.3002,
+              "front_to_front_right": 0.2169,
+              "rear_to_rear_left": 0.0731,
+              "rear_to_rear_right": 0.2544,
+              "front_left_to_rear_left": 0.3207,
+              "front_right_to_rear_right": 0.3594
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.066,
+            "seg2_speed_ratio": 0.023,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": -0.8254,
+            "seg1_yaw_rear": 4.0951,
+            "seg2_yaw_front": -1.037,
+            "seg2_yaw_rear": 3.5298,
+            "seg1_speed_recovered_mps": 7.12,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 21.27,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 4.16,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -4.27,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 3.93,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 25.78,
+              "ssim": 0.8531,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.2023,
+              "trajectory_adherence": {
+                "adherence": 0.4656,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.6789,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 26.01,
+              "ssim": 0.8627,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.7273,
+              "trajectory_adherence": {
+                "adherence": 0.4947,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.5873,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 28.86,
+              "ssim": 0.8533,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.3828,
+              "trajectory_adherence": {
+                "adherence": 0.9664,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.1055,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 20.22,
+              "ssim": 0.7989,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.7527,
+              "trajectory_adherence": {
+                "adherence": 0.6014,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.2521,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 26.86,
+              "ssim": 0.8423,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.2153,
+              "trajectory_adherence": {
+                "adherence": 0.9377,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.1956,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 18.79,
+              "ssim": 0.8324,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.5743,
+              "trajectory_adherence": {
+                "adherence": 0.5309,
+                "valid_flow_count": 5,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4737,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 24.55,
+          "mean_ssim": 0.8379,
+          "mean_divergence_l1": 2.21,
+          "mean_optical_flow": 0.5151,
+          "boundary_strip_correlation": 0.338,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.338,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.2593,
+              "front_to_front_right": 0.2248,
+              "rear_to_rear_left": 0.1149,
+              "rear_to_rear_right": 0.4281,
+              "front_left_to_rear_left": 0.3965,
+              "front_right_to_rear_right": 0.6041
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.076,
+            "seg2_speed_ratio": 0.02,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": -0.518,
+            "seg1_yaw_rear": 2.2801,
+            "seg2_yaw_front": -0.5463,
+            "seg2_yaw_rear": 3.1706,
+            "seg1_speed_recovered_mps": 6.08,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 24.66,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 2.4,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -3.59,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 3.96,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 24.4,
+              "ssim": 0.8503,
+              "divergence_l1": 2.46,
+              "mean_optical_flow": 0.2786,
+              "trajectory_adherence": {
+                "adherence": 0.5262,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4885,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 26.8,
+              "ssim": 0.8599,
+              "divergence_l1": 1.61,
+              "mean_optical_flow": 1.1682,
+              "trajectory_adherence": {
+                "adherence": 0.7325,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.8403,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 30.12,
+              "ssim": 0.8588,
+              "divergence_l1": 1.46,
+              "mean_optical_flow": 0.2495,
+              "trajectory_adherence": {
+                "adherence": 0.6727,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.0283,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 20.92,
+              "ssim": 0.795,
+              "divergence_l1": 4.47,
+              "mean_optical_flow": 0.5641,
+              "trajectory_adherence": {
+                "adherence": 0.4212,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.8185,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 27.0,
+              "ssim": 0.8317,
+              "divergence_l1": 1.66,
+              "mean_optical_flow": 0.2393,
+              "trajectory_adherence": {
+                "adherence": 0.8887,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.3498,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 18.04,
+              "ssim": 0.8313,
+              "divergence_l1": 1.61,
+              "mean_optical_flow": 0.5908,
+              "trajectory_adherence": {
+                "adherence": 0.5159,
+                "valid_flow_count": 4,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.5208,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 26.56,
+          "mean_ssim": 0.8462,
+          "mean_divergence_l1": 4.85,
+          "mean_optical_flow": 0.1876,
+          "boundary_strip_correlation": 0.3158,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.3158,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.1438,
+              "front_to_front_right": 0.2534,
+              "rear_to_rear_left": 0.0997,
+              "rear_to_rear_right": 0.434,
+              "front_left_to_rear_left": 0.4512,
+              "front_right_to_rear_right": 0.5127
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.25,
+            "seg2_speed_ratio": 0.36,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 0.6687,
+            "seg1_yaw_rear": 0.8219,
+            "seg2_yaw_front": 0.5744,
+            "seg2_yaw_rear": 4.6898,
+            "seg1_speed_recovered_mps": 1.5,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 0.89,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 0.28,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.63,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 3.95,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 20.84,
+              "ssim": 0.8413,
+              "divergence_l1": 5.2,
+              "mean_optical_flow": 0.2832,
+              "trajectory_adherence": {
+                "adherence": 0.5712,
+                "valid_flow_count": 6,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.3473,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 31.06,
+              "ssim": 0.8812,
+              "divergence_l1": 2.8,
+              "mean_optical_flow": 0.0346,
+              "trajectory_adherence": {
+                "adherence": 0.6891,
+                "valid_flow_count": 1,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.9767,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 31.09,
+              "ssim": 0.8562,
+              "divergence_l1": 2.86,
+              "mean_optical_flow": 0.2097,
+              "trajectory_adherence": {
+                "adherence": 0.4955,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.5849,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 18.82,
+              "ssim": 0.7809,
+              "divergence_l1": 9.61,
+              "mean_optical_flow": 0.5075,
+              "trajectory_adherence": {
+                "adherence": 0.4919,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.5962,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 31.47,
+              "ssim": 0.8562,
+              "divergence_l1": 2.63,
+              "mean_optical_flow": 0.0743,
+              "trajectory_adherence": {
+                "adherence": 0.9058,
+                "valid_flow_count": 6,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.2959,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 26.06,
+              "ssim": 0.8614,
+              "divergence_l1": 5.99,
+              "mean_optical_flow": 0.0163,
+              "trajectory_adherence": {
+                "adherence": null,
+                "valid_flow_count": 0,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": null,
+                "measurable": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000911": {
+      "scenario_id": "0000911",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 14.53,
+          "mean_ssim": 0.4955,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 4.2777,
+          "boundary_strip_correlation": 0.3782,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.3782,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.4378,
+              "front_to_front_right": 0.6273,
+              "rear_to_rear_left": 0.0543,
+              "rear_to_rear_right": 0.3186,
+              "front_left_to_rear_left": 0.1551,
+              "front_right_to_rear_right": 0.6759
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.022,
+            "seg2_speed_ratio": 0.016,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": -16.0887,
+            "seg1_yaw_rear": 25.6437,
+            "seg2_yaw_front": -5.3483,
+            "seg2_yaw_rear": 7.1384,
+            "seg1_speed_recovered_mps": 21.92,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 30.93,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.85,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 2.81,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 29.79,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 18.16,
+              "ssim": 0.6555,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 2.2517,
+              "trajectory_adherence": {
+                "adherence": 0.4578,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.7034,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 17.42,
+              "ssim": 0.615,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.4659,
+              "trajectory_adherence": {
+                "adherence": 0.7252,
+                "valid_flow_count": 9,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.8633,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 11.57,
+              "ssim": 0.4128,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 8.2283,
+              "trajectory_adherence": {
+                "adherence": 0.8405,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.501,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 14.26,
+              "ssim": 0.4615,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 4.9043,
+              "trajectory_adherence": {
+                "adherence": 0.607,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.2345,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 14.01,
+              "ssim": 0.5042,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 4.4465,
+              "trajectory_adherence": {
+                "adherence": 0.4889,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.6057,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 11.75,
+              "ssim": 0.3238,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 5.3693,
+              "trajectory_adherence": {
+                "adherence": 0.5349,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4612,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 14.75,
+          "mean_ssim": 0.4797,
+          "mean_divergence_l1": 21.43,
+          "mean_optical_flow": 1.8714,
+          "boundary_strip_correlation": 0.3183,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.3183,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.2346,
+              "front_to_front_right": 0.5658,
+              "rear_to_rear_left": 0.0595,
+              "rear_to_rear_right": 0.3046,
+              "front_left_to_rear_left": 0.14,
+              "front_right_to_rear_right": 0.6052
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.052,
+            "seg2_speed_ratio": 0.047,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": -0.2631,
+            "seg1_yaw_rear": 10.3568,
+            "seg2_yaw_front": 0.0038,
+            "seg2_yaw_rear": 11.024,
+            "seg1_speed_recovered_mps": 9.16,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 10.06,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -1.19,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.43,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 38.7,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 18.21,
+              "ssim": 0.6122,
+              "divergence_l1": 17.32,
+              "mean_optical_flow": 0.1327,
+              "trajectory_adherence": {
+                "adherence": 0.7597,
+                "valid_flow_count": 6,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.755,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 17.81,
+              "ssim": 0.6197,
+              "divergence_l1": 5.47,
+              "mean_optical_flow": 0.1792,
+              "trajectory_adherence": {
+                "adherence": 0.9196,
+                "valid_flow_count": 7,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.2526,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 11.77,
+              "ssim": 0.4088,
+              "divergence_l1": 25.63,
+              "mean_optical_flow": 3.1048,
+              "trajectory_adherence": {
+                "adherence": 0.538,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4513,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 14.6,
+              "ssim": 0.448,
+              "divergence_l1": 18.93,
+              "mean_optical_flow": 3.5681,
+              "trajectory_adherence": {
+                "adherence": 0.5514,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.4093,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 14.37,
+              "ssim": 0.4969,
+              "divergence_l1": 24.68,
+              "mean_optical_flow": 2.2058,
+              "trajectory_adherence": {
+                "adherence": 0.4746,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.6507,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 11.76,
+              "ssim": 0.2927,
+              "divergence_l1": 36.52,
+              "mean_optical_flow": 2.0379,
+              "trajectory_adherence": {
+                "adherence": 0.6343,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.1489,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 14.63,
+          "mean_ssim": 0.4717,
+          "mean_divergence_l1": 24.23,
+          "mean_optical_flow": 1.5899,
+          "boundary_strip_correlation": 0.2809,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.2809,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.2635,
+              "front_to_front_right": 0.5026,
+              "rear_to_rear_left": 0.0132,
+              "rear_to_rear_right": 0.1977,
+              "front_left_to_rear_left": 0.1401,
+              "front_right_to_rear_right": 0.5687
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.065,
+            "seg2_speed_ratio": 0.061,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 0.5347,
+            "seg1_yaw_rear": 6.8094,
+            "seg2_yaw_front": 0.5318,
+            "seg2_yaw_rear": 6.0712,
+            "seg1_speed_recovered_mps": 7.21,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 7.76,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": 0.09,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 0.24,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 35.69,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 18.57,
+              "ssim": 0.6321,
+              "divergence_l1": 15.44,
+              "mean_optical_flow": 1.0345,
+              "trajectory_adherence": {
+                "adherence": 0.6421,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.1243,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 17.43,
+              "ssim": 0.6042,
+              "divergence_l1": 9.85,
+              "mean_optical_flow": 0.705,
+              "trajectory_adherence": {
+                "adherence": 0.8507,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.4691,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 11.52,
+              "ssim": 0.3947,
+              "divergence_l1": 33.9,
+              "mean_optical_flow": 1.283,
+              "trajectory_adherence": {
+                "adherence": 0.7182,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.8852,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 14.41,
+              "ssim": 0.4289,
+              "divergence_l1": 22.08,
+              "mean_optical_flow": 3.2902,
+              "trajectory_adherence": {
+                "adherence": 0.5101,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.539,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 14.14,
+              "ssim": 0.4786,
+              "divergence_l1": 27.45,
+              "mean_optical_flow": 1.8622,
+              "trajectory_adherence": {
+                "adherence": 0.4567,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.7067,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 11.73,
+              "ssim": 0.2919,
+              "divergence_l1": 36.63,
+              "mean_optical_flow": 1.3647,
+              "trajectory_adherence": {
+                "adherence": 0.836,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 0.5153,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "0000919": {
+      "scenario_id": "0000919",
+      "instruction": "drive straight on",
+      "planned_mean_speed": 0.0,
+      "trajectory_motion_bucket": 47,
+      "official_mms_score": null,
+      "mms_evaluates_video": false,
+      "candidates": {
+        "vanilla_svd": {
+          "mean_psnr": 17.44,
+          "mean_ssim": 0.6324,
+          "mean_divergence_l1": 0.0,
+          "mean_optical_flow": 3.4076,
+          "boundary_strip_correlation": 0.4086,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.4086,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7625,
+              "front_to_front_right": 0.6279,
+              "rear_to_rear_left": 0.0,
+              "rear_to_rear_right": 0.0,
+              "front_left_to_rear_left": 0.8049,
+              "front_right_to_rear_right": 0.256
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.021,
+            "seg2_speed_ratio": 0.02,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 1.7198,
+            "seg1_yaw_rear": 12.8039,
+            "seg2_yaw_front": 1.7141,
+            "seg2_yaw_rear": 9.6808,
+            "seg1_speed_recovered_mps": 23.37,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 24.23,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.56,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 2.78,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 16.35,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 18.88,
+              "ssim": 0.76,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 0.9798,
+              "trajectory_adherence": {
+                "adherence": 0.4311,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.7871,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 21.04,
+              "ssim": 0.6703,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.6207,
+              "trajectory_adherence": {
+                "adherence": 0.5531,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.404,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 12.11,
+              "ssim": 0.5194,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 4.567,
+              "trajectory_adherence": {
+                "adherence": 0.475,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.6492,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 18.56,
+              "ssim": 0.7279,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.2641,
+              "trajectory_adherence": {
+                "adherence": 0.5958,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.2698,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 22.55,
+              "ssim": 0.7184,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 1.9286,
+              "trajectory_adherence": {
+                "adherence": 0.5787,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.3236,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 11.52,
+              "ssim": 0.3983,
+              "divergence_l1": 0.0,
+              "mean_optical_flow": 10.0856,
+              "trajectory_adherence": {
+                "adherence": 0.5166,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.5188,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "project_baseline": {
+          "mean_psnr": 17.3,
+          "mean_ssim": 0.6008,
+          "mean_divergence_l1": 14.61,
+          "mean_optical_flow": 1.3946,
+          "boundary_strip_correlation": 0.4676,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.4676,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7358,
+              "front_to_front_right": 0.6531,
+              "rear_to_rear_left": 0.0,
+              "rear_to_rear_right": 0.0,
+              "front_left_to_rear_left": 0.8209,
+              "front_right_to_rear_right": 0.5959
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.049,
+            "seg2_speed_ratio": 0.043,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": false,
+            "seg2_yaw_agreement": false,
+            "seg1_yaw_front": -1.8947,
+            "seg1_yaw_rear": 4.1911,
+            "seg2_yaw_front": -0.0032,
+            "seg2_yaw_rear": 3.2037,
+            "seg1_speed_recovered_mps": 9.8,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 11.25,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -0.86,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": -0.77,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 20.9,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 18.26,
+              "ssim": 0.7278,
+              "divergence_l1": 8.83,
+              "mean_optical_flow": 0.2146,
+              "trajectory_adherence": {
+                "adherence": 0.6112,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.2213,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 20.94,
+              "ssim": 0.6565,
+              "divergence_l1": 5.41,
+              "mean_optical_flow": 1.9717,
+              "trajectory_adherence": {
+                "adherence": 0.4632,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.6865,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 12.01,
+              "ssim": 0.4718,
+              "divergence_l1": 35.42,
+              "mean_optical_flow": 1.193,
+              "trajectory_adherence": {
+                "adherence": 0.6469,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.1092,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 18.22,
+              "ssim": 0.6978,
+              "divergence_l1": 11.01,
+              "mean_optical_flow": 0.8719,
+              "trajectory_adherence": {
+                "adherence": 0.5634,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.3718,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 22.53,
+              "ssim": 0.7028,
+              "divergence_l1": 5.08,
+              "mean_optical_flow": 2.3532,
+              "trajectory_adherence": {
+                "adherence": 0.3973,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -1.8934,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 11.82,
+              "ssim": 0.3483,
+              "divergence_l1": 21.88,
+              "mean_optical_flow": 1.763,
+              "trajectory_adherence": {
+                "adherence": 0.4827,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.6252,
+                "measurable": true
+              }
+            }
+          }
+        },
+        "cssc_only": {
+          "mean_psnr": 17.5,
+          "mean_ssim": 0.6041,
+          "mean_divergence_l1": 16.24,
+          "mean_optical_flow": 1.6254,
+          "boundary_strip_correlation": 0.4547,
+          "boundary_strip_details": {
+            "boundary_strip_correlation": 0.4547,
+            "pairwise_correlations": {
+              "front_to_front_left": 0.7792,
+              "front_to_front_right": 0.5996,
+              "rear_to_rear_left": 0.0,
+              "rear_to_rear_right": 0.0,
+              "front_left_to_rear_left": 0.8125,
+              "front_right_to_rear_right": 0.5367
+            },
+            "pair_count_evaluated": 6,
+            "is_calibrated_3d_geometry": false
+          },
+          "local_emc_approximation": 0.0,
+          "emc_details": {
+            "local_emc_approximation": 0.0,
+            "emc": 0.0,
+            "is_official_emc": false,
+            "all_cameras_present": true,
+            "matches": 0,
+            "seg1_speed_ratio": 0.053,
+            "seg2_speed_ratio": 0.072,
+            "seg1_steering_match": false,
+            "seg1_accel_match": false,
+            "seg2_steering_match": false,
+            "seg2_accel_match": false,
+            "seg1_yaw_agreement": true,
+            "seg2_yaw_agreement": true,
+            "seg1_yaw_front": 0.9359,
+            "seg1_yaw_rear": 3.8495,
+            "seg2_yaw_front": 0.1816,
+            "seg2_yaw_rear": 2.4412,
+            "seg1_speed_recovered_mps": 8.88,
+            "seg1_speed_planned_mps": 0.0,
+            "seg2_speed_recovered_mps": 6.48,
+            "seg2_speed_planned_mps": 0.0,
+            "seg1_accel_recovered_mps2": -1.3,
+            "seg1_accel_planned_mps2": 0.0,
+            "seg2_accel_recovered_mps2": 1.16,
+            "seg2_accel_planned_mps2": 0.0,
+            "valid_flow_measurements": 24
+          },
+          "visual_naturalness_proxy": 20.29,
+          "is_official_pq": false,
+          "camera_evaluations": {
+            "front": {
+              "psnr": 19.43,
+              "ssim": 0.7507,
+              "divergence_l1": 16.31,
+              "mean_optical_flow": 0.5782,
+              "trajectory_adherence": {
+                "adherence": 0.3256,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.1188,
+                "measurable": true
+              }
+            },
+            "front_left": {
+              "psnr": 20.7,
+              "ssim": 0.65,
+              "divergence_l1": 6.09,
+              "mean_optical_flow": 1.2196,
+              "trajectory_adherence": {
+                "adherence": 0.6306,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 1.1606,
+                "measurable": true
+              }
+            },
+            "front_right": {
+              "psnr": 12.62,
+              "ssim": 0.4812,
+              "divergence_l1": 34.45,
+              "mean_optical_flow": 1.3475,
+              "trajectory_adherence": {
+                "adherence": 0.8714,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.4042,
+                "measurable": true
+              }
+            },
+            "rear": {
+              "psnr": 18.14,
+              "ssim": 0.6887,
+              "divergence_l1": 12.16,
+              "mean_optical_flow": 0.9489,
+              "trajectory_adherence": {
+                "adherence": 0.3284,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": 2.11,
+                "measurable": true
+              }
+            },
+            "rear_left": {
+              "psnr": 22.34,
+              "ssim": 0.6985,
+              "divergence_l1": 5.79,
+              "mean_optical_flow": 2.0826,
+              "trajectory_adherence": {
+                "adherence": 0.3464,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -2.0532,
+                "measurable": true
+              }
+            },
+            "rear_right": {
+              "psnr": 11.79,
+              "ssim": 0.3558,
+              "divergence_l1": 22.64,
+              "mean_optical_flow": 3.5752,
+              "trajectory_adherence": {
+                "adherence": 0.9191,
+                "valid_flow_count": 10,
+                "planned_heading_rad": 0.0,
+                "recovered_flow_heading_rad": -0.2541,
+                "measurable": true
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "aggregate_statistics": {
+    "vanilla_svd": {
+      "psnr_mean": 18.04,
+      "psnr_std": 3.89,
+      "psnr_median": 16.87,
+      "psnr_min": 13.81,
+      "psnr_max": 24.42,
+      "ssim_mean": 0.6519,
+      "ssim_std": 0.1432,
+      "ssim_median": 0.6324,
+      "ssim_min": 0.4831,
+      "ssim_max": 0.8575,
+      "boundary_corr_mean": 0.4026,
+      "local_emc_mean": 0.0
+    },
+    "project_baseline": {
+      "psnr_mean": 18.2,
+      "psnr_std": 3.82,
+      "psnr_median": 16.89,
+      "psnr_min": 13.66,
+      "psnr_max": 24.55,
+      "ssim_mean": 0.6373,
+      "ssim_std": 0.1482,
+      "ssim_median": 0.6008,
+      "ssim_min": 0.4546,
+      "ssim_max": 0.855,
+      "boundary_corr_mean": 0.3967,
+      "local_emc_mean": 0.0
+    },
+    "cssc_only": {
+      "psnr_mean": 18.1,
+      "psnr_std": 4.07,
+      "psnr_median": 16.47,
+      "psnr_min": 13.62,
+      "psnr_max": 26.56,
+      "ssim_mean": 0.6243,
+      "ssim_std": 0.1451,
+      "ssim_median": 0.6041,
+      "ssim_min": 0.4478,
+      "ssim_max": 0.8462,
+      "boundary_corr_mean": 0.4039,
+      "local_emc_mean": 0.0
+    }
+  },
+  "pairwise_comparisons": {
+    "cssc_only_vs_vanilla": {
+      "psnr_delta_mean": 0.06,
+      "ssim_delta_mean": -0.0276,
+      "psnr_wins": 5,
+      "ssim_wins": 1,
+      "total_scenarios": 9
+    },
+    "project_baseline_vs_vanilla": {
+      "psnr_delta_mean": 0.16,
+      "ssim_delta_mean": -0.0146,
+      "psnr_wins": 6,
+      "ssim_wins": 0,
+      "total_scenarios": 9
+    },
+    "cssc_only_vs_project_baseline": {
+      "psnr_delta_mean": -0.1,
+      "ssim_delta_mean": -0.013,
+      "psnr_wins": 2,
+      "ssim_wins": 2,
+      "total_scenarios": 9
+    }
+  }
+}
