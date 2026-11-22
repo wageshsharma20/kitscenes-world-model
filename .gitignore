@@ -7,7 +7,8 @@ __pycache__/
 # Generated artefacts: renders, archives, reports and the dataset itself.
 renders/
 benchmark_renders/
-submissions/
+submissions/*
+!submissions/trajectories.jsonl
 data/*
 !data/train_observed_t0/
 !data/train_observed_t0/**
@@ -32,6 +33,12 @@ data/val_future_videos/*/*.mp4
 !data/train_manifest.jsonl
 !data/train_trajectories.jsonl
 !data/val_trajectories.jsonl
+!data/test_metadata.jsonl
+!data/history.jsonl
+!data/observed_t0/
+!data/observed_t0/**
+!submissions/*
+!submissions/trajectories.jsonltrajectories.jsonl
 models/*
 !models/cssc_pilot_step30.pt
 *.parquet
