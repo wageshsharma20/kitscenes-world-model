@@ -45,9 +45,10 @@ from kitscenes import archive, spec
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Merge and audit Strategy 1 production SVD shards.")
-    parser.add_argument("--shard1", type=Path, default=PROJECT_ROOT / "renders" / "production_svd" / "shard1_videos.zip")
-    parser.add_argument("--shard2", type=Path, default=PROJECT_ROOT / "renders" / "production_svd" / "shard2_videos.zip")
-    parser.add_argument("--shard3", type=Path, default=PROJECT_ROOT / "renders" / "production_svd" / "shard3_videos.zip")
+    parser.add_argument("--shard1", type=Path, default=None)
+    parser.add_argument("--shard2", type=Path, default=None)
+    parser.add_argument("--shard3", type=Path, default=None)
+    parser.add_argument("--shards", nargs="*", type=Path, default=None, help="List of shard zip archives to merge")
     parser.add_argument("--output", type=Path, default=PROJECT_ROOT / "submissions" / "videos.zip")
     parser.add_argument("--work-dir", type=Path, default=PROJECT_ROOT / "renders" / "production_merged")
     parser.add_argument("--allow-incomplete", action="store_true", default=False, help="Allow merge with partial test shards")
@@ -153,8 +154,18 @@ def merge_shards(
 
 def main():
     args = parse_args()
+    if args.shards:
+        paths = args.shards
+    else:
+        paths = [p for p in [args.shard1, args.shard2, args.shard3] if p is not None]
+        if not paths:
+            paths = [
+                PROJECT_ROOT / "renders" / "production_svd" / "shard1_videos.zip",
+                PROJECT_ROOT / "renders" / "production_svd" / "shard2_videos.zip",
+                PROJECT_ROOT / "renders" / "production_svd" / "shard3_videos.zip",
+            ]
     merge_shards(
-        shard_paths=[args.shard1, args.shard2, args.shard3],
+        shard_paths=paths,
         output_zip=args.output,
         work_dir=args.work_dir,
         allow_incomplete=args.allow_incomplete,

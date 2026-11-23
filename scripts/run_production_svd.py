@@ -83,25 +83,21 @@ def get_shard_workload(shard_id: int) -> List[Tuple[str, str]]:
     workload: List[Tuple[str, str]] = []
 
     if shard_id == 1:
-        # Shard 1: Front camera for scenarios 0000000 to 0000349 (350 videos)
-        for i in range(0, 350):
+        # Shard 1: All 400 front cameras (0000000 to 0000399 = 400 videos)
+        for i in range(0, 400):
             sid = str(i).zfill(7)
             workload.append((sid, "front"))
 
     elif shard_id == 2:
-        # Shard 2: Remaining 50 front cameras (0000350 - 0000399)
-        for i in range(350, 400):
-            sid = str(i).zfill(7)
-            workload.append((sid, "front"))
-        # Plus surround cameras for scenarios 0000000 - 0000054 (55 scenarios x 5 = 275 videos)
-        for i in range(0, 55):
+        # Shard 2: Surround cameras for first half of 125 scenarios (0000000 - 0000061: 62 x 5 = 310 videos)
+        for i in range(0, 62):
             sid = str(i).zfill(7)
             for cam in SURROUND_CAMERAS:
                 workload.append((sid, cam))
 
     elif shard_id == 3:
-        # Shard 3: Surround cameras for scenarios 0000055 - 0000124 (70 scenarios x 5 = 350 videos)
-        for i in range(55, 125):
+        # Shard 3: Surround cameras for second half of 125 scenarios (0000062 - 0000124: 63 x 5 = 315 videos)
+        for i in range(62, 125):
             sid = str(i).zfill(7)
             for cam in SURROUND_CAMERAS:
                 workload.append((sid, cam))
@@ -222,11 +218,13 @@ def run_production_pipeline(
     decode_chunk_size: int = 4,
     batch_zip_interval: int = 25,
     auto_zip: bool = True,
+    manifest_name: Optional[str] = None,
+    zip_name: Optional[str] = None,
 ) -> Path:
     """Execute production SVD-XT generation loop for the assigned shard."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    manifest_path = output_dir / f"shard{shard_id}_manifest.json"
-    zip_dest = output_dir / f"shard{shard_id}_videos.zip"
+    manifest_path = output_dir / manifest_name if manifest_name else output_dir / f"shard{shard_id}_manifest.json"
+    zip_dest = output_dir / zip_name if zip_name else output_dir / f"shard{shard_id}_videos.zip"
 
     if "cuda" in device_str and not torch.cuda.is_available():
         print(f"[-] WARNING: CUDA requested ({device_str}) but not available. Falling back to CPU.")
@@ -504,6 +502,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--batch-zip-interval", type=int, default=25, help="Update intermediate zip every N videos")
     parser.add_argument("--auto-zip", action="store_true", default=True, help="Auto-package shard zip archive")
     parser.add_argument("--limit", type=int, default=None, help="Limit number of videos to render (for testing)")
+    parser.add_argument("--start-idx", type=int, default=None, help="Start index in shard workload (0-based)")
+    parser.add_argument("--end-idx", type=int, default=None, help="End index in shard workload (exclusive)")
+    parser.add_argument("--zip-name", type=str, default=None, help="Custom zip archive filename")
+    parser.add_argument("--manifest-name", type=str, default=None, help="Custom manifest JSON filename")
     parser.add_argument("--output-dir", type=Path, default=PROJECT_ROOT / "renders" / "production_svd")
     return parser
 
@@ -513,7 +515,11 @@ def main():
     args = parser.parse_args()
 
     workload = get_shard_workload(args.shard)
-    if args.limit and args.limit > 0:
+    if args.start_idx is not None or args.end_idx is not None:
+        start = args.start_idx if args.start_idx is not None else 0
+        end = args.end_idx if args.end_idx is not None else len(workload)
+        workload = workload[start:end]
+    elif args.limit and args.limit > 0:
         workload = workload[:args.limit]
 
     run_production_pipeline(
@@ -527,6 +533,8 @@ def main():
         decode_chunk_size=args.decode_chunk_size,
         batch_zip_interval=args.batch_zip_interval,
         auto_zip=args.auto_zip,
+        manifest_name=args.manifest_name,
+        zip_name=args.zip_name,
     )
 
 
