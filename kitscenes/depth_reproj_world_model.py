@@ -40,6 +40,15 @@ CAMERA_NEIGHBORS: Dict[str, Tuple[str, ...]] = {
     "rear": ("rear_left", "rear_right"),
 }
 
+GROUND_FALLBACK_CAMERAS: Dict[str, Tuple[str, ...]] = {
+    "front": ("rear_left", "rear_right", "rear"),
+    "front_left": ("front_right", "rear_right", "rear"),
+    "front_right": ("front_left", "rear_left", "rear"),
+    "rear_left": ("front", "front_right", "rear_right"),
+    "rear_right": ("front", "front_left", "rear_left"),
+    "rear": ("front_left", "front_right", "front"),
+}
+
 
 def compute_smooth_headings(trajectory: Sequence[Sequence[float]]) -> np.ndarray:
     """Estimate smooth per-step ego yaw headings (rad) from 25 [x, y] future waypoints."""
@@ -226,11 +235,13 @@ def compute_ego_body_mask(
         static_body = (diff < 6.0) & bottom_strip
         mask = np.maximum(mask, static_body.astype(np.uint8))
 
-    # Conservative physical camera-rig corner guard for roof mount corners
+    # Conservative physical camera-rig hood / roof-rack guards
     ys, xs = np.mgrid[0:height, 0:width]
+    nx = xs.astype(np.float32) / max(float(width), 1.0)
     if cam_name == "front":
-        # Central silver hood contour at bottom center
-        hood = (ys >= 0.85 * height) & (xs >= 0.20 * width) & (xs <= 0.80 * width)
+        # Curved BMW 7 Series hood silhouette (peaks ~0.815*h at center, tapers out by 0.17/0.83*w)
+        hood_top = float(height) * (0.815 + 0.195 * ((nx - 0.5) / 0.33) ** 2)
+        hood = (nx >= 0.16) & (nx <= 0.84) & (ys >= hood_top)
         mask = np.maximum(mask, hood.astype(np.uint8))
     elif cam_name == "front_left":
         corner = (ys >= 0.86 * height) & ((xs - 0.48 * width) / (0.52 * width) + (ys - 0.86 * height) / (0.14 * height) > 1.15)
@@ -245,7 +256,9 @@ def compute_ego_body_mask(
         corner = (ys >= 0.86 * height) & ((xs - 0.52 * width) / (0.48 * width) + (ys - 0.86 * height) / (0.14 * height) > 1.15)
         mask = np.maximum(mask, corner.astype(np.uint8))
     elif cam_name == "rear":
-        rack = (ys >= 0.87 * height) & (xs <= 0.58 * width)
+        # Full-width roof aluminum sensor rack + central/corner GNSS domes & rear antenna silhouette
+        rack_arch = float(height) * (0.812 + 0.070 * np.minimum(((nx - 0.5) / 0.28) ** 2, 1.0))
+        rack = ys >= rack_arch
         mask = np.maximum(mask, rack.astype(np.uint8))
 
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
@@ -324,6 +337,7 @@ class Depth3DFullFoVWorldModel:
         self.t_vecs: Dict[str, np.ndarray] = {}
         self.road_depths: Dict[str, np.ndarray] = {}
         self.road_masks: Dict[str, np.ndarray] = {}
+        self.road_masks_t: Dict[str, torch.Tensor] = {}
         self.sky_weights: Dict[str, torch.Tensor] = {}
         self.ground_z = float(getattr(self.rig, "nominal_ground_z_ego", -1.60))
 
@@ -349,6 +363,7 @@ class Depth3DFullFoVWorldModel:
             )
             self.road_depths[cam] = d_road
             self.road_masks[cam] = m_road
+            self.road_masks_t[cam] = torch.from_numpy(m_road.astype(np.float32)).to(self.device)
 
             # Smooth vertical sky weight based on exact calibrated world ray pitch rz
             rz = torch.from_numpy(rays_w[..., 2]).to(self.device)
@@ -368,6 +383,7 @@ class Depth3DFullFoVWorldModel:
         dst_pose: Tuple[float, float, float],
         src_img_hi: torch.Tensor,
         src_ego_mask: torch.Tensor,
+        ground_only: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """Exact closed-form backward homography sample (road + sky blend) at render resolution."""
         k_s = self.k_render[src_cam]
@@ -379,26 +395,26 @@ class Depth3DFullFoVWorldModel:
         )
 
         hg_t = torch.tensor(h_g, dtype=torch.float32, device=self.device)
-        hs_t = torch.tensor(h_sky, dtype=torch.float32, device=self.device)
-
         pg = self._dst_pix @ hg_t.T
-        ps = self._dst_pix @ hs_t.T
-
-        # Points must have positive homogeneous coordinate w > 0 to lie in front of source camera
         wg = pg[..., 2]
-        ws = ps[..., 2]
-        front_g = wg > 1e-4
-        front_s = ws > 1e-4
-
+        front_g = wg > (0.05 if ground_only else 1e-4)
         ug = pg[..., 0] / torch.where(front_g, wg, torch.ones_like(wg))
         vg = pg[..., 1] / torch.where(front_g, wg, torch.ones_like(wg))
-        us = ps[..., 0] / torch.where(front_s, ws, torch.ones_like(ws))
-        vs = ps[..., 1] / torch.where(front_s, ws, torch.ones_like(ws))
 
         sw = self.sky_weights[dst_cam]
-        u_src = sw * us + (1.0 - sw) * ug
-        v_src = sw * vs + (1.0 - sw) * vg
-        in_front = (sw > 0.5) & front_s | (sw <= 0.5) & front_g
+        if ground_only:
+            u_src, v_src = ug, vg
+            in_front = front_g & (sw <= 0.35)
+        else:
+            hs_t = torch.tensor(h_sky, dtype=torch.float32, device=self.device)
+            ps = self._dst_pix @ hs_t.T
+            ws = ps[..., 2]
+            front_s = ws > 1e-4
+            us = ps[..., 0] / torch.where(front_s, ws, torch.ones_like(ws))
+            vs = ps[..., 1] / torch.where(front_s, ws, torch.ones_like(ws))
+            u_src = sw * us + (1.0 - sw) * ug
+            v_src = sw * vs + (1.0 - sw) * vg
+            in_front = ((sw > 0.5) & front_s) | ((sw <= 0.5) & front_g)
 
         w_r, h_r = self.render_w, self.render_h
         in_bounds = (
@@ -425,6 +441,20 @@ class Depth3DFullFoVWorldModel:
             > 0.5
         )
         cov = in_bounds & (~hit_ego)
+
+        if ground_only:
+            # Opposite/cross-rig cameras may supply flat road pixels out to ~75m (road_masks_t)
+            src_road = (
+                F.grid_sample(
+                    self.road_masks_t[src_cam].unsqueeze(0).unsqueeze(0),
+                    grid,
+                    mode="nearest",
+                    padding_mode="zeros",
+                    align_corners=True,
+                )[0, 0]
+                > 0.5
+            )
+            cov = cov & src_road
 
         sampled = F.grid_sample(
             src_img_hi,
@@ -570,46 +600,61 @@ class Depth3DFullFoVWorldModel:
             out_rgb = torch.where(need.unsqueeze(0), fill_adj, base_rgb)
         return out_rgb, (base_mask | fill_mask)
 
-    def _fill_residual_holes(self, img_rgb_u8: np.ndarray, hole_mask: np.ndarray) -> np.ndarray:
-        """Complete any remaining unseen border/disocclusion holes cleanly without streaks."""
+    @staticmethod
+    def _voronoi_fill_region(
+        src_img: np.ndarray,
+        out_img: np.ndarray,
+        target_mask: np.ndarray,
+        valid_source_mask: np.ndarray,
+    ) -> None:
+        """Exact L2 nearest-valid pixel lookup using immutable source image (no row-order artifacts)."""
+        if not np.any(target_mask) or not np.any(valid_source_mask):
+            return
+        # distanceTransformWithLabels computes Euclidean nearest zero pixel (label 1..K)
+        src_u8 = np.where(valid_source_mask, 0, 1).astype(np.uint8)
+        _, labels = cv2.distanceTransformWithLabels(src_u8, cv2.DIST_L2, 5, labelType=cv2.DIST_LABEL_PIXEL)
+        ys_v, xs_v = np.where(valid_source_mask)
+        # DIST_LABEL_PIXEL assigns labels 1..N matching row-major order of zero pixels
+        lbl_t = labels[target_mask] - 1
+        lbl_t = np.clip(lbl_t, 0, len(ys_v) - 1)
+        out_img[target_mask] = src_img[ys_v[lbl_t], xs_v[lbl_t]]
+
+    def _fill_residual_holes(
+        self,
+        img_rgb_u8: np.ndarray,
+        hole_mask: np.ndarray,
+        source_valid_mask: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
+        """Complete remaining unseen holes using observed world ground/sky partitions cleanly."""
         if not np.any(hole_mask):
             return img_rgb_u8
         if self.inpaint_fn is not None:
             return self.inpaint_fn(img_rgb_u8, hole_mask)
 
+        orig = img_rgb_u8.copy()
         out = img_rgb_u8.copy()
-        h, w = hole_mask.shape
-        valid = ~hole_mask
-        ys_valid = np.where(valid.any(axis=1))[0]
-        if len(ys_valid) == 0:
+        h, _w = hole_mask.shape
+        valid = (~hole_mask) if source_valid_mask is None else (source_valid_mask & (~hole_mask))
+        if not np.any(valid):
             return out
 
-        # Clamp vertical mirror sources strictly below the horizon line for ground holes
-        horizon_y = int(0.54 * h)
-        road_valid_rows = ys_valid[ys_valid >= horizon_y]
+        horizon_y = int(0.55 * h)
+        ys_grid = np.arange(h, dtype=np.int32)[:, None]
+        is_ground = np.broadcast_to(ys_grid >= horizon_y, hole_mask.shape)
+        is_sky = ~is_ground
 
-        for y in range(h):
-            if not hole_mask[y].any():
-                continue
-            if valid[y].any():
-                xs_v = np.where(valid[y])[0]
-                xs_h = np.where(hole_mask[y])[0]
-                nearest_x = np.clip(xs_v[np.argmin(np.abs(xs_v[:, None] - xs_h[None, :]), axis=0)], 0, w - 1)
-                out[y, xs_h] = out[y, nearest_x]
-            elif y >= horizon_y and len(road_valid_rows) > 0:
-                # Sample from local valid road band only (never reflect buildings/sky!)
-                band_lo = int(road_valid_rows[max(0, len(road_valid_rows) - max(12, len(road_valid_rows) // 3))])
-                band_hi = int(road_valid_rows[-1])
-                if band_hi > band_lo:
-                    y_src = band_lo + ((y - band_hi - 1) % max(1, band_hi - band_lo))
-                else:
-                    y_src = band_hi
-                out[y] = out[y_src]
-            else:
-                y_ref = int(ys_valid[np.argmin(np.abs(ys_valid - y))])
-                out[y] = out[y_ref]
+        g_hole = hole_mask & is_ground
+        s_hole = hole_mask & is_sky
+        g_src = valid & is_ground
+        s_src = valid & is_sky
 
-        seam = cv2.dilate(hole_mask.astype(np.uint8), np.ones((9, 9), np.uint8)) - cv2.erode(
+        if np.any(g_hole):
+            self._voronoi_fill_region(orig, out, g_hole, g_src if np.any(g_src) else valid)
+        if np.any(s_hole):
+            self._voronoi_fill_region(orig, out, s_hole, s_src if np.any(s_src) else valid)
+
+        # Feather hole perimeter seamlessly
+        seam = cv2.dilate(hole_mask.astype(np.uint8), np.ones((7, 7), np.uint8)) - cv2.erode(
             hole_mask.astype(np.uint8), np.ones((3, 3), np.uint8)
         )
         seam = np.clip(seam, 0, 1) * hole_mask.astype(np.uint8)
@@ -742,7 +787,9 @@ class Depth3DFullFoVWorldModel:
             ego_mask_t = ego_masks_t[cam]
             t0_ren_t = F.interpolate(t0_hi_t[cam], size=(self.render_h, self.render_w), mode="area")[0]
             ego_blur = cv2.GaussianBlur(ego_masks[cam].astype(np.float32), (11, 11), 2.5)
-            ego_alpha = torch.from_numpy(ego_blur).to(self.device).unsqueeze(0)
+            ego_alpha_np = cv2.resize(ego_blur, (spec.WIDTH, spec.HEIGHT), interpolation=cv2.INTER_AREA)[..., None]
+            t0_out_rgb = cv2.resize(t0_hi_np[cam], (spec.WIDTH, spec.HEIGHT), interpolation=cv2.INTER_AREA)
+            ego_out_np = cv2.resize(ego_masks[cam].astype(np.uint8), (spec.WIDTH, spec.HEIGHT), interpolation=cv2.INTER_NEAREST) > 0
 
             for k in range(spec.FRAME_COUNT):
                 pose_k = (float(pts[k, 0]), float(pts[k, 1]), float(headings[k]))
@@ -775,6 +822,23 @@ class Depth3DFullFoVWorldModel:
                             if bool((cov_mask | ego_mask_t).all()):
                                 break
 
+                    # 3b. Opposite/cross-rig ground fallback (e.g. front cameras -> rear road ahead at t=0!)
+                    ground_holes = (~cov_mask) & (~ego_mask_t) & (self.sky_weights[cam] <= 0.35)
+                    if bool(ground_holes.any()):
+                        for g_cam in GROUND_FALLBACK_CAMERAS[cam]:
+                            g_rgb, g_cov = self._warp_backward_analytical(
+                                g_cam,
+                                (0.0, 0.0, 0.0),
+                                cam,
+                                pose_k,
+                                t0_hi_t[g_cam],
+                                ego_masks_t[g_cam],
+                                ground_only=True,
+                            )
+                            frame_ren, cov_mask = self._match_and_composite(frame_ren, cov_mask, g_rgb, g_cov)
+                            if not bool(((~cov_mask) & (~ego_mask_t) & (self.sky_weights[cam] <= 0.35)).any()):
+                                break
+
                     # 4. Elevated 3D foreground object parallax layer (cars, poles, buildings)
                     if cam in fg_world:
                         pw_f, uv_f, m_f = fg_world[cam]
@@ -784,10 +848,6 @@ class Depth3DFullFoVWorldModel:
                         if bool(fg_cov.any()):
                             frame_ren = torch.where(fg_cov.unsqueeze(0), fg_rgb, frame_ren)
                             cov_mask = cov_mask | fg_cov
-
-                    # 5. Re-composite bolted ego car hood/roof corner cleanly
-                    frame_ren = ego_alpha * t0_ren_t + (1.0 - ego_alpha) * frame_ren
-                    cov_mask = cov_mask | ego_mask_t
 
                 if self.render_scale > 1:
                     frame_out_t = F.interpolate(
@@ -806,9 +866,18 @@ class Depth3DFullFoVWorldModel:
                     cov_out = cov_mask
 
                 frame_np = (frame_out_t.permute(1, 2, 0).detach().cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
-                hole_np = ~cov_out.detach().cpu().numpy()
+                world_cov_np = cov_out.detach().cpu().numpy()
+                hole_np = (~world_cov_np) & (~ego_out_np)
                 if np.any(hole_np):
-                    frame_np = self._fill_residual_holes(frame_np, hole_np)
+                    source_valid = world_cov_np & (~ego_out_np)
+                    frame_np = self._fill_residual_holes(frame_np, hole_np, source_valid_mask=source_valid)
+
+                # 5. Composite bolted ego car hood/roof rack crisp AFTER hole completion so car body never bleeds
+                if not (abs(pose_k[0]) < 1e-4 and abs(pose_k[1]) < 1e-4 and abs(pose_k[2]) < 1e-4):
+                    frame_np = (
+                        ego_alpha_np * t0_out_rgb.astype(np.float32)
+                        + (1.0 - ego_alpha_np) * frame_np.astype(np.float32)
+                    ).clip(0, 255).astype(np.uint8)
 
                 if self.crf_sharpen > 0.0:
                     blur = cv2.GaussianBlur(frame_np, (0, 0), 1.0)
