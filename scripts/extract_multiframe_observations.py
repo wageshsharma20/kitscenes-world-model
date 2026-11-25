@@ -46,6 +46,8 @@ CAMERA_FRAME_COLUMNS: Dict[str, str] = {
 }
 
 DEFAULT_PAST_OFFSETS: Tuple[Tuple[int, str], ...] = (
+    (-21, "tm40"),
+    (-16, "tm30"),
     (-11, "tm20"),
     (-6, "tm10"),
     (-3, "tm04"),
