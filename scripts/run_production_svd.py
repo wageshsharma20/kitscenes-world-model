@@ -32,9 +32,7 @@ Usage on Kaggle:
 from __future__ import annotations
 
 import argparse
-import datetime
 import json
-import os
 import shutil
 import sys
 import time
@@ -176,9 +174,8 @@ def resolve_conditioning_image(
     sid: str,
     cam: str,
     observed_t0_dir: Path,
-    fallback_sid: str = "0000000",
 ) -> Image.Image:
-    """Load conditioning image with robust fallbacks across directory layouts."""
+    """Load conditioning image strictly for ``sid`` and ``cam``; fail loudly if absent."""
     candidate_paths = [
         observed_t0_dir / sid / f"{cam}.jpg",
         observed_t0_dir / sid / f"{cam}.png",
@@ -188,11 +185,6 @@ def resolve_conditioning_image(
         PROJECT_ROOT / "data" / "val_observed_t0" / sid / f"{cam}.png",
         PROJECT_ROOT / "data" / "train_observed_t0" / sid / f"{cam}.jpg",
         PROJECT_ROOT / "data" / "train_observed_t0" / sid / f"{cam}.png",
-        # Fallback to scenario 0000000
-        observed_t0_dir / fallback_sid / f"{cam}.jpg",
-        observed_t0_dir / fallback_sid / f"{cam}.png",
-        PROJECT_ROOT / "data" / "observed_t0" / fallback_sid / f"{cam}.jpg",
-        PROJECT_ROOT / "data" / "observed_t0" / fallback_sid / f"{cam}.png",
     ]
 
     for p in candidate_paths:
@@ -202,9 +194,11 @@ def resolve_conditioning_image(
             except Exception:
                 pass
 
-    # Neutral road gray placeholder if completely absent
-    print(f"[-] Notice: Missing conditioning image for {sid}/{cam}; using synthetic gray placeholder.")
-    return Image.new("RGB", (spec.WIDTH, spec.HEIGHT), (120, 120, 120))
+    raise FileNotFoundError(
+        f"Missing observed t=0 conditioning image for scenario={sid}, camera={cam} "
+        f"(searched under {observed_t0_dir} and {PROJECT_ROOT / 'data'}). "
+        "Extract real observed_t0 frames first; silent fallback is disabled."
+    )
 
 
 def run_production_pipeline(
