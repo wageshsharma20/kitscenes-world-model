@@ -32,9 +32,10 @@ from scripts.eval_world_model_qalign import build_depth_fn, build_lama_fn, encod
 def load_test_inputs(
     traj_path: Path,
     history_path: Path,
-) -> List[Tuple[str, List[List[float]], Optional[List[List[float]]]]]:
-    """Merge future trajectory plan + past odometry for all 400 test scenarios."""
+) -> List[Tuple[str, List[List[float]], Optional[List[List[float]]], str]]:
+    """Merge future trajectory plan + past odometry + scenario_type for all 400 test scenarios."""
     past_by_sid: Dict[str, List[List[float]]] = {}
+    type_by_sid: Dict[str, str] = {}
     if history_path.exists():
         with open(history_path) as f:
             for line in f:
@@ -45,8 +46,9 @@ def load_test_inputs(
                 past = r.get("past_trajectory") or r.get("trajectory", {}).get("past")
                 if past:
                     past_by_sid[sid] = past
+                type_by_sid[sid] = str(r.get("scenario_type", ""))
 
-    items: List[Tuple[str, List[List[float]], Optional[List[List[float]]]]] = []
+    items: List[Tuple[str, List[List[float]], Optional[List[List[float]]], str]] = []
     with open(traj_path) as f:
         for line in f:
             if not line.strip():
@@ -56,7 +58,7 @@ def load_test_inputs(
             fut = r.get("future_trajectory") or r.get("trajectory")
             if not fut or len(fut) != spec.WAYPOINT_COUNT:
                 raise ValueError(f"Expected 25 waypoints for {sid}, got {len(fut or [])}")
-            items.append((sid, fut, past_by_sid.get(sid)))
+            items.append((sid, fut, past_by_sid.get(sid), type_by_sid.get(sid, "")))
     items.sort(key=lambda x: x[0])
     return items
 
@@ -81,7 +83,7 @@ def unpack_if_needed(src_dir: Optional[Path], tar_path: Optional[Path], dst_pare
 def _gpu_worker(
     worker_id: int,
     gpu_idx: Optional[int],
-    tasks: List[Tuple[str, List[List[float]], Optional[List[List[float]]]]],
+    tasks: List[Tuple[str, List[List[float]], Optional[List[List[float]]], str]],
     t0_dir: Path,
     past_dir: Optional[Path],
     out_videos_dir: Path,
@@ -95,17 +97,29 @@ def _gpu_worker(
 
     depth_fn = build_depth_fn(str(cfg["depth_model"]), device=device) if cfg["use_depth"] else None
     lama_fn = build_lama_fn(device=device) if cfg["use_lama"] else None
-    model = Depth3DFullFoVWorldModel(
+    model_depth = Depth3DFullFoVWorldModel(
         device=device,
         render_scale=int(cfg["render_scale"]),
         depth_fn=depth_fn,
         inpaint_fn=lama_fn,
         crf_sharpen=float(cfg["crf_sharpen"]),
     )
+    no_depth_slices = set(cfg.get("no_depth_slices", ()))
+    model_analytical = (
+        Depth3DFullFoVWorldModel(
+            device=device,
+            render_scale=int(cfg["render_scale"]),
+            depth_fn=None,
+            inpaint_fn=lama_fn,
+            crf_sharpen=float(cfg["crf_sharpen"]),
+        )
+        if (no_depth_slices and depth_fn is not None)
+        else model_depth
+    )
 
     t_start = time.time()
     rendered = 0
-    for idx, (sid, fut_traj, past_traj) in enumerate(tasks, start=1):
+    for idx, (sid, fut_traj, past_traj, stype) in enumerate(tasks, start=1):
         scen_dir = out_videos_dir / sid
         if all((scen_dir / f"{c}.mp4").exists() for c in spec.CAMERAS):
             rendered += 1
@@ -120,7 +134,8 @@ def _gpu_worker(
                     if pp.exists():
                         past_imgs[(cam, tag)] = pp
 
-        gen = model.generate_scenario(
+        active_model = model_analytical if stype in no_depth_slices else model_depth
+        gen = active_model.generate_scenario(
             sid,
             fut_traj,
             cond,
@@ -157,6 +172,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--out-zip", type=Path, default=Path("/kaggle/working/videos.zip"))
     parser.add_argument("--depth-model", type=str, default="depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf")
     parser.add_argument("--no-depth", action="store_true", default=False)
+    parser.add_argument("--no-depth-slices", type=str, default="", help="Comma-separated scenario_types to run without depth")
     parser.add_argument("--no-lama", action="store_true", default=False)
     parser.add_argument("--render-scale", type=int, default=2)
     parser.add_argument("--crf-sharpen", type=float, default=0.0)
@@ -191,6 +207,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     cfg: Dict[str, object] = {
         "depth_model": args.depth_model,
         "use_depth": not args.no_depth,
+        "no_depth_slices": tuple(s.strip() for s in args.no_depth_slices.split(",") if s.strip()),
         "use_lama": not args.no_lama,
         "render_scale": args.render_scale,
         "crf_sharpen": args.crf_sharpen,
