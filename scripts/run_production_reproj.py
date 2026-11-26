@@ -205,6 +205,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         count, elapsed = _gpu_worker(0, gpu_sel, items, t0_dir, past_dir, args.out_videos_dir, cfg)
         print(f"[+] Single-worker complete: {count} scenarios in {elapsed:.1f}s", flush=True)
     else:
+        # Pre-warm HuggingFace & LaMa weights in main process before spawning multi-GPU workers
+        if cfg["use_depth"]:
+            from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+
+            AutoImageProcessor.from_pretrained(str(cfg["depth_model"]))
+            AutoModelForDepthEstimation.from_pretrained(str(cfg["depth_model"]))
+        if cfg["use_lama"]:
+            from simple_lama_inpainting.models.model import LAMA_MODEL_URL
+            from simple_lama_inpainting.utils.util import download_model
+
+            download_model(LAMA_MODEL_URL)
+
         shards: List[List[Tuple[str, List[List[float]], Optional[List[List[float]]]]]] = [
             items[i :: len(gpu_ids)] for i in range(len(gpu_ids))
         ]
