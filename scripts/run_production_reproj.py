@@ -123,7 +123,7 @@ def _gpu_worker(
     rendered = 0
     for idx, (sid, fut_traj, past_traj, stype) in enumerate(tasks, start=1):
         scen_dir = out_videos_dir / sid
-        if all((scen_dir / f"{c}.mp4").exists() for c in spec.CAMERAS):
+        if all((scen_dir / f"{c}.mp4").exists() and (scen_dir / f"{c}.mp4").stat().st_size > 1024 for c in spec.CAMERAS):
             rendered += 1
             continue
 
@@ -182,6 +182,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--crf", type=int, default=14)
     parser.add_argument("--gpus", type=str, default="0,1", help="Comma-separated CUDA device indices (or empty for CPU)")
     parser.add_argument("--scenarios", type=str, default="", help="Optional comma-separated scenario IDs subset")
+    parser.add_argument("--scenario-range", type=str, default="", help="Optional 0-based Python slice START:END across sorted scenarios")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--pack-zip", action="store_true", default=False)
     parser.add_argument("--allow-partial", action="store_true", default=False)
@@ -199,6 +200,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.scenarios.strip():
         want = {s.strip().zfill(7) for s in args.scenarios.split(",") if s.strip()}
         items = [it for it in items if it[0] in want]
+    if args.scenario_range.strip():
+        parts = args.scenario_range.strip().split(":", 1)
+        if len(parts) != 2:
+            raise ValueError(f"--scenario-range must be START:END, got {args.scenario_range!r}")
+        start_idx = int(parts[0]) if parts[0] else 0
+        end_idx = int(parts[1]) if parts[1] else len(items)
+        items = items[start_idx:end_idx]
     if args.limit > 0:
         items = items[: args.limit]
     if not items:

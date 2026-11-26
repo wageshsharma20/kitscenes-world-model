@@ -21,6 +21,7 @@ import argparse
 from collections import defaultdict
 import gc
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -84,6 +85,7 @@ def encode_rgb_h264(frames_rgb: np.ndarray, out_mp4: Path, fps: float = float(sp
     if n_frames != spec.FRAME_COUNT or width != spec.WIDTH or height != spec.HEIGHT:
         raise ValueError(f"Expected (25, 568, 876, 3), got {frames_rgb.shape}")
 
+    tmp_mp4 = out_mp4.with_name(f".{out_mp4.stem}.tmp{out_mp4.suffix}")
     cmd = [
         ffmpeg_bin,
         "-y",
@@ -105,16 +107,21 @@ def encode_rgb_h264(frames_rgb: np.ndarray, out_mp4: Path, fps: float = float(sp
         str(crf),
         "-pix_fmt",
         "yuv420p",
-        str(out_mp4),
+        str(tmp_mp4),
     ]
-    proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-    assert proc.stdin is not None
-    proc.stdin.write(np.ascontiguousarray(frames_rgb, dtype=np.uint8).tobytes())
-    proc.stdin.close()
-    err = proc.stderr.read() if proc.stderr else b""
-    ret = proc.wait()
-    if ret != 0:
-        raise RuntimeError(f"ffmpeg exited with {ret} for {out_mp4}: {err.decode(errors='replace')}")
+    try:
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert proc.stdin is not None
+        proc.stdin.write(np.ascontiguousarray(frames_rgb, dtype=np.uint8).tobytes())
+        proc.stdin.close()
+        err = proc.stderr.read() if proc.stderr else b""
+        ret = proc.wait()
+        if ret != 0:
+            raise RuntimeError(f"ffmpeg exited with {ret} for {out_mp4}: {err.decode(errors='replace')}")
+        os.replace(tmp_mp4, out_mp4)
+    except Exception:
+        tmp_mp4.unlink(missing_ok=True)
+        raise
 
 
 def read_video_rgb(path: Path) -> np.ndarray:
