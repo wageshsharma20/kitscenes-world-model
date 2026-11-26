@@ -373,9 +373,12 @@ class Depth3DFullFoVWorldModel:
             sky_w = torch.clamp((rz - (-0.055)) / 0.050, 0.0, 1.0)
             self.sky_weights[cam] = sky_w
 
-    def _to_tensor_img(self, img_rgb: np.ndarray) -> torch.Tensor:
-        arr = np.asarray(img_rgb, dtype=np.float32) / 255.0
-        return torch.from_numpy(arr).permute(2, 0, 1).unsqueeze(0).to(self.device)
+    def _to_tensor_img(self, img_rgb: np.ndarray, downsample: bool = False) -> torch.Tensor:
+        t_u8 = torch.from_numpy(np.ascontiguousarray(img_rgb, dtype=np.uint8)).to(self.device)
+        t_f = t_u8.permute(2, 0, 1).unsqueeze(0).float().div_(255.0)
+        if downsample and (t_f.shape[-2] != self.render_h or t_f.shape[-1] != self.render_w):
+            t_f = F.interpolate(t_f, size=(self.render_h, self.render_w), mode="area")
+        return t_f
 
     def _warp_backward_analytical(
         self,
@@ -715,7 +718,7 @@ class Depth3DFullFoVWorldModel:
             else:
                 rgb = np.asarray(src, dtype=np.uint8)
             t0_hi_np[cam] = rgb
-            t0_hi_t[cam] = self._to_tensor_img(rgb)
+            t0_hi_t[cam] = self._to_tensor_img(rgb, downsample=(self.depth_fn is None))
             if rgb.shape[:2] != (self.render_h, self.render_w):
                 t0_ren_np[cam] = cv2.resize(rgb, (self.render_w, self.render_h), interpolation=cv2.INTER_AREA)
             else:
@@ -811,7 +814,7 @@ class Depth3DFullFoVWorldModel:
                 prgb = cv2.cvtColor(pbgr, cv2.COLOR_BGR2RGB)
             else:
                 prgb = np.asarray(psrc, dtype=np.uint8)
-            ten = self._to_tensor_img(prgb)
+            ten = self._to_tensor_img(prgb, downsample=True)
             past_tensor_cache[key] = ten
             return ten
 
@@ -821,7 +824,11 @@ class Depth3DFullFoVWorldModel:
         for cam in target_cameras:
             frames_out = np.empty((spec.FRAME_COUNT, spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8)
             ego_mask_t = ego_masks_t[cam]
-            t0_ren_t = F.interpolate(t0_hi_t[cam], size=(self.render_h, self.render_w), mode="area")[0]
+            t0_ren_t = (
+                t0_hi_t[cam][0]
+                if t0_hi_t[cam].shape[-2:] == (self.render_h, self.render_w)
+                else F.interpolate(t0_hi_t[cam], size=(self.render_h, self.render_w), mode="area")[0]
+            )
             ego_blur = cv2.GaussianBlur(ego_masks[cam].astype(np.float32), (11, 11), 2.5)
             ego_alpha_np = cv2.resize(ego_blur, (spec.WIDTH, spec.HEIGHT), interpolation=cv2.INTER_AREA)[..., None]
             t0_out_rgb = cv2.resize(t0_hi_np[cam], (spec.WIDTH, spec.HEIGHT), interpolation=cv2.INTER_AREA)
@@ -857,8 +864,8 @@ class Depth3DFullFoVWorldModel:
                             if bool((cov_mask | ego_mask_t).all()):
                                 break
 
-                    # 3. Past frames (t = -0.2s .. -2.0s) fill expanding behind-car road regions!
-                    if not bool((cov_mask | ego_mask_t).all()) and past_specs[cam]:
+                    # 3. Past frames fill remaining non-sky holes (>64px avoids redundant sky-border warps)
+                    if past_specs[cam] and int(((~cov_mask) & (~ego_mask_t) & (self.sky_weights[cam] <= 0.75)).sum()) > 64:
                         for p_tag, p_pose, p_src in past_specs[cam]:
                             p_t = _get_past_tensor(cam, p_tag, p_src)
                             if p_t is None:
@@ -869,7 +876,7 @@ class Depth3DFullFoVWorldModel:
                             frame_ren, cov_mask = self._match_and_composite(
                                 frame_ren, cov_mask, p_rgb, p_cov, sky_weights=self.sky_weights[cam]
                             )
-                            if bool((cov_mask | ego_mask_t).all()):
+                            if int(((~cov_mask) & (~ego_mask_t) & (self.sky_weights[cam] <= 0.75)).sum()) <= 64:
                                 break
 
                     # 3b. Opposite/cross-rig ground fallback (e.g. front cameras -> rear road ahead at t=0!)
