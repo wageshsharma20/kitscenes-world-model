@@ -569,32 +569,54 @@ class Depth3DFullFoVWorldModel:
         return sampled, cov, z_buf.view(h_r, w_r)
 
     @staticmethod
+    def _apply_overlap_gain(
+        base_rgb: torch.Tensor,
+        fill_rgb: torch.Tensor,
+        mask: torch.Tensor,
+    ) -> torch.Tensor:
+        if int(mask.sum()) < 150:
+            return fill_rgb
+        b_ov = base_rgb[:, mask]
+        f_ov = fill_rgb[:, mask]
+        mean_b = b_ov.mean(dim=1, keepdim=True)
+        mean_f = f_ov.mean(dim=1, keepdim=True)
+        std_b = b_ov.std(dim=1, keepdim=True).clamp(min=1e-3)
+        std_f = f_ov.std(dim=1, keepdim=True).clamp(min=1e-3)
+        gain = (std_b / std_f).clamp(0.75, 1.35)
+        return ((fill_rgb.view(3, -1) - mean_f) * gain + mean_b).view_as(fill_rgb).clamp(0.0, 1.0)
+
+    @classmethod
     def _match_and_composite(
+        cls,
         base_rgb: torch.Tensor,
         base_mask: torch.Tensor,
         fill_rgb: torch.Tensor,
         fill_mask: torch.Tensor,
+        sky_weights: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Match exposure across camera overlap and feather-fill missing pixels."""
+        """Match exposure (sky/ground separate) and smooth 21px overlap cross-fade."""
         overlap = base_mask & fill_mask
         fill_adj = fill_rgb
-        if int(overlap.sum()) >= 200:
-            b_ov = base_rgb[:, overlap]
-            f_ov = fill_rgb[:, overlap]
-            mean_b = b_ov.mean(dim=1, keepdim=True)
-            mean_f = f_ov.mean(dim=1, keepdim=True)
-            std_b = b_ov.std(dim=1, keepdim=True).clamp(min=1e-3)
-            std_f = f_ov.std(dim=1, keepdim=True).clamp(min=1e-3)
-            gain = (std_b / std_f).clamp(0.75, 1.35)
-            fill_adj = ((fill_rgb.view(3, -1) - mean_f) * gain + mean_b).view_as(fill_rgb).clamp(0.0, 1.0)
+        if sky_weights is not None and int(overlap.sum()) >= 200:
+            is_sky = sky_weights > 0.35
+            ov_sky = overlap & is_sky
+            ov_gnd = overlap & (~is_sky)
+            if int(ov_sky.sum()) >= 150 and int(ov_gnd.sum()) >= 150:
+                f_sky = cls._apply_overlap_gain(base_rgb, fill_rgb, ov_sky)
+                f_gnd = cls._apply_overlap_gain(base_rgb, fill_rgb, ov_gnd)
+                sw_c = sky_weights.clamp(0.0, 1.0).unsqueeze(0)
+                fill_adj = sw_c * f_sky + (1.0 - sw_c) * f_gnd
+            else:
+                fill_adj = cls._apply_overlap_gain(base_rgb, fill_rgb, overlap)
+        elif int(overlap.sum()) >= 150:
+            fill_adj = cls._apply_overlap_gain(base_rgb, fill_rgb, overlap)
 
         need = (~base_mask) & fill_mask
-        # Soft feather right at the seam boundary (3px blur on mask edge)
-        if bool(need.any()) and bool(base_mask.any()):
-            need_f = need.float().unsqueeze(0).unsqueeze(0)
-            smooth_w = F.avg_pool2d(need_f, 5, stride=1, padding=2)[0] * (base_mask | fill_mask).float().unsqueeze(0)
-            w_fill = torch.where(need.unsqueeze(0), smooth_w.clamp(min=0.5), torch.zeros_like(smooth_w))
-            w_fill = torch.where((~base_mask).unsqueeze(0) & fill_mask.unsqueeze(0), torch.ones_like(w_fill), w_fill)
+        if bool(need.any()) and bool(overlap.any()):
+            # Cross-fade smoothly over ~10px border inside overlap so camera seams vanish
+            base_cov_f = F.avg_pool2d(base_mask.float().unsqueeze(0).unsqueeze(0), 21, stride=1, padding=10)[0, 0]
+            ov_blend = ((1.0 - base_cov_f) * 2.0).clamp(0.0, 1.0) * overlap.float()
+            w_fill = torch.where(need, torch.ones_like(ov_blend), ov_blend).unsqueeze(0)
             out_rgb = w_fill * fill_adj + (1.0 - w_fill) * base_rgb
         else:
             out_rgb = torch.where(need.unsqueeze(0), fill_adj, base_rgb)
@@ -800,17 +822,26 @@ class Depth3DFullFoVWorldModel:
                     cov_mask = torch.ones((self.render_h, self.render_w), dtype=torch.bool, device=self.device)
                 else:
                     # 1. Exact closed-form backward homography from primary camera t=0
+                    # Exclude elevated foreground on road band when depth is enabled so cars/cones don't streak onto asphalt
+                    src_excl_cam = ego_mask_t
+                    if cam in fg_masks_t:
+                        src_excl_cam = src_excl_cam | (fg_masks_t[cam] & (self.sky_weights[cam] <= 0.25))
                     frame_ren, cov_mask = self._warp_backward_analytical(
-                        cam, (0.0, 0.0, 0.0), cam, pose_k, t0_hi_t[cam], ego_mask_t
+                        cam, (0.0, 0.0, 0.0), cam, pose_k, t0_hi_t[cam], src_excl_cam
                     )
 
                     # 2. Adjacent 360-degree neighbor cameras fill horizontal/yaw margins
                     if not bool((cov_mask | ego_mask_t).all()):
                         for nbr in CAMERA_NEIGHBORS[cam]:
+                            src_excl_n = ego_masks_t[nbr]
+                            if nbr in fg_masks_t:
+                                src_excl_n = src_excl_n | (fg_masks_t[nbr] & (self.sky_weights[nbr] <= 0.25))
                             n_rgb, n_cov = self._warp_backward_analytical(
-                                nbr, (0.0, 0.0, 0.0), cam, pose_k, t0_hi_t[nbr], ego_masks_t[nbr]
+                                nbr, (0.0, 0.0, 0.0), cam, pose_k, t0_hi_t[nbr], src_excl_n
                             )
-                            frame_ren, cov_mask = self._match_and_composite(frame_ren, cov_mask, n_rgb, n_cov)
+                            frame_ren, cov_mask = self._match_and_composite(
+                                frame_ren, cov_mask, n_rgb, n_cov, sky_weights=self.sky_weights[cam]
+                            )
                             if bool((cov_mask | ego_mask_t).all()):
                                 break
 
@@ -820,7 +851,9 @@ class Depth3DFullFoVWorldModel:
                             p_rgb, p_cov = self._warp_backward_analytical(
                                 cam, p_pose, cam, pose_k, p_t, ego_mask_t
                             )
-                            frame_ren, cov_mask = self._match_and_composite(frame_ren, cov_mask, p_rgb, p_cov)
+                            frame_ren, cov_mask = self._match_and_composite(
+                                frame_ren, cov_mask, p_rgb, p_cov, sky_weights=self.sky_weights[cam]
+                            )
                             if bool((cov_mask | ego_mask_t).all()):
                                 break
 
@@ -840,7 +873,9 @@ class Depth3DFullFoVWorldModel:
                                 src_excl,
                                 ground_only=True,
                             )
-                            frame_ren, cov_mask = self._match_and_composite(frame_ren, cov_mask, g_rgb, g_cov)
+                            frame_ren, cov_mask = self._match_and_composite(
+                                frame_ren, cov_mask, g_rgb, g_cov, sky_weights=self.sky_weights[cam]
+                            )
                             if not bool(((~cov_mask) & (~ego_mask_t) & (self.sky_weights[cam] <= 0.35)).any()):
                                 break
 
