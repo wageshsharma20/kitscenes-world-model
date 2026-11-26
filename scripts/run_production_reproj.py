@@ -103,6 +103,7 @@ def _gpu_worker(
         depth_fn=depth_fn,
         inpaint_fn=lama_fn,
         crf_sharpen=float(cfg["crf_sharpen"]),
+        min_lama_hole_pixels=int(cfg.get("min_lama_hole_pixels", 0)),
     )
     no_depth_slices = set(cfg.get("no_depth_slices", ()))
     model_analytical = (
@@ -112,6 +113,7 @@ def _gpu_worker(
             depth_fn=None,
             inpaint_fn=lama_fn,
             crf_sharpen=float(cfg["crf_sharpen"]),
+            min_lama_hole_pixels=int(cfg.get("min_lama_hole_pixels", 0)),
         )
         if (no_depth_slices and depth_fn is not None)
         else model_depth
@@ -174,6 +176,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--no-depth", action="store_true", default=False)
     parser.add_argument("--no-depth-slices", type=str, default="", help="Comma-separated scenario_types to run without depth")
     parser.add_argument("--no-lama", action="store_true", default=False)
+    parser.add_argument("--min-lama-hole-pixels", type=int, default=0, help="Skip LaMa when hole pixel count is below threshold")
     parser.add_argument("--render-scale", type=int, default=2)
     parser.add_argument("--crf-sharpen", type=float, default=0.0)
     parser.add_argument("--crf", type=int, default=14)
@@ -209,6 +212,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "use_depth": not args.no_depth,
         "no_depth_slices": tuple(s.strip() for s in args.no_depth_slices.split(",") if s.strip()),
         "use_lama": not args.no_lama,
+        "min_lama_hole_pixels": args.min_lama_hole_pixels,
         "render_scale": args.render_scale,
         "crf_sharpen": args.crf_sharpen,
         "crf": args.crf,

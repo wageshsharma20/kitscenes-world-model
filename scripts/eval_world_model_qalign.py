@@ -61,12 +61,15 @@ CAMERA_WEIGHTS: Dict[str, float] = {
 }
 
 VARIANT_SPECS: Dict[str, Dict[str, object]] = {
-    "analytical_r2": {"use_depth": False, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0},
-    "analytical_lama_r2": {"use_depth": False, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0},
-    "analytical_lama_sharp": {"use_depth": False, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.14},
-    "depth_r2": {"use_depth": True, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0},
-    "depth_lama_r2": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0},
-    "depth_lama_sharp": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.14},
+    "analytical_r2": {"use_depth": False, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
+    "analytical_sharp": {"use_depth": False, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.16, "min_lama_hole_pixels": 0},
+    "analytical_sharp24": {"use_depth": False, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.24, "min_lama_hole_pixels": 0},
+    "analytical_sel_lama_sharp": {"use_depth": False, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.16, "min_lama_hole_pixels": 600},
+    "analytical_lama_r2": {"use_depth": False, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
+    "analytical_lama_sharp": {"use_depth": False, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.16, "min_lama_hole_pixels": 0},
+    "depth_r2": {"use_depth": True, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
+    "depth_lama_r2": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
+    "depth_lama_sharp": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.14, "min_lama_hole_pixels": 0},
 }
 
 
@@ -298,8 +301,11 @@ def run_render_stage(args: argparse.Namespace) -> int:
             depth_fn=depth_fn if vcfg["use_depth"] else None,
             inpaint_fn=lama_fn if vcfg["use_lama"] else None,
             crf_sharpen=float(vcfg["crf_sharpen"]),
+            min_lama_hole_pixels=int(vcfg.get("min_lama_hole_pixels", 0)),
         )
         t_v = time.time()
+        variant_bytes = 0
+        variant_videos = 0
         print(f"\n=== Rendering variant `{vname}` across {len(records)} validation scenarios ===", flush=True)
         for idx, rec in enumerate(records, start=1):
             sid = str(rec["scenario_id"]).zfill(7)
@@ -322,21 +328,27 @@ def run_render_stage(args: argparse.Namespace) -> int:
             dt = time.time() - t_s
 
             psnrs: List[float] = []
+            scenario_paths: Dict[str, Path] = {}
+            scen_psnr_by_cam: Dict[str, float] = {}
             for cam in spec.CAMERAS:
                 out_mp4 = args.out_dir / "videos" / vname / sid / f"{cam}.mp4"
                 encode_rgb_h264(gen[cam], out_mp4, crf=args.crf)
+                variant_bytes += out_mp4.stat().st_size
+                variant_videos += 1
+                scenario_paths[cam] = out_mp4
                 gt_rgb = read_video_rgb(fut_base / sid / f"{cam}.mp4")
                 psnr_val = compute_psnr(gt_rgb, gen[cam])
                 psnrs.append(psnr_val)
-                emc_val: Optional[float] = None
-                if cam == "front":
-                    try:
-                        emc_res = compute_video_optical_flow_emc(
-                            out_mp4, rec["expert_like"], method="farneback"
-                        )
-                        emc_val = float(emc_res.get("emc", 0.0))
-                    except Exception:
-                        emc_val = None
+                scen_psnr_by_cam[cam] = psnr_val
+
+            emc_val: Optional[float] = None
+            try:
+                emc_res = compute_video_optical_flow_emc(scenario_paths, rec["expert_like"])
+                emc_val = float(emc_res.get("emc", 0.0))
+            except Exception:
+                emc_val = None
+
+            for cam in spec.CAMERAS:
                 manifest["entries"].append(
                     {
                         "key": f"{vname}__{sid}__{cam}",
@@ -344,17 +356,23 @@ def run_render_stage(args: argparse.Namespace) -> int:
                         "scenario_id": sid,
                         "scenario_type": rec.get("scenario_type", "unknown"),
                         "camera": cam,
-                        "mp4_path": str(out_mp4),
-                        "psnr": round(psnr_val, 3),
-                        "emc_local": round(emc_val, 4) if emc_val is not None else None,
+                        "mp4_path": str(scenario_paths[cam]),
+                        "psnr": round(scen_psnr_by_cam[cam], 3),
+                        "emc_local": (round(emc_val, 4) if (cam == "front" and emc_val is not None) else None),
                     }
                 )
             print(
                 f"  [{idx:02d}/{len(records)}] {vname} {sid} ({rec.get('scenario_type','')[:18]:18s}) "
-                f"| mean PSNR={np.mean(psnrs):.2f} dB (front={psnrs[0]:.2f}) | {dt:.2f}s",
+                f"| mean PSNR={np.mean(psnrs):.2f} dB (front={psnrs[0]:.2f}, emc={emc_val}) | {dt:.2f}s",
                 flush=True,
             )
-        print(f"[+] Variant `{vname}` finished in {time.time() - t_v:.1f}s", flush=True)
+        avg_kb = (variant_bytes / max(variant_videos, 1)) / 1024.0
+        proj_gib = ((variant_bytes / max(variant_videos, 1)) * 2400.0) / (1024.0 ** 3)
+        print(
+            f"[+] Variant `{vname}` finished in {time.time() - t_v:.1f}s "
+            f"| avg={avg_kb:.1f} KiB/vid (2400-video proj={proj_gib:.2f} GiB)",
+            flush=True,
+        )
 
     manifest_path = args.out_dir / "render_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2))

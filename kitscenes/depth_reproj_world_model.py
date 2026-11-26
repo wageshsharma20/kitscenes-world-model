@@ -322,6 +322,7 @@ class Depth3DFullFoVWorldModel:
         depth_fn: Optional[Callable[[Dict[str, np.ndarray]], Dict[str, Tuple[np.ndarray, bool]]]] = None,
         inpaint_fn: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
         crf_sharpen: float = 0.0,
+        min_lama_hole_pixels: int = 0,
     ) -> None:
         self.rig = rig or CameraRig(width=spec.WIDTH, height=spec.HEIGHT, is_provisional=False)
         self.device = torch.device(device if (device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -331,6 +332,7 @@ class Depth3DFullFoVWorldModel:
         self.depth_fn = depth_fn
         self.inpaint_fn = inpaint_fn
         self.crf_sharpen = float(crf_sharpen)
+        self.min_lama_hole_pixels = max(0, int(min_lama_hole_pixels))
 
         self.k_render: Dict[str, np.ndarray] = {}
         self.r_mats: Dict[str, np.ndarray] = {}
@@ -650,7 +652,7 @@ class Depth3DFullFoVWorldModel:
         """Complete remaining unseen holes using observed world ground/sky partitions cleanly."""
         if not np.any(hole_mask):
             return img_rgb_u8
-        if self.inpaint_fn is not None:
+        if self.inpaint_fn is not None and int(np.count_nonzero(hole_mask)) >= self.min_lama_hole_pixels:
             return self.inpaint_fn(img_rgb_u8, hole_mask)
 
         orig = img_rgb_u8.copy()
@@ -782,8 +784,11 @@ class Depth3DFullFoVWorldModel:
                 uv_n = torch.stack([u_norm, v_norm], dim=-1)
                 fg_world[cam] = (pts_ego.reshape(-1, 3), uv_n.reshape(-1, 2), fg_mask.reshape(-1))
 
-        # Load past frames and poses for border/rear gap completion
-        past_sources: Dict[str, List[Tuple[Tuple[float, float, float], torch.Tensor]]] = {c: [] for c in spec.CAMERAS}
+        # Index past frames/poses lazily so scenarios covered by primary+neighbors skip JPEG decode & GPU upload
+        past_specs: Dict[str, List[Tuple[str, Tuple[float, float, float], Union[Path, np.ndarray]]]] = {
+            c: [] for c in spec.CAMERAS
+        }
+        past_tensor_cache: Dict[Tuple[str, str], Optional[torch.Tensor]] = {}
         if past_images and past_trajectory is not None:
             past_poses = compute_past_poses(past_trajectory)
             for tag in ("tm02", "tm04", "tm10", "tm20", "tm30", "tm40"):
@@ -791,17 +796,24 @@ class Depth3DFullFoVWorldModel:
                     continue
                 p_pose = past_poses[tag]
                 for cam in spec.CAMERAS:
-                    if (cam, tag) not in past_images:
-                        continue
-                    psrc = past_images[(cam, tag)]
-                    if isinstance(psrc, (str, Path)):
-                        pbgr = cv2.imread(str(psrc), cv2.IMREAD_COLOR)
-                        if pbgr is None:
-                            continue
-                        prgb = cv2.cvtColor(pbgr, cv2.COLOR_BGR2RGB)
-                    else:
-                        prgb = np.asarray(psrc, dtype=np.uint8)
-                    past_sources[cam].append((p_pose, self._to_tensor_img(prgb)))
+                    if (cam, tag) in past_images:
+                        past_specs[cam].append((tag, p_pose, past_images[(cam, tag)]))
+
+        def _get_past_tensor(cam_name: str, tag_name: str, psrc: Union[Path, np.ndarray]) -> Optional[torch.Tensor]:
+            key = (cam_name, tag_name)
+            if key in past_tensor_cache:
+                return past_tensor_cache[key]
+            if isinstance(psrc, (str, Path)):
+                pbgr = cv2.imread(str(psrc), cv2.IMREAD_COLOR)
+                if pbgr is None:
+                    past_tensor_cache[key] = None
+                    return None
+                prgb = cv2.cvtColor(pbgr, cv2.COLOR_BGR2RGB)
+            else:
+                prgb = np.asarray(psrc, dtype=np.uint8)
+            ten = self._to_tensor_img(prgb)
+            past_tensor_cache[key] = ten
+            return ten
 
         headings = compute_smooth_headings(pts)
         outputs: Dict[str, np.ndarray] = {}
@@ -846,8 +858,11 @@ class Depth3DFullFoVWorldModel:
                                 break
 
                     # 3. Past frames (t = -0.2s .. -2.0s) fill expanding behind-car road regions!
-                    if not bool((cov_mask | ego_mask_t).all()) and past_sources[cam]:
-                        for p_pose, p_t in past_sources[cam]:
+                    if not bool((cov_mask | ego_mask_t).all()) and past_specs[cam]:
+                        for p_tag, p_pose, p_src in past_specs[cam]:
+                            p_t = _get_past_tensor(cam, p_tag, p_src)
+                            if p_t is None:
+                                continue
                             p_rgb, p_cov = self._warp_backward_analytical(
                                 cam, p_pose, cam, pose_k, p_t, ego_mask_t
                             )
