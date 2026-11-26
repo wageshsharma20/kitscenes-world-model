@@ -10,9 +10,13 @@ ZIP archive assembly (`<= 3 GiB`) via `kitscenes.archive.build_archive`.
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 import multiprocessing as mp
+import os
 from pathlib import Path
+import shutil
+import subprocess
 import sys
 import tarfile
 import time
@@ -180,6 +184,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--render-scale", type=int, default=2)
     parser.add_argument("--crf-sharpen", type=float, default=0.0)
     parser.add_argument("--crf", type=int, default=14)
+    parser.add_argument("--max-zip-gib", type=float, default=2.95, help="Auto-transcode to --fallback-crf if packed archive exceeds this GiB limit")
+    parser.add_argument("--fallback-crf", type=int, default=18, help="Fallback CRF if initial archive exceeds --max-zip-gib (0 disables)")
     parser.add_argument("--gpus", type=str, default="0,1", help="Comma-separated CUDA device indices (or empty for CPU)")
     parser.add_argument("--scenarios", type=str, default="", help="Optional comma-separated scenario IDs subset")
     parser.add_argument("--scenario-range", type=str, default="", help="Optional 0-based Python slice START:END across sorted scenarios")
@@ -187,6 +193,53 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--pack-zip", action="store_true", default=False)
     parser.add_argument("--allow-partial", action="store_true", default=False)
     return parser.parse_args(argv)
+
+
+def _reencode_mp4_crf(mp4_path: Path, crf: int) -> None:
+    """Re-encode one MP4 atomically to a higher CRF when clamping final archive size."""
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if not ffmpeg_bin:
+        raise RuntimeError("ffmpeg binary not found in PATH.")
+    tmp_path = mp4_path.with_name(f".{mp4_path.stem}.crf{crf}.tmp{mp4_path.suffix}")
+    try:
+        subprocess.run(
+            [
+                ffmpeg_bin,
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                str(mp4_path),
+                "-c:v",
+                "libx264",
+                "-crf",
+                str(crf),
+                "-pix_fmt",
+                "yuv420p",
+                str(tmp_path),
+            ],
+            check=True,
+        )
+        os.replace(tmp_path, mp4_path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+
+
+def _clamp_videos_crf_if_oversized(videos_dir: Path, max_bytes: int, fallback_crf: int) -> None:
+    mp4s = sorted(videos_dir.rglob("*.mp4"))
+    total_bytes = sum(p.stat().st_size for p in mp4s)
+    if total_bytes <= max_bytes or fallback_crf <= 0:
+        return
+    print(
+        f"[!] Total MP4 bytes ({total_bytes / (1024**3):.2f} GiB) exceeds {max_bytes / (1024**3):.2f} GiB; "
+        f"clamping {len(mp4s)} videos to CRF {fallback_crf} ...",
+        flush=True,
+    )
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(lambda p: _reencode_mp4_crf(p, fallback_crf), mp4s))
+    new_bytes = sum(p.stat().st_size for p in mp4s)
+    print(f"[+] Clamped total MP4 bytes -> {new_bytes / (1024**3):.2f} GiB", flush=True)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -263,6 +316,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(f"[+] Parallel Dual-GPU render complete in {time.time() - t0:.1f}s", flush=True)
 
     if args.pack_zip:
+        max_bytes = int(args.max_zip_gib * (1024 ** 3))
+        if args.fallback_crf > 0:
+            _clamp_videos_crf_if_oversized(args.out_videos_dir, max_bytes, args.fallback_crf)
         print(f"[*] Validating and packing {args.out_zip} ...", flush=True)
         report = archive.build_archive(
             args.out_videos_dir,
@@ -270,6 +326,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             allow_partial=args.allow_partial,
             check_media=True,
         )
+        if args.fallback_crf > 0 and not report.ok and args.out_zip.exists() and args.out_zip.stat().st_size > max_bytes:
+            _clamp_videos_crf_if_oversized(args.out_videos_dir, 0, args.fallback_crf)
+            report = archive.build_archive(
+                args.out_videos_dir,
+                output=args.out_zip,
+                allow_partial=args.allow_partial,
+                check_media=True,
+            )
         for line in report.summary_lines():
             print(f"    {line}", flush=True)
         if not report.ok:
