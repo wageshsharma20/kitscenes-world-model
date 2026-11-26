@@ -397,11 +397,12 @@ def load_one_align_model():
         "trust_remote_code": True,
         "torch_dtype": torch.float16,
         "device_map": "auto",
+        "low_cpu_mem_usage": True,
     }
     if torch.cuda.is_available() and torch.cuda.device_count() == 1:
         vram_gib = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
         if vram_gib < 18.0:
-            kwargs["max_memory"] = {0: "13GiB", "cpu": "24GiB"}
+            kwargs["max_memory"] = {0: "13GiB", "cpu": "10GiB"}
     try:
         md = AutoModelForCausalLM.from_pretrained("q-future/one-align", attn_implementation="eager", **kwargs)
     except TypeError:
