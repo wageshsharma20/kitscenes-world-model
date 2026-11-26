@@ -403,9 +403,12 @@ def load_one_align_model():
         if vram_gib < 18.0:
             kwargs["max_memory"] = {0: "13GiB", "cpu": "24GiB"}
     try:
-        return AutoModelForCausalLM.from_pretrained("q-future/one-align", attn_implementation="eager", **kwargs)
+        md = AutoModelForCausalLM.from_pretrained("q-future/one-align", attn_implementation="eager", **kwargs)
     except TypeError:
-        return AutoModelForCausalLM.from_pretrained("q-future/one-align", **kwargs)
+        md = AutoModelForCausalLM.from_pretrained("q-future/one-align", **kwargs)
+    lm_dev = md.lm_head.weight.device if hasattr(md, "lm_head") else md.device
+    md.weight_tensor = torch.tensor([5.0, 4.0, 3.0, 2.0, 1.0], dtype=torch.float16, device=lm_dev)
+    return md
 
 
 def _norm_pq_pair(q_pred: float, q_gt: float) -> Tuple[float, float, float]:
