@@ -132,8 +132,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         _run([sys.executable, "-m", "virtualenv", "--system-site-packages", str(venv_dir)])
     q_pip = str(venv_dir / "bin" / "pip")
     q_py = str(venv_dir / "bin" / "python")
-    _run([q_pip, "install", "-q", "--no-deps", "--force-reinstall", "transformers==4.36.1", "tokenizers==0.15.2", "huggingface-hub==0.25.2"])
-    _run([q_pip, "install", "-q", "icecream", "sentencepiece", "protobuf", "accelerate"])
+    _run([
+        q_pip,
+        "install",
+        "-q",
+        "--no-deps",
+        "--force-reinstall",
+        "transformers==4.36.1",
+        "tokenizers==0.15.2",
+        "huggingface-hub==0.25.2",
+        "accelerate==0.29.3",
+        "bitsandbytes==0.43.3",
+    ])
+    _run([q_pip, "install", "-q", "icecream", "sentencepiece", "protobuf"])
 
     _run([q_py, str(eval_script), "--stage", "score", "--out-dir", str(out_dir)])
 

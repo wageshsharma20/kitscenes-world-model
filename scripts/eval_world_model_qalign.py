@@ -390,7 +390,7 @@ def frames_1fps_pil(mp4_path: Path) -> List[object]:
 
 
 def load_one_align_model():
-    """Load official `q-future/one-align` FP16 model across all available GPUs."""
+    """Load `q-future/one-align` (pure FP16 on >=20GiB VRAM / multi-GPU; 8-bit hybrid fallback on single 15GiB T4)."""
     from transformers import AutoModelForCausalLM
 
     kwargs = {
@@ -402,7 +402,28 @@ def load_one_align_model():
     if torch.cuda.is_available() and torch.cuda.device_count() == 1:
         vram_gib = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
         if vram_gib < 18.0:
-            kwargs["max_memory"] = {0: "13GiB", "cpu": "10GiB"}
+            try:
+                from transformers import BitsAndBytesConfig
+
+                bnb_cfg = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    llm_int8_skip_modules=["vision_model", "visual_abstractor", "lm_head"],
+                )
+                print("[*] Single 15-16GiB GPU detected -> loading OneAlign with 8-bit LLM + FP16 vision/head...", flush=True)
+                md = AutoModelForCausalLM.from_pretrained(
+                    "q-future/one-align",
+                    quantization_config=bnb_cfg,
+                    trust_remote_code=True,
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                    low_cpu_mem_usage=True,
+                )
+                lm_dev = md.lm_head.weight.device if hasattr(md, "lm_head") else md.device
+                md.weight_tensor = torch.tensor([5.0, 4.0, 3.0, 2.0, 1.0], dtype=torch.float16, device=lm_dev)
+                return md
+            except Exception as exc:  # noqa: BLE001
+                print(f"[!] 8-bit load failed ({exc}), falling back to FP16 offload...", flush=True)
+                kwargs["max_memory"] = {0: "13GiB", "cpu": "10GiB"}
     try:
         md = AutoModelForCausalLM.from_pretrained("q-future/one-align", attn_implementation="eager", **kwargs)
     except TypeError:
