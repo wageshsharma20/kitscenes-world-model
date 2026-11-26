@@ -61,6 +61,8 @@ CAMERA_WEIGHTS: Dict[str, float] = {
 
 VARIANT_SPECS: Dict[str, Dict[str, object]] = {
     "analytical_r2": {"use_depth": False, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0},
+    "analytical_lama_r2": {"use_depth": False, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0},
+    "analytical_lama_sharp": {"use_depth": False, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.14},
     "depth_r2": {"use_depth": True, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0},
     "depth_lama_r2": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0},
     "depth_lama_sharp": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.14},
@@ -536,7 +538,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--val-tar", type=Path, default=None, help="Path to val_calib.tar if not extracted")
     parser.add_argument("--val-trajectories", type=Path, default=PROJECT_ROOT / "data" / "val_trajectories.jsonl")
     parser.add_argument("--out-dir", type=Path, default=Path("/kaggle/working/qalign_calib"))
-    parser.add_argument("--variants", type=str, default="analytical_r2,depth_lama_r2,depth_lama_sharp")
+    parser.add_argument("--variants", type=str, default="analytical_r2,analytical_lama_r2,depth_lama_r2,depth_lama_sharp")
     parser.add_argument("--depth-model", type=str, default="depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--crf", type=int, default=14)
