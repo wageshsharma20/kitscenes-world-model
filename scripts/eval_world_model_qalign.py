@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 from collections import defaultdict
+import gc
 import json
 from pathlib import Path
 import shutil
@@ -389,6 +390,24 @@ def frames_1fps_pil(mp4_path: Path) -> List[object]:
         return sampled
 
 
+def _attach_onealign_weight_tensor(md) -> None:
+    """Attach OneAlign MOS weights onto a real device (never `meta`) and sync to logits."""
+    lm_w = getattr(getattr(md, "lm_head", None), "weight", None)
+    lm_dev = getattr(lm_w, "device", None)
+    if lm_dev is None or lm_dev.type == "meta":
+        lm_dev = getattr(md, "device", torch.device("cpu"))
+    if getattr(lm_dev, "type", "cpu") == "meta":
+        lm_dev = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    md.weight_tensor = torch.tensor([5.0, 4.0, 3.0, 2.0, 1.0], dtype=torch.float16, device=lm_dev)
+
+    def _sync_weight_dev(_mod, _inp, out):
+        logits = out["logits"] if isinstance(out, dict) else getattr(out, "logits", None)
+        if logits is not None and md.weight_tensor.device != logits.device:
+            md.weight_tensor = md.weight_tensor.to(logits.device)
+
+    md.register_forward_hook(_sync_weight_dev)
+
+
 def load_one_align_model():
     """Load `q-future/one-align` (pure FP16 on >=20GiB VRAM / multi-GPU; 8-bit hybrid fallback on single 15GiB T4)."""
     from transformers import AutoModelForCausalLM
@@ -418,18 +437,20 @@ def load_one_align_model():
                     device_map="auto",
                     low_cpu_mem_usage=True,
                 )
-                lm_dev = md.lm_head.weight.device if hasattr(md, "lm_head") else md.device
-                md.weight_tensor = torch.tensor([5.0, 4.0, 3.0, 2.0, 1.0], dtype=torch.float16, device=lm_dev)
+                _attach_onealign_weight_tensor(md)
                 return md
             except Exception as exc:  # noqa: BLE001
                 print(f"[!] 8-bit load failed ({exc}), falling back to FP16 offload...", flush=True)
-                kwargs["max_memory"] = {0: "13GiB", "cpu": "10GiB"}
+                gc.collect()
+                torch.cuda.empty_cache()
+                Path("/tmp/onealign_offload").mkdir(parents=True, exist_ok=True)
+                kwargs["max_memory"] = {0: "13500MiB", "cpu": "11GiB"}
+                kwargs["offload_folder"] = "/tmp/onealign_offload"
     try:
         md = AutoModelForCausalLM.from_pretrained("q-future/one-align", attn_implementation="eager", **kwargs)
     except TypeError:
         md = AutoModelForCausalLM.from_pretrained("q-future/one-align", **kwargs)
-    lm_dev = md.lm_head.weight.device if hasattr(md, "lm_head") else md.device
-    md.weight_tensor = torch.tensor([5.0, 4.0, 3.0, 2.0, 1.0], dtype=torch.float16, device=lm_dev)
+    _attach_onealign_weight_tensor(md)
     return md
 
 
