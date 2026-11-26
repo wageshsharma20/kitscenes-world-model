@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+import gc
 import io
 import json
 import os
@@ -208,13 +209,16 @@ def _worker_rg_from_file(args: Tuple[str, int, List[str], str, str, Sequence[Tup
     parquet_path, rg_idx, cols, t0_dir_s, past_dir_s, past_offsets, target_scenarios = args
     pf = pq.ParquetFile(parquet_path)
     tbl = pf.read_row_group(rg_idx, columns=cols)
-    return _process_observed_row_group(
+    recs = _process_observed_row_group(
         tbl.to_pydict(),
         Path(t0_dir_s),
         Path(past_dir_s),
         past_offsets,
         target_scenarios,
     )
+    del tbl
+    gc.collect()
+    return recs
 
 
 def _worker_rg_from_hf(args: Tuple[str, str, int, List[str], str, str, Sequence[Tuple[int, str]], Optional[Set[str]]]) -> List[Dict[str, Any]]:
@@ -222,17 +226,29 @@ def _worker_rg_from_hf(args: Tuple[str, str, int, List[str], str, str, Sequence[
     import pyarrow.parquet as pq
 
     remote_uri, token, rg_idx, cols, t0_dir_s, past_dir_s, past_offsets, target_scenarios = args
-    fs = HfFileSystem(token=token)
-    with fs.open(remote_uri, "rb") as f:
-        pf = pq.ParquetFile(f)
-        tbl = pf.read_row_group(rg_idx, columns=cols)
-    return _process_observed_row_group(
-        tbl.to_pydict(),
-        Path(t0_dir_s),
-        Path(past_dir_s),
-        past_offsets,
-        target_scenarios,
-    )
+    last_err: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            fs = HfFileSystem(token=token)
+            with fs.open(remote_uri, "rb") as f:
+                pf = pq.ParquetFile(f)
+                tbl = pf.read_row_group(rg_idx, columns=cols)
+            recs = _process_observed_row_group(
+                tbl.to_pydict(),
+                Path(t0_dir_s),
+                Path(past_dir_s),
+                past_offsets,
+                target_scenarios,
+            )
+            del tbl
+            gc.collect()
+            return recs
+        except Exception as exc:  # noqa: BLE001
+            last_err = exc
+            if attempt < 2:
+                time.sleep(3.0 * (attempt + 1))
+    assert last_err is not None
+    raise last_err
 
 
 def _scenario_complete(
