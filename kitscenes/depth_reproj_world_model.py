@@ -702,6 +702,7 @@ class Depth3DFullFoVWorldModel:
         cal_depths: Dict[str, np.ndarray] = {}
         ego_masks: Dict[str, np.ndarray] = {}
         ego_masks_t: Dict[str, torch.Tensor] = {}
+        fg_masks_t: Dict[str, torch.Tensor] = {}
         fg_world: Dict[str, Tuple[torch.Tensor, torch.Tensor, torch.Tensor]] = {}
 
         # Rough speed estimate from planned trajectory for empirical hood detection
@@ -753,6 +754,7 @@ class Depth3DFullFoVWorldModel:
                 elevated = (pts_ego[..., 2] > (self.ground_z + 0.35)) & (d_cal_t := z_t[..., 0] < 50.0)
                 del d_cal_t
                 fg_mask = elevated & (~ego_masks_t[cam])
+                fg_masks_t[cam] = fg_mask
                 u_norm = (self._dst_pix[..., 0] / max(self.render_w - 1, 1)) * 2.0 - 1.0
                 v_norm = (self._dst_pix[..., 1] / max(self.render_h - 1, 1)) * 2.0 - 1.0
                 uv_n = torch.stack([u_norm, v_norm], dim=-1)
@@ -826,13 +828,16 @@ class Depth3DFullFoVWorldModel:
                     ground_holes = (~cov_mask) & (~ego_mask_t) & (self.sky_weights[cam] <= 0.35)
                     if bool(ground_holes.any()):
                         for g_cam in GROUND_FALLBACK_CAMERAS[cam]:
+                            src_excl = ego_masks_t[g_cam]
+                            if g_cam in fg_masks_t:
+                                src_excl = src_excl | fg_masks_t[g_cam]
                             g_rgb, g_cov = self._warp_backward_analytical(
                                 g_cam,
                                 (0.0, 0.0, 0.0),
                                 cam,
                                 pose_k,
                                 t0_hi_t[g_cam],
-                                ego_masks_t[g_cam],
+                                src_excl,
                                 ground_only=True,
                             )
                             frame_ren, cov_mask = self._match_and_composite(frame_ren, cov_mask, g_rgb, g_cov)
