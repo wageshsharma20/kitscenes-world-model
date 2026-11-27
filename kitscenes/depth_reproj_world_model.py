@@ -324,6 +324,7 @@ class Depth3DFullFoVWorldModel:
         inpaint_fn: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
         crf_sharpen: float = 0.0,
         min_lama_hole_pixels: int = 0,
+        min_lama_luma: float = 0.0,
         chain_warps: bool = False,
         adaptive_filter: bool = False,
         photometric_refine: bool = False,
@@ -340,6 +341,7 @@ class Depth3DFullFoVWorldModel:
         self.inpaint_fn = inpaint_fn
         self.crf_sharpen = float(crf_sharpen)
         self.min_lama_hole_pixels = max(0, int(min_lama_hole_pixels))
+        self.min_lama_luma = max(0.0, float(min_lama_luma))
         # Chain each frame off the frame rendered immediately before it instead of warping
         # t=0 across the whole clip. One step is 0.2 s of ego motion, so the planar stretch
         # (and therefore the disocclusion area the inpainter has to invent) is far smaller.
@@ -774,7 +776,14 @@ class Depth3DFullFoVWorldModel:
         if not np.any(hole_mask):
             return img_rgb_u8
         if self.inpaint_fn is not None and int(np.count_nonzero(hole_mask)) >= self.min_lama_hole_pixels:
-            return self.inpaint_fn(img_rgb_u8, hole_mask)
+            use_lama_now = True
+            if self.min_lama_luma > 0.0:
+                valid_px = (~hole_mask) if source_valid_mask is None else (source_valid_mask & (~hole_mask))
+                luma_source = cv2.cvtColor(img_rgb_u8, cv2.COLOR_RGB2GRAY)
+                mean_luma = float(luma_source[valid_px].mean()) if np.any(valid_px) else float(luma_source.mean())
+                use_lama_now = mean_luma >= self.min_lama_luma
+            if use_lama_now:
+                return self.inpaint_fn(img_rgb_u8, hole_mask)
 
         orig = img_rgb_u8.copy()
         out = img_rgb_u8.copy()

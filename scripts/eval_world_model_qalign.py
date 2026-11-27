@@ -155,6 +155,29 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
         "photometric_refine": True,
         "equalize_strength": 0.0,
     },
+    # Stage B.3: Luma-gated selective LaMa (avoid dark night smearing) and 3D Depth-Anything-V2 parallax
+    "cand_f_lumagate": {
+        "provenance_note": "Scale 2 + luma-gated selective LaMa (holes >=1200 px and mean_luma >=45)",
+        "use_depth": False,
+        "use_lama": True,
+        "render_scale": 2,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 1200,
+        "min_lama_luma": 45.0,
+        "adaptive_filter": False,
+        "photometric_refine": False,
+    },
+    "cand_i_depth_lama": {
+        "provenance_note": "Scale 2 + Metric Depth-Anything-V2 3D foreground overlay + luma-gated selective LaMa",
+        "use_depth": True,
+        "use_lama": True,
+        "render_scale": 2,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 1200,
+        "min_lama_luma": 45.0,
+        "adaptive_filter": False,
+        "photometric_refine": False,
+    },
 }
 
 LEVEL_NAMES: Tuple[str, ...] = ("excellent", "good", "fair", "poor", "bad")
@@ -514,6 +537,7 @@ def run_render_stage(args: argparse.Namespace) -> int:
             inpaint_fn=lama_fn if vcfg["use_lama"] else None,
             crf_sharpen=float(vcfg["crf_sharpen"]),
             min_lama_hole_pixels=int(vcfg.get("min_lama_hole_pixels", 0)),
+            min_lama_luma=float(vcfg.get("min_lama_luma", 0.0)),
             adaptive_filter=bool(vcfg.get("adaptive_filter", False)),
             photometric_refine=bool(vcfg.get("photometric_refine", False)),
             equalize_strength=float(vcfg.get("equalize_strength", 0.20)),

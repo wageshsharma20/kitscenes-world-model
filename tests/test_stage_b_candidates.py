@@ -35,6 +35,34 @@ def test_stage_b_variant_specs_explicit_configs():
     assert eq.VARIANT_SPECS["cand_f_r2_lama"]["photometric_refine"] is False
     assert eq.VARIANT_SPECS["cand_g_r2_photo"]["photometric_refine"] is True
     assert eq.VARIANT_SPECS["cand_g_r2_photo"]["equalize_strength"] == 0.0
+    assert eq.VARIANT_SPECS["cand_f_lumagate"]["min_lama_luma"] == pytest.approx(45.0)
+    assert eq.VARIANT_SPECS["cand_i_depth_lama"]["use_depth"] is True
+    assert eq.VARIANT_SPECS["cand_i_depth_lama"]["min_lama_luma"] == pytest.approx(45.0)
+
+
+def test_min_lama_luma_gates_dark_frames():
+    called = []
+
+    def _fake_lama(img, mask):
+        called.append(float(img.mean()))
+        return img
+
+    model = Depth3DFullFoVWorldModel(
+        render_scale=1,
+        inpaint_fn=_fake_lama,
+        min_lama_hole_pixels=10,
+        min_lama_luma=45.0,
+    )
+    hole = np.zeros((spec.HEIGHT, spec.WIDTH), dtype=bool)
+    hole[10:20, 10:20] = True  # 100 hole pixels
+
+    dark = np.full((spec.HEIGHT, spec.WIDTH, 3), 20, dtype=np.uint8)
+    model._fill_residual_holes(dark, hole)
+    assert len(called) == 0
+
+    bright = np.full((spec.HEIGHT, spec.WIDTH, 3), 110, dtype=np.uint8)
+    model._fill_residual_holes(bright, hole)
+    assert len(called) == 1
 
 
 def test_jacobian_lod_identity_vs_minification():
