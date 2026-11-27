@@ -55,11 +55,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from kitscenes import spec
-from scripts.eval_world_model_qalign import _attach_onealign_weight_tensor, load_one_align_model
-
-LEVEL_NAMES: Tuple[str, ...] = ("excellent", "good", "fair", "poor", "bad")
-LEVEL_WEIGHTS_RAW: Tuple[float, ...] = (5.0, 4.0, 3.0, 2.0, 1.0)
-LEVEL_WEIGHTS_UNIT_100: Tuple[float, ...] = (100.0, 75.0, 50.0, 25.0, 0.0)
+from scripts.eval_world_model_qalign import (
+    LEVEL_NAMES,
+    _attach_onealign_weight_tensor,
+    extract_five_level_distribution,
+    load_one_align_model,
+)
 
 
 def _sha256_file(path: Path) -> str:
@@ -150,36 +151,22 @@ def sample_upstream_1fps_frames(mp4_path: Path) -> Dict[str, Any]:
     }
 
 
-def extract_five_level_distribution(logits: Any, reported_score: Optional[float] = None) -> Dict[str, Any]:
-    """Compute softmax probabilities over the five OneAlign quality levels and verify identity."""
-    logits_t = torch.as_tensor(logits, dtype=torch.float32).reshape(-1)
-    if logits_t.numel() != len(LEVEL_NAMES):
-        raise ValueError(f"Expected 5 quality level logits, got shape {tuple(logits_t.shape)}")
-
-    probs_t = torch.softmax(logits_t, dim=-1)
-    probs = [float(x) for x in probs_t.tolist()]
-    logits_list = [float(x) for x in logits_t.tolist()]
-
-    q_raw = float(sum(p * w for p, w in zip(probs, LEVEL_WEIGHTS_RAW)))
-    pq_worldmark_100 = float(sum(p * w for p, w in zip(probs, LEVEL_WEIGHTS_UNIT_100)))
-    pq_from_raw = 100.0 * (q_raw - 1.0) / 4.0
-
-    if abs(pq_worldmark_100 - pq_from_raw) > 1e-2:
-        raise AssertionError(
-            f"Probability weight mismatch: worldmark={pq_worldmark_100:.4f} vs raw={pq_from_raw:.4f}"
-        )
-    if reported_score is not None and abs(float(reported_score) - q_raw) > 0.02:
-        raise AssertionError(
-            f"Reported score {reported_score:.4f} diverges from softmax expected value {q_raw:.4f}"
-        )
-
-    return {
-        "level_logits": {name: round(val, 6) for name, val in zip(LEVEL_NAMES, logits_list)},
-        "level_probs": {name: round(val, 6) for name, val in zip(LEVEL_NAMES, probs)},
-        "prob_sum": round(float(sum(probs)), 6),
-        "q_raw": round(q_raw, 6),
-        "pq_worldmark_100": round(pq_worldmark_100, 4),
-    }
+def _cuda_devices_summary() -> Tuple[int, List[Dict[str, Any]], float, float]:
+    """Summarize all visible CUDA devices and aggregate total/peak VRAM across shards."""
+    if not torch.cuda.is_available():
+        return 0, [], 0.0, 0.0
+    n_dev = torch.cuda.device_count()
+    devs: List[Dict[str, Any]] = []
+    tot_mem = 0.0
+    tot_peak = 0.0
+    for idx in range(n_dev):
+        props = torch.cuda.get_device_properties(idx)
+        mem_gib = props.total_memory / (1024 ** 3)
+        peak_gib = torch.cuda.max_memory_allocated(idx) / (1024 ** 3)
+        tot_mem += mem_gib
+        tot_peak += peak_gib
+        devs.append({"index": idx, "name": props.name, "total_gib": round(mem_gib, 2), "peak_gib": round(peak_gib, 3)})
+    return n_dev, devs, round(tot_mem, 2), round(tot_peak, 3)
 
 
 def detect_model_precision(model: Any) -> str:
@@ -216,7 +203,8 @@ def load_one_align_for_smoke_test(precision: str = "auto") -> Tuple[Any, Dict[st
         raise ValueError(f"Unsupported precision {precision!r}")
 
     if torch.cuda.is_available():
-        torch.cuda.reset_peak_memory_stats()
+        for idx in range(torch.cuda.device_count()):
+            torch.cuda.reset_peak_memory_stats(idx)
 
     t_load = time.time()
     if precision == "auto":
@@ -248,25 +236,18 @@ def load_one_align_for_smoke_test(precision: str = "auto") -> Tuple[Any, Dict[st
     if precision == "fp16" and detected_precision == "8bit_hybrid":
         raise RuntimeError("Requested `fp16` mode but 8-bit quantized modules were loaded.")
 
-    gpu_name = torch.cuda.get_device_name(0) if torch.cuda.is_available() else "cpu"
-    vram_total = (
-        torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
-        if torch.cuda.is_available()
-        else 0.0
-    )
-    peak_vram = (
-        torch.cuda.max_memory_allocated() / (1024 ** 3)
-        if torch.cuda.is_available()
-        else 0.0
-    )
+    gpu_count, gpus, vram_total, peak_vram = _cuda_devices_summary()
+    gpu_name = gpus[0]["name"] if gpus else "cpu"
 
     meta = {
         "requested_precision": precision,
         "detected_precision": detected_precision,
         "load_time_s": round(load_time_s, 3),
+        "gpu_count": gpu_count,
+        "gpus": gpus,
         "gpu_name": gpu_name,
-        "gpu_vram_total_gib": round(vram_total, 2),
-        "post_load_peak_vram_gib": round(peak_vram, 3),
+        "gpu_vram_total_gib": vram_total,
+        "post_load_peak_vram_gib": peak_vram,
         "preferential_tokens": verify_preferential_tokens(md),
     }
     return md, meta
@@ -551,7 +532,9 @@ def _run_score_cmd(args: argparse.Namespace) -> int:
             clip_records.append(rec)
 
         if not args.verify_input_only and torch.cuda.is_available():
-            model_meta["peak_vram_gib"] = round(torch.cuda.max_memory_allocated() / (1024 ** 3), 3)
+            _, gpus_end, _, peak_total = _cuda_devices_summary()
+            model_meta["gpus"] = gpus_end
+            model_meta["peak_vram_gib"] = peak_total
 
         summary: Dict[str, Any] = {"clip_count": len(clip_records)}
         if not args.verify_input_only:

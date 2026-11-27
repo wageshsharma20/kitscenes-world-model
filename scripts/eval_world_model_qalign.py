@@ -71,7 +71,89 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
     "depth_r2": {"use_depth": True, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
     "depth_lama_r2": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
     "depth_lama_sharp": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.14, "min_lama_hole_pixels": 0},
+    # Stage B incremental candidates (A: Baseline .. E: Selective refinement)
+    "cand_a_baseline": {
+        "use_depth": False,
+        "use_lama": False,
+        "render_scale": 2,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 0,
+        "adaptive_filter": False,
+        "photometric_refine": False,
+    },
+    "cand_b_scale1": {
+        "use_depth": False,
+        "use_lama": False,
+        "render_scale": 1,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 0,
+        "adaptive_filter": False,
+        "photometric_refine": False,
+    },
+    "cand_c_adaptive": {
+        "use_depth": False,
+        "use_lama": False,
+        "render_scale": 1,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 0,
+        "adaptive_filter": True,
+        "photometric_refine": False,
+    },
+    "cand_d_photometric": {
+        "use_depth": False,
+        "use_lama": False,
+        "render_scale": 1,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 0,
+        "adaptive_filter": True,
+        "photometric_refine": True,
+    },
+    "cand_e_selective": {
+        "use_depth": False,
+        "use_lama": True,
+        "render_scale": 1,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 1200,
+        "adaptive_filter": True,
+        "photometric_refine": True,
+    },
 }
+
+LEVEL_NAMES: Tuple[str, ...] = ("excellent", "good", "fair", "poor", "bad")
+LEVEL_WEIGHTS_RAW: Tuple[float, ...] = (5.0, 4.0, 3.0, 2.0, 1.0)
+LEVEL_WEIGHTS_UNIT_100: Tuple[float, ...] = (100.0, 75.0, 50.0, 25.0, 0.0)
+
+
+def extract_five_level_distribution(logits: object, reported_score: Optional[float] = None) -> Dict[str, object]:
+    """Compute softmax probabilities over the five OneAlign quality levels and verify identity."""
+    logits_t = torch.as_tensor(logits, dtype=torch.float32).reshape(-1)
+    if logits_t.numel() != len(LEVEL_NAMES):
+        raise ValueError(f"Expected 5 quality level logits, got shape {tuple(logits_t.shape)}")
+
+    probs_t = torch.softmax(logits_t, dim=-1)
+    probs = [float(x) for x in probs_t.tolist()]
+    logits_list = [float(x) for x in logits_t.tolist()]
+
+    q_raw = float(sum(p * w for p, w in zip(probs, LEVEL_WEIGHTS_RAW)))
+    pq_worldmark_100 = float(sum(p * w for p, w in zip(probs, LEVEL_WEIGHTS_UNIT_100)))
+    pq_from_raw = 100.0 * (q_raw - 1.0) / 4.0
+
+    if abs(pq_worldmark_100 - pq_from_raw) > 1e-2:
+        raise AssertionError(
+            f"Probability weight mismatch: worldmark={pq_worldmark_100:.4f} vs raw={pq_from_raw:.4f}"
+        )
+    if reported_score is not None and abs(float(reported_score) - q_raw) > 0.02:
+        raise AssertionError(
+            f"Reported score {reported_score:.4f} diverges from softmax expected value {q_raw:.4f}"
+        )
+
+    return {
+        "level_logits": {name: round(val, 6) for name, val in zip(LEVEL_NAMES, logits_list)},
+        "level_probs": {name: round(val, 6) for name, val in zip(LEVEL_NAMES, probs)},
+        "prob_sum": round(float(sum(probs)), 6),
+        "q_raw": round(q_raw, 6),
+        "pq_worldmark_100": round(pq_worldmark_100, 4),
+    }
 
 
 def encode_rgb_h264(frames_rgb: np.ndarray, out_mp4: Path, fps: float = float(spec.FPS), crf: int = 14) -> None:
@@ -209,10 +291,13 @@ def load_val_records(
     val_traj_path: Path,
     val_calib_root: Path,
     limit: int = 0,
+    scenarios: str = "",
+    stratified: bool = True,
 ) -> List[Dict[str, object]]:
     """Match validation trajectory records with extracted t=0/past/GT calibration folders."""
     t0_dir = val_calib_root / "val_t0_native"
     fut_dir = val_calib_root / "val_future_videos"
+    want = {s.strip().zfill(7) for s in scenarios.split(",") if s.strip()} if scenarios else set()
     records: List[Dict[str, object]] = []
     with open(val_traj_path) as f:
         for line in f:
@@ -220,14 +305,38 @@ def load_val_records(
                 continue
             r = json.loads(line)
             sid = str(r["scenario_id"]).zfill(7)
+            if want and sid not in want:
+                continue
             if not (t0_dir / sid / "front.jpg").exists():
                 continue
             if not (fut_dir / sid / "front.mp4").exists():
                 continue
             records.append(r)
     records.sort(key=lambda x: str(x["scenario_id"]))
-    if limit > 0:
-        records = records[:limit]
+    if limit > 0 and limit < len(records):
+        if stratified:
+            buckets: Dict[str, List[Dict[str, object]]] = defaultdict(list)
+            for rec in records:
+                buckets[str(rec.get("scenario_type", "unknown"))].append(rec)
+            ordered_slices = list(SLICE_ORDER) + sorted(s for s in buckets if s not in SLICE_ORDER)
+            picked: List[Dict[str, object]] = []
+            idx_by_slice = {s: 0 for s in ordered_slices}
+            while len(picked) < limit:
+                progressed = False
+                for st in ordered_slices:
+                    bucket = buckets.get(st, [])
+                    pos = idx_by_slice[st]
+                    if pos < len(bucket):
+                        picked.append(bucket[pos])
+                        idx_by_slice[st] = pos + 1
+                        progressed = True
+                        if len(picked) >= limit:
+                            break
+                if not progressed:
+                    break
+            records = sorted(picked, key=lambda x: str(x["scenario_id"]))
+        else:
+            records = records[:limit]
     return records
 
 
@@ -249,7 +358,13 @@ def ensure_val_calib_extracted(val_dir: Optional[Path], val_tar: Optional[Path],
 
 def run_render_stage(args: argparse.Namespace) -> int:
     val_root = ensure_val_calib_extracted(args.val_dir, args.val_tar, args.out_dir)
-    records = load_val_records(args.val_trajectories, val_root, limit=args.limit)
+    records = load_val_records(
+        args.val_trajectories,
+        val_root,
+        limit=args.limit,
+        scenarios=args.scenarios,
+        stratified=not args.no_stratify,
+    )
     if not records:
         raise RuntimeError(f"No matching validation calibration scenarios found under {val_root}")
 
@@ -265,10 +380,21 @@ def run_render_stage(args: argparse.Namespace) -> int:
     lama_fn = build_lama_fn(device=args.device) if need_lama else None
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    git_sha = None
+    try:
+        git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), text=True).strip()
+    except Exception:
+        pass
     manifest: Dict[str, object] = {
         "val_root": str(val_root),
+        "git_commit": git_sha,
+        "crf": int(args.crf),
+        "depth_model": args.depth_model if need_depth else None,
         "scenarios": [],
         "variants": requested,
+        "variant_configs": {
+            v: {**VARIANT_SPECS[v], "crf": int(args.crf)} for v in requested
+        },
         "entries": [],
     }
 
@@ -309,6 +435,8 @@ def run_render_stage(args: argparse.Namespace) -> int:
             inpaint_fn=lama_fn if vcfg["use_lama"] else None,
             crf_sharpen=float(vcfg["crf_sharpen"]),
             min_lama_hole_pixels=int(vcfg.get("min_lama_hole_pixels", 0)),
+            adaptive_filter=bool(vcfg.get("adaptive_filter", False)),
+            photometric_refine=bool(vcfg.get("photometric_refine", False)),
         )
         t_v = time.time()
         variant_bytes = 0
@@ -486,6 +614,62 @@ def _norm_pq_pair(q_pred: float, q_gt: float) -> Tuple[float, float, float]:
     return raw_100, rel_unit, rel_raw
 
 
+def _score_onealign_video(md, frames: List[object]) -> Dict[str, object]:
+    """Run upstream OneAlign video scorer and capture 5-level distribution when exposed."""
+    with torch.inference_mode():
+        try:
+            res = md.score([frames], task_="quality", input_="video", return_dict=True)
+        except TypeError:
+            q_val = float(md.score([frames], task_="quality", input_="video"))
+            return {"q_raw": q_val, "pq_worldmark_100": round(100.0 * (q_val - 1.0) / 4.0, 4)}
+
+    if isinstance(res, dict) and "logits" in res and "scores" in res:
+        q_val = float(torch.as_tensor(res["scores"]).reshape(-1)[0].item())
+        return extract_five_level_distribution(res["logits"], reported_score=q_val)
+    q_val = float(torch.as_tensor(res).reshape(-1)[0].item())
+    return {"q_raw": q_val, "pq_worldmark_100": round(100.0 * (q_val - 1.0) / 4.0, 4)}
+
+
+def _compute_paired_deltas(
+    cand_scores: Dict[str, float],
+    base_scores: Dict[str, float],
+    scenarios: List[Dict[str, object]],
+) -> Dict[str, object]:
+    """Compare candidate vs baseline scenario-level PQ preserving paired slice breakdown."""
+    diffs: List[float] = []
+    by_slice: Dict[str, List[float]] = defaultdict(list)
+    improved = regressed = tied = 0
+    for sc in scenarios:
+        sid = str(sc["scenario_id"])
+        stype = str(sc["scenario_type"])
+        if sid not in cand_scores or sid not in base_scores:
+            continue
+        delta = cand_scores[sid] - base_scores[sid]
+        diffs.append(delta)
+        by_slice[stype].append(delta)
+        if delta > 1e-4:
+            improved += 1
+        elif delta < -1e-4:
+            regressed += 1
+        else:
+            tied += 1
+    if not diffs:
+        return {}
+    return {
+        "n_scenarios": len(diffs),
+        "mean_delta": round(float(np.mean(diffs)), 4),
+        "std_delta": round(float(np.std(diffs, ddof=1) if len(diffs) > 1 else 0.0), 4),
+        "min_delta": round(float(np.min(diffs)), 4),
+        "max_delta": round(float(np.max(diffs)), 4),
+        "scenarios_improved": improved,
+        "scenarios_regressed": regressed,
+        "scenarios_tied": tied,
+        "slice_mean_deltas": {
+            s: round(float(np.mean(by_slice[s])), 4) for s in SLICE_ORDER if by_slice.get(s)
+        },
+    }
+
+
 def run_score_stage(args: argparse.Namespace) -> int:
     manifest_path = args.out_dir / "render_manifest.json"
     if not manifest_path.exists():
@@ -503,14 +687,13 @@ def run_score_stage(args: argparse.Namespace) -> int:
         t_start = time.time()
         for idx, entry in enumerate(pending, start=1):
             fr = frames_1fps_pil(Path(str(entry["mp4_path"])))
-            with torch.inference_mode():
-                q_val = float(md.score([fr], task_="quality", input_="video"))
-            cached[str(entry["key"])] = {**entry, "q_raw": q_val, "n_frames_1fps": len(fr)}
+            scored = _score_onealign_video(md, fr)
+            cached[str(entry["key"])] = {**entry, **scored, "n_frames_1fps": len(fr)}
             if idx % 20 == 0 or idx == len(pending):
                 scores_path.write_text(json.dumps(cached, indent=2))
                 rate = idx / max(time.time() - t_start, 1e-3)
                 print(
-                    f"  [Q-Align {idx:03d}/{len(pending)}] {entry['key']} -> q={q_val:.4f} "
+                    f"  [Q-Align {idx:03d}/{len(pending)}] {entry['key']} -> q={scored['q_raw']:.4f} "
                     f"({rate:.2f} vid/s)",
                     flush=True,
                 )
@@ -520,25 +703,30 @@ def run_score_stage(args: argparse.Namespace) -> int:
     # Compute normalized PQ per variant, scenario, slice, and camera
     variants = ["gt"] + list(manifest["variants"])
     scenarios = manifest["scenarios"]
+    variant_cfgs = manifest.get("variant_configs", {})
 
     print("\n================ Q-ALIGN OFFICIAL CALIBRATION SUMMARY ================", flush=True)
     header = (
-        f"{'Variant':<18s} | {'PQ_norm1(1-5)':<13s} | {'PQ_ratio':<8s} | {'Q_raw':<6s} | "
+        f"{'Variant':<20s} | {'PQ_norm1(1-5)':<13s} | {'PQ_ratio':<8s} | {'Q_raw':<6s} | "
         f"{'Front':<6s} | {'Surr5':<6s} | {'PSNR':<6s} | {'EMC':<6s}"
     )
     print(header, flush=True)
     print("-" * len(header), flush=True)
 
     summary_out: Dict[str, object] = {}
+    scen_pq1_by_variant: Dict[str, Dict[str, float]] = {}
     for v in variants:
         scen_pqs_1: List[float] = []
         scen_pqs_r: List[float] = []
         raw_qs: List[float] = []
+        raw_100s: List[float] = []
         front_pqs: List[float] = []
         side_pqs: List[float] = []
         psnrs: List[float] = []
         emcs: List[float] = []
         by_slice: Dict[str, List[float]] = defaultdict(list)
+        video_rows: List[Dict[str, object]] = []
+        scen_pq1_map: Dict[str, float] = {}
 
         for sc in scenarios:
             sid = str(sc["scenario_id"])
@@ -550,10 +738,25 @@ def run_score_stage(args: argparse.Namespace) -> int:
                 pr_rec = cached[f"{v}__{sid}__{cam}"]
                 q_gt = float(gt_rec["q_raw"])
                 q_pr = float(pr_rec["q_raw"])
-                _, p1, pr = _norm_pq_pair(q_pr, q_gt)
+                raw100, p1, pr = _norm_pq_pair(q_pr, q_gt)
                 w_pq1 += w * p1
                 w_pqr += w * pr
                 raw_qs.append(q_pr)
+                raw_100s.append(raw100)
+                video_rows.append(
+                    {
+                        "scenario_id": sid,
+                        "scenario_type": stype,
+                        "camera": cam,
+                        "pq_worldmark_100": round(raw100, 3),
+                        "pq_norm_unit": round(p1, 3),
+                        "pq_norm_ratio": round(pr, 3),
+                        "q_raw": round(q_pr, 4),
+                        "q_gt": round(q_gt, 4),
+                        "level_probs": pr_rec.get("level_probs"),
+                        "psnr": pr_rec.get("psnr"),
+                    }
+                )
                 if cam == "front":
                     front_pqs.append(p1)
                 else:
@@ -564,41 +767,67 @@ def run_score_stage(args: argparse.Namespace) -> int:
                     emcs.append(float(pr_rec["emc_local"]))
             scen_pqs_1.append(w_pq1)
             scen_pqs_r.append(w_pqr)
+            scen_pq1_map[sid] = w_pq1
             by_slice[stype].append(w_pq1)
 
+        scen_pq1_by_variant[v] = scen_pq1_map
         m_pq1 = float(np.mean(scen_pqs_1))
         m_pqr = float(np.mean(scen_pqs_r))
         m_q = float(np.mean(raw_qs))
+        m_wm = float(np.mean(raw_100s))
         m_fr = float(np.mean(front_pqs))
         m_sd = float(np.mean(side_pqs))
         m_psnr = float(np.mean(psnrs)) if psnrs else float("nan")
         m_emc = float(np.mean(emcs)) if emcs else float("nan")
         print(
-            f"{v:<18s} | {m_pq1:13.2f} | {m_pqr:8.2f} | {m_q:6.3f} | "
+            f"{v:<20s} | {m_pq1:13.2f} | {m_pqr:8.2f} | {m_q:6.3f} | "
             f"{m_fr:6.2f} | {m_sd:6.2f} | {m_psnr:6.2f} | {m_emc:6.3f}",
             flush=True,
         )
         slice_means = {s: float(np.mean(by_slice[s])) for s in SLICE_ORDER if by_slice.get(s)}
+        worst_25 = sorted(video_rows, key=lambda r: (r["pq_norm_unit"], r["pq_worldmark_100"]))[:25]
         summary_out[v] = {
+            "config": variant_cfgs.get(v) or (
+                {**VARIANT_SPECS[v], "crf": manifest.get("crf")} if v in VARIANT_SPECS else None
+            ),
             "pq_norm_unit": round(m_pq1, 3),
             "pq_norm_ratio": round(m_pqr, 3),
+            "pq_worldmark_mean": round(m_wm, 3),
             "q_raw_mean": round(m_q, 4),
             "front_pq": round(m_fr, 3),
             "surround5_pq": round(m_sd, 3),
             "mean_psnr": None if np.isnan(m_psnr) else round(m_psnr, 3),
             "mean_emc_local": None if np.isnan(m_emc) else round(m_emc, 4),
             "slices": {k: round(val, 2) for k, val in slice_means.items()},
+            "worst_25_videos": worst_25,
         }
+
+    baseline_var = args.baseline_variant if args.baseline_variant in scen_pq1_by_variant else (
+        manifest["variants"][0] if manifest["variants"] else None
+    )
+    if baseline_var is not None:
+        base_map = scen_pq1_by_variant[baseline_var]
+        for v in manifest["variants"]:
+            if v == baseline_var:
+                continue
+            summary_out[v]["paired_vs_baseline"] = {
+                "baseline_variant": baseline_var,
+                **_compute_paired_deltas(scen_pq1_by_variant[v], base_map, scenarios),
+            }
 
     print("\n--- Per-Slice Breakdown (PQ_norm1) ---", flush=True)
     for v in manifest["variants"]:
         sl = summary_out[v]["slices"]
         line = " | ".join(f"{k[:14]}={val:.1f}" for k, val in sl.items())
-        print(f"  {v:<16s}: {line}", flush=True)
+        delta_txt = ""
+        paired = summary_out[v].get("paired_vs_baseline")
+        if paired:
+            delta_txt = f" | dBase={paired['mean_delta']:+.2f} (+{paired['scenarios_improved']}/-{paired['scenarios_regressed']})"
+        print(f"  {v:<20s}: {line}{delta_txt}", flush=True)
 
     summary_path = args.out_dir / "calibration_summary.json"
     summary_path.write_text(json.dumps(summary_out, indent=2))
-    print(f"\n[+] Saved calibration summary to {summary_path}", flush=True)
+    print(f"\n[+] Saved calibration summary (incl. worst 25 videos) to {summary_path}", flush=True)
     return 0
 
 
@@ -609,11 +838,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--val-tar", type=Path, default=None, help="Path to val_calib.tar if not extracted")
     parser.add_argument("--val-trajectories", type=Path, default=PROJECT_ROOT / "data" / "val_trajectories.jsonl")
     parser.add_argument("--out-dir", type=Path, default=Path("/kaggle/working/qalign_calib"))
-    parser.add_argument("--variants", type=str, default="analytical_r2,analytical_lama_r2,depth_lama_r2,depth_lama_sharp")
+    parser.add_argument("--variants", type=str, default="cand_a_baseline,cand_b_scale1,cand_c_adaptive,cand_d_photometric,cand_e_selective")
+    parser.add_argument("--baseline-variant", type=str, default="cand_a_baseline")
     parser.add_argument("--depth-model", type=str, default="depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf")
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--crf", type=int, default=14)
+    parser.add_argument("--scenarios", type=str, default="", help="Optional comma-separated validation scenario IDs")
     parser.add_argument("--limit", type=int, default=0, help="Optional limit on number of val scenarios (0 = all matched)")
+    parser.add_argument("--no-stratify", action="store_true", help="Disable stratified slice sampling when --limit > 0")
     return parser.parse_args(argv)
 
 

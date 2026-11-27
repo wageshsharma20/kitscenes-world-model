@@ -54,6 +54,17 @@ def _box_blur(image: np.ndarray, radius: int) -> np.ndarray:
     return total / float(k * k)
 
 
+def _smooth_1d(values: np.ndarray, smooth_window: int) -> np.ndarray:
+    """Box-smooth a 1-D per-frame parameter curve with edge padding."""
+    if smooth_window <= 1 or len(values) <= 1:
+        return values.astype(np.float32)
+    kernel = np.ones(smooth_window, dtype=np.float32) / float(smooth_window)
+    pad_left = smooth_window // 2
+    pad_right = smooth_window - 1 - pad_left
+    padded = np.pad(values.astype(np.float32), (pad_left, pad_right), mode="edge")
+    return np.convolve(padded, kernel, mode="valid")[: len(values)].astype(np.float32)
+
+
 def photometric_gains(
     frames: np.ndarray,
     anchor: Optional[np.ndarray] = None,
@@ -80,14 +91,40 @@ def photometric_gains(
     gains = 1.0 + (gains - 1.0) * strength
     offsets = (target_mean - means) * strength
 
-    if smooth_window > 1 and len(gains) > 1:
-        kernel = np.ones(smooth_window, dtype=np.float32) / smooth_window
-        padded = np.pad(gains, (smooth_window // 2, smooth_window // 2), mode="edge")
-        gains = np.convolve(padded, kernel, mode="valid")[: len(gains)]
-        padded = np.pad(offsets, (smooth_window // 2, smooth_window // 2), mode="edge")
-        offsets = np.convolve(padded, kernel, mode="valid")[: len(offsets)]
-
+    gains = _smooth_1d(gains, smooth_window)
+    offsets = _smooth_1d(offsets, smooth_window)
     return gains.astype(np.float32), offsets.astype(np.float32)
+
+
+def saturation_gains(
+    frames: np.ndarray,
+    anchor: Optional[np.ndarray] = None,
+    strength: float = 1.0,
+    max_scale: float = 1.25,
+    smooth_window: int = 5,
+) -> np.ndarray:
+    """Per-frame chroma gain anchored to `t=0` to prevent warp/compression saturation drift."""
+    if anchor is None:
+        anchor = frames[0]
+    anchor_f = anchor.astype(np.float32)
+    anchor_y = (anchor_f @ LUMA)[..., None]
+    anchor_chroma = float(np.sqrt(np.mean(np.sum((anchor_f - anchor_y) ** 2, axis=-1)))) + 1e-3
+
+    data_f = frames.astype(np.float32)
+    clip_y = (data_f @ LUMA)[..., None]
+    clip_chroma = np.sqrt(np.mean(np.sum((data_f - clip_y) ** 2, axis=-1), axis=(1, 2))) + 1e-3
+
+    gains = np.clip(anchor_chroma / clip_chroma, 1.0 / max_scale, max_scale)
+    gains = 1.0 + (gains - 1.0) * strength
+    return _smooth_1d(gains, smooth_window)
+
+
+def apply_saturation(frames: np.ndarray, sat_gains: np.ndarray) -> np.ndarray:
+    """Scale opponent chroma around per-pixel luma without shifting exposure."""
+    data = frames.astype(np.float32)
+    y = (data @ LUMA)[..., None]
+    out = y + (data - y) * sat_gains[:, None, None, None]
+    return np.clip(out, 0, 255).astype(np.uint8)
 
 
 def apply_photometric(frames: np.ndarray, gains: np.ndarray, offsets: np.ndarray) -> np.ndarray:
@@ -128,6 +165,7 @@ def refine_clip(
     sharpen_amount: float = 0.30,
     equalize_strength: float = 0.5,
     photometric_strength: float = 1.0,
+    saturation_strength: float = 0.0,
 ) -> np.ndarray:
     """Run the full refinement chain on one camera clip."""
     if frames.ndim != 4 or frames.shape[0] != spec.FRAME_COUNT:
@@ -136,6 +174,9 @@ def refine_clip(
         )
     gains, offsets = photometric_gains(frames, anchor=anchor, strength=photometric_strength)
     out = apply_photometric(frames, gains, offsets)
+    if saturation_strength > 0:
+        sat_g = saturation_gains(out, anchor=anchor, strength=saturation_strength)
+        out = apply_saturation(out, sat_g)
     out = equalize_channels(out, strength=equalize_strength)
     out = unsharp(out, radius=2, amount=sharpen_amount)
     out[0] = frames[0] if anchor is None else anchor

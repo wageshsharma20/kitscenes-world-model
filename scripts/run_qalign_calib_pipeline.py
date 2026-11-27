@@ -36,9 +36,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--work-dir", type=Path, default=Path("/content/kitscenes_work"))
     parser.add_argument("--val-tar", type=Path, default=None)
     parser.add_argument("--val-dir", type=Path, default=None)
-    parser.add_argument("--variants", type=str, default="analytical_r2,analytical_lama_r2,depth_lama_r2,depth_lama_sharp")
+    parser.add_argument("--variants", type=str, default="cand_a_baseline,cand_b_scale1,cand_c_adaptive,cand_d_photometric,cand_e_selective")
     parser.add_argument("--crf", type=int, default=14)
     parser.add_argument("--device", type=str, default="cuda:0")
+    parser.add_argument("--scenarios", type=str, default="")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--score-only", action="store_true", help="Skip val extraction & video rendering; score existing render_manifest.json")
     args = parser.parse_args(argv)
@@ -103,6 +104,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             render_cmd.extend(["--val-dir", str(val_dir)])
         if args.val_tar is not None:
             render_cmd.extend(["--val-tar", str(args.val_tar)])
+        if args.scenarios.strip():
+            render_cmd.extend(["--scenarios", args.scenarios.strip()])
         if args.limit > 0:
             render_cmd.extend(["--limit", str(args.limit)])
         _run(render_cmd)

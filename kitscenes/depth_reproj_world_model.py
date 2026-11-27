@@ -29,6 +29,7 @@ import torch
 import torch.nn.functional as F
 
 from kitscenes import spec
+from kitscenes.refine import refine_clip
 from kitscenes.video_engine import CameraRig
 
 CAMERA_NEIGHBORS: Dict[str, Tuple[str, ...]] = {
@@ -324,6 +325,11 @@ class Depth3DFullFoVWorldModel:
         crf_sharpen: float = 0.0,
         min_lama_hole_pixels: int = 0,
         chain_warps: bool = False,
+        adaptive_filter: bool = False,
+        photometric_refine: bool = False,
+        photometric_strength: float = 1.0,
+        saturation_strength: float = 0.90,
+        equalize_strength: float = 0.20,
     ) -> None:
         self.rig = rig or CameraRig(width=spec.WIDTH, height=spec.HEIGHT, is_provisional=False)
         self.device = torch.device(device if (device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -338,6 +344,12 @@ class Depth3DFullFoVWorldModel:
         # t=0 across the whole clip. One step is 0.2 s of ego motion, so the planar stretch
         # (and therefore the disocclusion area the inpainter has to invent) is far smaller.
         self.chain_warps = bool(chain_warps)
+        self.adaptive_filter = bool(adaptive_filter)
+        self.photometric_refine = bool(photometric_refine)
+        self.photometric_strength = float(photometric_strength)
+        self.saturation_strength = float(saturation_strength)
+        self.equalize_strength = float(equalize_strength)
+        self._mip_cache: Dict[int, Tuple[torch.Tensor, torch.Tensor]] = {}
         # Per-camera fraction of each output frame that had to be synthesised rather than
         # sampled from observed pixels. Cheap, model-free proxy for how much a frame can
         # drift away from real footage; filled by generate_scenario.
@@ -470,14 +482,111 @@ class Depth3DFullFoVWorldModel:
             )
             cov = cov & src_road
 
-        sampled = F.grid_sample(
+        sampled = self._sample_with_optional_mips(src_img_hi, grid, u_src, v_src, in_bounds, sw)
+        return sampled, cov
+
+    @staticmethod
+    def _gaussian_blur_2d(img: torch.Tensor, sigma: float) -> torch.Tensor:
+        """Separable Gaussian prefilter on (1, 3, H, W) float tensors."""
+        radius = max(1, int(math.ceil(2.5 * sigma)))
+        coords = torch.arange(-radius, radius + 1, dtype=img.dtype, device=img.device)
+        k1d = torch.exp(-0.5 * (coords / sigma) ** 2)
+        k1d = k1d / k1d.sum()
+        kh = k1d.view(1, 1, 1, -1).repeat(img.shape[1], 1, 1, 1)
+        kv = k1d.view(1, 1, -1, 1).repeat(img.shape[1], 1, 1, 1)
+        pad_h = F.pad(img, (radius, radius, 0, 0), mode="replicate")
+        blur_h = F.conv2d(pad_h, kh, groups=img.shape[1])
+        pad_v = F.pad(blur_h, (0, 0, radius, radius), mode="replicate")
+        return F.conv2d(pad_v, kv, groups=img.shape[1])
+
+    def _get_mip_levels(self, src_img_hi: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Return cached (level1, level2) Gaussian mip approximations for `src_img_hi`."""
+        key = src_img_hi.data_ptr()
+        cached = self._mip_cache.get(key)
+        if cached is not None and cached[0].shape == src_img_hi.shape:
+            return cached
+        l1 = self._gaussian_blur_2d(src_img_hi, sigma=0.85)
+        l2 = self._gaussian_blur_2d(l1, sigma=1.45)
+        self._mip_cache[key] = (l1, l2)
+        return l1, l2
+
+    def _compute_jacobian_lod(
+        self,
+        u_src: torch.Tensor,
+        v_src: torch.Tensor,
+        in_bounds: torch.Tensor,
+        sky_weights: Optional[torch.Tensor],
+        src_h: int,
+        src_w: int,
+    ) -> torch.Tensor:
+        """Estimate per-pixel continuous mip level log2(footprint) > 0 only on minification."""
+        scale_u = float(max(src_w - 1, 1)) / float(max(self.render_w - 1, 1))
+        scale_v = float(max(src_h - 1, 1)) / float(max(self.render_h - 1, 1))
+        us = (u_src * scale_u).unsqueeze(0).unsqueeze(0)
+        vs = (v_src * scale_v).unsqueeze(0).unsqueeze(0)
+        in_b_4d = in_bounds.unsqueeze(0).unsqueeze(0)
+
+        u_px = F.pad(us, (1, 1, 0, 0), mode="replicate")[0, 0]
+        v_px = F.pad(vs, (1, 1, 0, 0), mode="replicate")[0, 0]
+        b_px = F.pad(in_b_4d, (1, 1, 0, 0), mode="constant", value=False)[0, 0]
+        du_dx = 0.5 * (u_px[:, 2:] - u_px[:, :-2])
+        dv_dx = 0.5 * (v_px[:, 2:] - v_px[:, :-2])
+        valid_x = b_px[:, 2:] & b_px[:, :-2] & in_bounds
+
+        u_py = F.pad(us, (0, 0, 1, 1), mode="replicate")[0, 0]
+        v_py = F.pad(vs, (0, 0, 1, 1), mode="replicate")[0, 0]
+        b_py = F.pad(in_b_4d, (0, 0, 1, 1), mode="constant", value=False)[0, 0]
+        du_dy = 0.5 * (u_py[2:, :] - u_py[:-2, :])
+        dv_dy = 0.5 * (v_py[2:, :] - v_py[:-2, :])
+        valid_y = b_py[2:, :] & b_py[:-2, :] & in_bounds
+
+        if sky_weights is not None:
+            sw_4d = sky_weights.unsqueeze(0).unsqueeze(0)
+            s_px = F.pad(sw_4d, (1, 1, 0, 0), mode="replicate")[0, 0]
+            s_py = F.pad(sw_4d, (0, 0, 1, 1), mode="replicate")[0, 0]
+            valid_x = valid_x & ((s_px[:, 2:] - s_px[:, :-2]).abs() < 0.25)
+            valid_y = valid_y & ((s_py[2:, :] - s_py[:-2, :]).abs() < 0.25)
+
+        sq_x = torch.where(valid_x, du_dx * du_dx + dv_dx * dv_dx, torch.ones_like(du_dx))
+        sq_y = torch.where(valid_y, du_dy * du_dy + dv_dy * dv_dy, torch.ones_like(du_dy))
+        rms_scale = torch.sqrt(0.5 * (sq_x + sq_y)).clamp(min=1.0, max=4.0)
+        return torch.log2(rms_scale).clamp(min=0.0, max=2.0)
+
+    def _sample_with_optional_mips(
+        self,
+        src_img_hi: torch.Tensor,
+        grid: torch.Tensor,
+        u_src: torch.Tensor,
+        v_src: torch.Tensor,
+        in_bounds: torch.Tensor,
+        sky_weights: Optional[torch.Tensor],
+    ) -> torch.Tensor:
+        s0 = F.grid_sample(
             src_img_hi,
             grid,
             mode="bicubic",
             padding_mode="zeros",
             align_corners=True,
         )[0].clamp(0.0, 1.0)
-        return sampled, cov
+        if not self.adaptive_filter:
+            return s0
+
+        lod = self._compute_jacobian_lod(
+            u_src, v_src, in_bounds, sky_weights, src_img_hi.shape[-2], src_img_hi.shape[-1]
+        )
+        if not bool((lod > 0.05).any()):
+            return s0
+
+        l1, l2 = self._get_mip_levels(src_img_hi)
+        s1 = F.grid_sample(l1, grid, mode="bilinear", padding_mode="zeros", align_corners=True)[0].clamp(0.0, 1.0)
+        w2 = (lod - 1.0).clamp(0.0, 1.0)
+        w1 = lod.clamp(0.0, 1.0) - w2
+        w0 = 1.0 - w1 - w2
+
+        if bool((w2 > 0.01).any()):
+            s2 = F.grid_sample(l2, grid, mode="bilinear", padding_mode="zeros", align_corners=True)[0].clamp(0.0, 1.0)
+            return (w0.unsqueeze(0) * s0 + w1.unsqueeze(0) * s1 + w2.unsqueeze(0) * s2).clamp(0.0, 1.0)
+        return (w0.unsqueeze(0) * s0 + w1.unsqueeze(0) * s1).clamp(0.0, 1.0)
 
     def _render_foreground_3d_overlay(
         self,
@@ -711,6 +820,7 @@ class Depth3DFullFoVWorldModel:
     ) -> Dict[str, np.ndarray]:
         """Generate 25-frame H.264-ready RGB sequences for requested cameras."""
         target_cameras = list(cameras) if cameras is not None else list(spec.CAMERAS)
+        self._mip_cache.clear()
 
         t0_hi_np: Dict[str, np.ndarray] = {}
         t0_hi_t: Dict[str, torch.Tensor] = {}
@@ -977,12 +1087,23 @@ class Depth3DFullFoVWorldModel:
                         + (1.0 - ego_alpha_np) * frame_np.astype(np.float32)
                     ).clip(0, 255).astype(np.uint8)
 
-                if self.crf_sharpen > 0.0:
-                    blur = cv2.GaussianBlur(frame_np, (0, 0), 1.0)
-                    frame_np = cv2.addWeighted(frame_np, 1.0 + self.crf_sharpen, blur, -self.crf_sharpen, 0)
-
                 frames_out[k] = frame_np
+
+            if self.photometric_refine:
+                frames_out = refine_clip(
+                    frames_out,
+                    anchor=t0_out_rgb,
+                    sharpen_amount=0.0,
+                    equalize_strength=self.equalize_strength,
+                    photometric_strength=self.photometric_strength,
+                    saturation_strength=self.saturation_strength,
+                )
+            if self.crf_sharpen > 0.0:
+                for k in range(spec.FRAME_COUNT):
+                    blur = cv2.GaussianBlur(frames_out[k], (0, 0), 1.0)
+                    frames_out[k] = cv2.addWeighted(frames_out[k], 1.0 + self.crf_sharpen, blur, -self.crf_sharpen, 0)
 
             outputs[cam] = frames_out
 
+        self._mip_cache.clear()
         return outputs

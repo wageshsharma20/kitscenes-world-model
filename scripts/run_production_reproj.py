@@ -249,24 +249,22 @@ def _gpu_worker(
 
     depth_fn = build_depth_fn(str(cfg["depth_model"]), device=device) if cfg["use_depth"] else None
     lama_fn = build_lama_fn(device=device) if cfg["use_lama"] else None
-    model_depth = Depth3DFullFoVWorldModel(
-        device=device,
-        render_scale=int(cfg["render_scale"]),
-        depth_fn=depth_fn,
-        inpaint_fn=lama_fn,
-        crf_sharpen=float(cfg["crf_sharpen"]),
-        min_lama_hole_pixels=int(cfg.get("min_lama_hole_pixels", 0)),
-    )
+    model_kwargs = {
+        "device": device,
+        "render_scale": int(cfg["render_scale"]),
+        "inpaint_fn": lama_fn,
+        "crf_sharpen": float(cfg["crf_sharpen"]),
+        "min_lama_hole_pixels": int(cfg.get("min_lama_hole_pixels", 0)),
+        "adaptive_filter": bool(cfg.get("adaptive_filter", False)),
+        "photometric_refine": bool(cfg.get("photometric_refine", False)),
+        "photometric_strength": float(cfg.get("photometric_strength", 1.0)),
+        "saturation_strength": float(cfg.get("saturation_strength", 0.90)),
+        "equalize_strength": float(cfg.get("equalize_strength", 0.20)),
+    }
+    model_depth = Depth3DFullFoVWorldModel(depth_fn=depth_fn, **model_kwargs)
     no_depth_slices = set(cfg.get("no_depth_slices", ()))
     model_analytical = (
-        Depth3DFullFoVWorldModel(
-            device=device,
-            render_scale=int(cfg["render_scale"]),
-            depth_fn=None,
-            inpaint_fn=lama_fn,
-            crf_sharpen=float(cfg["crf_sharpen"]),
-            min_lama_hole_pixels=int(cfg.get("min_lama_hole_pixels", 0)),
-        )
+        Depth3DFullFoVWorldModel(depth_fn=None, **model_kwargs)
         if (no_depth_slices and depth_fn is not None)
         else model_depth
     )
@@ -356,6 +354,11 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--no-lama", action="store_true", default=False)
     parser.add_argument("--min-lama-hole-pixels", type=int, default=0, help="Skip LaMa when hole pixel count is below threshold")
     parser.add_argument("--render-scale", type=int, default=2)
+    parser.add_argument("--adaptive-filter", action="store_true", default=False, help="Enable Jacobian-aware minification mip filtering")
+    parser.add_argument("--photometric-refine", action="store_true", default=False, help="Anchor exposure and saturation to t=0 frame")
+    parser.add_argument("--photometric-strength", type=float, default=1.0)
+    parser.add_argument("--saturation-strength", type=float, default=0.90)
+    parser.add_argument("--equalize-strength", type=float, default=0.20)
     parser.add_argument("--crf-sharpen", type=float, default=0.0)
     parser.add_argument("--crf", type=int, default=14)
     parser.add_argument("--max-zip-gib", type=float, default=2.95, help="Auto-transcode to --fallback-crf if packed archive exceeds this GiB limit")
@@ -437,6 +440,11 @@ def _build_initial_manifest(
         },
         "render_config": {
             "render_scale": int(args.render_scale),
+            "adaptive_filter": bool(cfg["adaptive_filter"]),
+            "photometric_refine": bool(cfg["photometric_refine"]),
+            "photometric_strength": float(cfg["photometric_strength"]),
+            "saturation_strength": float(cfg["saturation_strength"]),
+            "equalize_strength": float(cfg["equalize_strength"]),
             "depth_enabled": bool(cfg["use_depth"]),
             "depth_model": str(args.depth_model) if cfg["use_depth"] else None,
             "no_depth_slices": list(cfg["no_depth_slices"]),
@@ -577,6 +585,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "use_lama": not args.no_lama,
         "min_lama_hole_pixels": args.min_lama_hole_pixels,
         "render_scale": args.render_scale,
+        "adaptive_filter": bool(args.adaptive_filter),
+        "photometric_refine": bool(args.photometric_refine),
+        "photometric_strength": float(args.photometric_strength),
+        "saturation_strength": float(args.saturation_strength),
+        "equalize_strength": float(args.equalize_strength),
         "crf_sharpen": args.crf_sharpen,
         "crf": args.crf,
     }

@@ -74,3 +74,26 @@ def test_summarize_reports_clip_statistics():
     stats = refine.summarize(list(_clip()))
     assert set(stats) == {"mean_luma", "std_luma", "temporal_flicker", "sharpness"}
     assert all(np.isfinite(value) for value in stats.values())
+
+
+def test_saturation_anchoring_restores_chroma_without_shifting_luma():
+    rng = np.random.default_rng(7)
+    base = rng.integers(50, 200, size=(spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8)
+    clip = np.repeat(base[None, ...], spec.FRAME_COUNT, axis=0)
+    # Boost chroma on frames 1..24 while keeping roughly neutral anchor chroma at frame 0
+    clip_f = clip.astype(np.float32)
+    y = (clip_f @ refine.LUMA)[..., None]
+    clip_f[1:] = np.clip(y[1:] + 1.35 * (clip_f[1:] - y[1:]), 0, 255)
+    drifted = clip_f.astype(np.uint8)
+
+    sat_g = refine.saturation_gains(drifted, anchor=drifted[0], smooth_window=1)
+    assert sat_g[0] == pytest.approx(1.0, abs=1e-4)
+    assert sat_g[10] < 0.90
+
+    out = refine.refine_clip(drifted, anchor=drifted[0], sharpen_amount=0.0, equalize_strength=0.0, saturation_strength=1.0)
+    anchor_c = float(np.sqrt(np.mean(np.sum((drifted[0].astype(np.float32) - y[0]) ** 2, axis=-1))))
+    before_c = float(np.sqrt(np.mean(np.sum((drifted[10].astype(np.float32) - y[10]) ** 2, axis=-1))))
+    out_y10 = (out[10].astype(np.float32) @ refine.LUMA)[..., None]
+    after_c = float(np.sqrt(np.mean(np.sum((out[10].astype(np.float32) - out_y10) ** 2, axis=-1))))
+    assert abs(after_c - anchor_c) < abs(before_c - anchor_c)
+    assert float(refine.luma(out[10:11]).mean()) == pytest.approx(float(refine.luma(drifted[:1]).mean()), abs=2.0)
