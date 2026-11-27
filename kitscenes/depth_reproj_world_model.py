@@ -323,6 +323,7 @@ class Depth3DFullFoVWorldModel:
         inpaint_fn: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
         crf_sharpen: float = 0.0,
         min_lama_hole_pixels: int = 0,
+        chain_warps: bool = False,
     ) -> None:
         self.rig = rig or CameraRig(width=spec.WIDTH, height=spec.HEIGHT, is_provisional=False)
         self.device = torch.device(device if (device != "cuda" or torch.cuda.is_available()) else "cpu")
@@ -333,6 +334,14 @@ class Depth3DFullFoVWorldModel:
         self.inpaint_fn = inpaint_fn
         self.crf_sharpen = float(crf_sharpen)
         self.min_lama_hole_pixels = max(0, int(min_lama_hole_pixels))
+        # Chain each frame off the frame rendered immediately before it instead of warping
+        # t=0 across the whole clip. One step is 0.2 s of ego motion, so the planar stretch
+        # (and therefore the disocclusion area the inpainter has to invent) is far smaller.
+        self.chain_warps = bool(chain_warps)
+        # Per-camera fraction of each output frame that had to be synthesised rather than
+        # sampled from observed pixels. Cheap, model-free proxy for how much a frame can
+        # drift away from real footage; filled by generate_scenario.
+        self.last_hole_fraction: Dict[str, List[float]] = {}
 
         self.k_render: Dict[str, np.ndarray] = {}
         self.r_mats: Dict[str, np.ndarray] = {}
@@ -824,6 +833,10 @@ class Depth3DFullFoVWorldModel:
         for cam in target_cameras:
             frames_out = np.empty((spec.FRAME_COUNT, spec.HEIGHT, spec.WIDTH, 3), dtype=np.uint8)
             ego_mask_t = ego_masks_t[cam]
+            self.last_hole_fraction[cam] = []
+            prev_ren_t: Optional[torch.Tensor] = None
+            prev_hole_t: Optional[torch.Tensor] = None
+            prev_pose: Tuple[float, float, float] = (0.0, 0.0, 0.0)
             t0_ren_t = (
                 t0_hi_t[cam][0]
                 if t0_hi_t[cam].shape[-2:] == (self.render_h, self.render_w)
@@ -845,9 +858,24 @@ class Depth3DFullFoVWorldModel:
                     src_excl_cam = ego_mask_t
                     if cam in fg_masks_t:
                         src_excl_cam = src_excl_cam | (fg_masks_t[cam] & (self.sky_weights[cam] <= 0.25))
-                    frame_ren, cov_mask = self._warp_backward_analytical(
-                        cam, (0.0, 0.0, 0.0), cam, pose_k, t0_hi_t[cam], src_excl_cam
-                    )
+                    if self.chain_warps and prev_ren_t is not None:
+                        # Sample the previous rendered frame; its own unfilled holes are
+                        # excluded so they cannot be dragged forward and re-stretched.
+                        prev_excl = src_excl_cam | (prev_hole_t if prev_hole_t is not None else False)
+                        frame_ren, cov_mask = self._warp_backward_analytical(
+                            cam, prev_pose, cam, pose_k, prev_ren_t, prev_excl
+                        )
+                        # t=0 stays the photometric reference and the fallback fill.
+                        t0_rgb, t0_cov = self._warp_backward_analytical(
+                            cam, (0.0, 0.0, 0.0), cam, pose_k, t0_hi_t[cam], src_excl_cam
+                        )
+                        frame_ren, cov_mask = self._match_and_composite(
+                            frame_ren, cov_mask, t0_rgb, t0_cov, sky_weights=self.sky_weights[cam]
+                        )
+                    else:
+                        frame_ren, cov_mask = self._warp_backward_analytical(
+                            cam, (0.0, 0.0, 0.0), cam, pose_k, t0_hi_t[cam], src_excl_cam
+                        )
 
                     # 2. Adjacent 360-degree neighbor cameras fill horizontal/yaw margins
                     if not bool((cov_mask | ego_mask_t).all()):
@@ -911,6 +939,13 @@ class Depth3DFullFoVWorldModel:
                             frame_ren = torch.where(fg_cov.unsqueeze(0), fg_rgb, frame_ren)
                             cov_mask = cov_mask | fg_cov
 
+                if self.chain_warps:
+                    # grid_sample expects a batch dimension; keep the render-resolution frame so
+                    # the next step does not have to grow it back from output size.
+                    prev_ren_t = frame_ren.detach().unsqueeze(0)
+                    prev_hole_t = (~cov_mask) & (~ego_mask_t)
+                    prev_pose = pose_k
+
                 if self.render_scale > 1:
                     frame_out_t = F.interpolate(
                         frame_ren.unsqueeze(0), size=(spec.HEIGHT, spec.WIDTH), mode="area"
@@ -930,6 +965,7 @@ class Depth3DFullFoVWorldModel:
                 frame_np = (frame_out_t.permute(1, 2, 0).detach().cpu().numpy() * 255.0).clip(0, 255).astype(np.uint8)
                 world_cov_np = cov_out.detach().cpu().numpy()
                 hole_np = (~world_cov_np) & (~ego_out_np)
+                self.last_hole_fraction[cam].append(float(hole_np.mean()))
                 if np.any(hole_np):
                     source_valid = world_cov_np & (~ego_out_np)
                     frame_np = self._fill_residual_holes(frame_np, hole_np, source_valid_mask=source_valid)
