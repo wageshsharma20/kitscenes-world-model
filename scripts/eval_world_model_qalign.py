@@ -122,6 +122,39 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
         "adaptive_filter": True,
         "photometric_refine": True,
     },
+    # Stage B.2 scale=2 candidates (isolating LaMa and clean photometric anchoring without scale=1/adaptive penalty)
+    "cand_f_r2_lama": {
+        "provenance_note": "Scale 2 + selective LaMa hole repair (>=1200 px) vs baseline A",
+        "use_depth": False,
+        "use_lama": True,
+        "render_scale": 2,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 1200,
+        "adaptive_filter": False,
+        "photometric_refine": False,
+    },
+    "cand_g_r2_photo": {
+        "provenance_note": "Scale 2 + clean photometric/saturation anchoring (preserve_frame0=False, equalize=0.0) vs A",
+        "use_depth": False,
+        "use_lama": False,
+        "render_scale": 2,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 0,
+        "adaptive_filter": False,
+        "photometric_refine": True,
+        "equalize_strength": 0.0,
+    },
+    "cand_h_r2_photo_lama": {
+        "provenance_note": "Scale 2 + clean photometric anchoring + selective LaMa hole repair (>=1200 px)",
+        "use_depth": False,
+        "use_lama": True,
+        "render_scale": 2,
+        "crf_sharpen": 0.24,
+        "min_lama_hole_pixels": 1200,
+        "adaptive_filter": False,
+        "photometric_refine": True,
+        "equalize_strength": 0.0,
+    },
 }
 
 LEVEL_NAMES: Tuple[str, ...] = ("excellent", "good", "fair", "poor", "bad")
@@ -483,6 +516,7 @@ def run_render_stage(args: argparse.Namespace) -> int:
             min_lama_hole_pixels=int(vcfg.get("min_lama_hole_pixels", 0)),
             adaptive_filter=bool(vcfg.get("adaptive_filter", False)),
             photometric_refine=bool(vcfg.get("photometric_refine", False)),
+            equalize_strength=float(vcfg.get("equalize_strength", 0.20)),
         )
         t_v = time.time()
         variant_bytes = 0

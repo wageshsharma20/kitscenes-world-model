@@ -166,6 +166,7 @@ def refine_clip(
     equalize_strength: float = 0.5,
     photometric_strength: float = 1.0,
     saturation_strength: float = 0.0,
+    preserve_frame0: bool = True,
 ) -> np.ndarray:
     """Run the full refinement chain on one camera clip."""
     if frames.ndim != 4 or frames.shape[0] != spec.FRAME_COUNT:
@@ -179,7 +180,8 @@ def refine_clip(
         out = apply_saturation(out, sat_g)
     out = equalize_channels(out, strength=equalize_strength)
     out = unsharp(out, radius=2, amount=sharpen_amount)
-    out[0] = frames[0] if anchor is None else anchor
+    if preserve_frame0:
+        out[0] = frames[0] if anchor is None else anchor
     return out
 
 

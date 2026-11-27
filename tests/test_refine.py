@@ -97,3 +97,17 @@ def test_saturation_anchoring_restores_chroma_without_shifting_luma():
     after_c = float(np.sqrt(np.mean(np.sum((out[10].astype(np.float32) - out_y10) ** 2, axis=-1))))
     assert abs(after_c - anchor_c) < abs(before_c - anchor_c)
     assert float(refine.luma(out[10:11]).mean()) == pytest.approx(float(refine.luma(drifted[:1]).mean()), abs=2.0)
+
+
+def test_refine_clip_can_preserve_moving_frame0_when_anchor_is_t0():
+    clip = _clip()
+    anchor = np.full_like(clip[0], 125)
+    clip[0] = np.clip(clip[0].astype(np.int16) - 20, 0, 255).astype(np.uint8)
+    out = refine.refine_clip(
+        clip,
+        anchor=anchor,
+        sharpen_amount=0.0,
+        equalize_strength=0.0,
+        preserve_frame0=False,
+    )
+    assert not np.array_equal(out[0], anchor)

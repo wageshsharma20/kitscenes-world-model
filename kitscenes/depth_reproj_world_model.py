@@ -1097,6 +1097,7 @@ class Depth3DFullFoVWorldModel:
                     equalize_strength=self.equalize_strength,
                     photometric_strength=self.photometric_strength,
                     saturation_strength=self.saturation_strength,
+                    preserve_frame0=False,
                 )
             if self.crf_sharpen > 0.0:
                 for k in range(spec.FRAME_COUNT):

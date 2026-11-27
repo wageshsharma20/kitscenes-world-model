@@ -28,6 +28,13 @@ def test_stage_b_variant_specs_explicit_configs():
     assert eq.VARIANT_SPECS["cand_d_photometric"]["photometric_refine"] is True
     assert eq.VARIANT_SPECS["cand_e_selective"]["use_lama"] is True
     assert int(eq.VARIANT_SPECS["cand_e_selective"]["min_lama_hole_pixels"]) > 0
+    for name in ("cand_f_r2_lama", "cand_g_r2_photo", "cand_h_r2_photo_lama"):
+        assert eq.VARIANT_SPECS[name]["render_scale"] == 2
+        assert eq.VARIANT_SPECS[name]["adaptive_filter"] is False
+    assert eq.VARIANT_SPECS["cand_f_r2_lama"]["use_lama"] is True
+    assert eq.VARIANT_SPECS["cand_f_r2_lama"]["photometric_refine"] is False
+    assert eq.VARIANT_SPECS["cand_g_r2_photo"]["photometric_refine"] is True
+    assert eq.VARIANT_SPECS["cand_g_r2_photo"]["equalize_strength"] == 0.0
 
 
 def test_jacobian_lod_identity_vs_minification():
