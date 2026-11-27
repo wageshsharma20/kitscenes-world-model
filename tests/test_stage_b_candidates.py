@@ -164,3 +164,21 @@ def test_eval_defaults_to_causal_ridge_trajectories():
     first_sid = sorted(preds)[0]
     assert len(preds[first_sid]) == spec.WAYPOINT_COUNT
     assert eq._load_predicted_trajectories("expert_like", train_path=train_p, val_path=val_p, pred_path=None) == {}
+
+
+def test_single_gpu_quant_policy_skips_8bit_on_pascal(monkeypatch):
+    class _Props:
+        total_memory = 16 * (1024 ** 3)
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda idx: _Props())
+
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda idx: (6, 0))
+    assert eq._single_gpu_quant_policy() == (True, False)
+
+    monkeypatch.setattr(torch.cuda, "get_device_capability", lambda idx: (7, 5))
+    assert eq._single_gpu_quant_policy() == (True, True)
+
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 2)
+    assert eq._single_gpu_quant_policy() == (False, False)

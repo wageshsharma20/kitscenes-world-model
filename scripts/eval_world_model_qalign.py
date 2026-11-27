@@ -614,8 +614,22 @@ def _attach_onealign_weight_tensor(md) -> None:
     md.register_forward_hook(_sync_weight_dev)
 
 
+def _single_gpu_quant_policy() -> Tuple[bool, bool]:
+    """Return `(needs_single_gpu_budget, can_use_8bit)` for single <18GiB GPUs (`sm_75+` for bitsandbytes)."""
+    if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
+        return False, False
+    vram_gib = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+    if vram_gib >= 18.0:
+        return False, False
+    try:
+        cap = tuple(torch.cuda.get_device_capability(0))
+    except Exception:
+        cap = (7, 5)
+    return True, cap >= (7, 5)
+
+
 def load_one_align_model():
-    """Load `q-future/one-align` (pure FP16 on >=20GiB VRAM / multi-GPU; 8-bit hybrid fallback on single 15GiB T4)."""
+    """Load `q-future/one-align` (pure FP16 on >=20GiB VRAM / multi-GPU; 8-bit hybrid on T4; FP16 offload on P100)."""
     from transformers import AutoModelForCausalLM
 
     kwargs = {
@@ -624,9 +638,9 @@ def load_one_align_model():
         "device_map": "auto",
         "low_cpu_mem_usage": True,
     }
-    if torch.cuda.is_available() and torch.cuda.device_count() == 1:
-        vram_gib = torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
-        if vram_gib < 18.0:
+    needs_budget, can_8bit = _single_gpu_quant_policy()
+    if needs_budget:
+        if can_8bit:
             try:
                 from transformers import BitsAndBytesConfig
 
@@ -634,7 +648,7 @@ def load_one_align_model():
                     load_in_8bit=True,
                     llm_int8_skip_modules=["vision_model", "visual_abstractor", "lm_head"],
                 )
-                print("[*] Single 15-16GiB GPU detected -> loading OneAlign with 8-bit LLM + FP16 vision/head...", flush=True)
+                print("[*] Single 15-16GiB Turing+ GPU detected -> loading OneAlign with 8-bit LLM + FP16 vision/head...", flush=True)
                 md = AutoModelForCausalLM.from_pretrained(
                     "q-future/one-align",
                     quantization_config=bnb_cfg,
@@ -649,9 +663,12 @@ def load_one_align_model():
                 print(f"[!] 8-bit load failed ({exc}), falling back to FP16 offload...", flush=True)
                 gc.collect()
                 torch.cuda.empty_cache()
-                Path("/tmp/onealign_offload").mkdir(parents=True, exist_ok=True)
-                kwargs["max_memory"] = {0: "13500MiB", "cpu": "11GiB"}
-                kwargs["offload_folder"] = "/tmp/onealign_offload"
+        else:
+            print("[*] Single <18GiB GPU with compute capability < 7.5 (e.g. P100) -> using lossless FP16 CPU offload...", flush=True)
+        Path("/tmp/onealign_offload").mkdir(parents=True, exist_ok=True)
+        kwargs["max_memory"] = {0: "13000MiB", "cpu": "11GiB"}
+        kwargs["offload_folder"] = "/tmp/onealign_offload"
+        kwargs["offload_state_dict"] = True
     try:
         md = AutoModelForCausalLM.from_pretrained("q-future/one-align", attn_implementation="eager", **kwargs)
     except TypeError:
