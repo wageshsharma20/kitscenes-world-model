@@ -151,6 +151,36 @@ def sample_upstream_1fps_frames(mp4_path: Path) -> Dict[str, Any]:
     }
 
 
+def _ensure_cuda_initialized() -> None:
+    """Lazily initialize CUDA context/allocator before querying or resetting stats."""
+    if not torch.cuda.is_available():
+        return
+    try:
+        if not torch.cuda.is_initialized():
+            torch.cuda.init()
+    except Exception:
+        pass
+
+
+def _safe_reset_peak_memory_stats(device_idx: int) -> None:
+    """Reset peak CUDA memory stats, tolerating uninitialized caching allocators (PyTorch 2.14+)."""
+    try:
+        _ensure_cuda_initialized()
+        torch.cuda.reset_peak_memory_stats(device_idx)
+    except RuntimeError:
+        pass
+
+
+def _safe_max_memory_allocated(device_idx: int) -> int:
+    """Read peak allocated CUDA bytes, returning 0 if the caching allocator is uninitialized."""
+    try:
+        if not torch.cuda.is_initialized():
+            return 0
+        return int(torch.cuda.max_memory_allocated(device_idx))
+    except RuntimeError:
+        return 0
+
+
 def _cuda_devices_summary() -> Tuple[int, List[Dict[str, Any]], float, float]:
     """Summarize all visible CUDA devices and aggregate total/peak VRAM across shards."""
     if not torch.cuda.is_available():
@@ -162,7 +192,7 @@ def _cuda_devices_summary() -> Tuple[int, List[Dict[str, Any]], float, float]:
     for idx in range(n_dev):
         props = torch.cuda.get_device_properties(idx)
         mem_gib = props.total_memory / (1024 ** 3)
-        peak_gib = torch.cuda.max_memory_allocated(idx) / (1024 ** 3)
+        peak_gib = _safe_max_memory_allocated(idx) / (1024 ** 3)
         tot_mem += mem_gib
         tot_peak += peak_gib
         devs.append({"index": idx, "name": props.name, "total_gib": round(mem_gib, 2), "peak_gib": round(peak_gib, 3)})
@@ -220,7 +250,7 @@ def load_one_align_for_smoke_test(precision: str = "auto") -> Tuple[Any, Dict[st
 
     if torch.cuda.is_available():
         for idx in range(torch.cuda.device_count()):
-            torch.cuda.reset_peak_memory_stats(idx)
+            _safe_reset_peak_memory_stats(idx)
 
     _, _, pre_total_vram, _ = _cuda_devices_summary()
     fp16_placement = "quantized_8bit" if precision == "8bit" else "auto"

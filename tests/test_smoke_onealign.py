@@ -144,3 +144,27 @@ def test_resolve_fp16_offload_kwargs_handles_t4_vs_l4():
     l4_kw, l4_mode = sm._resolve_fp16_offload_kwargs(22.5)
     assert l4_mode == "all_gpu"
     assert l4_kw == {}
+
+
+def test_cuda_memory_stats_tolerate_uninitialized_device_error(monkeypatch):
+    class _FakeProps:
+        name = "Tesla T4"
+        total_memory = 15 * (1024 ** 3)
+
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
+    monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
+    monkeypatch.setattr(torch.cuda, "get_device_properties", lambda idx: _FakeProps())
+
+    def _raise_invalid(_idx):
+        raise RuntimeError("Invalid device argument")
+
+    monkeypatch.setattr(torch.cuda, "reset_peak_memory_stats", _raise_invalid)
+    monkeypatch.setattr(torch.cuda, "max_memory_allocated", _raise_invalid)
+
+    sm._safe_reset_peak_memory_stats(0)
+    n_dev, devs, tot_mem, tot_peak = sm._cuda_devices_summary()
+    assert n_dev == 1
+    assert tot_mem == pytest.approx(15.0)
+    assert tot_peak == 0.0
+    assert devs[0]["peak_gib"] == 0.0
