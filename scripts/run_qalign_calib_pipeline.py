@@ -40,6 +40,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--crf", type=int, default=14)
     parser.add_argument("--device", type=str, default="cuda:0")
     parser.add_argument("--scenarios", type=str, default="")
+    parser.add_argument("--traj-source", choices=["ridge", "expert_like"], default="ridge")
     parser.add_argument("--limit", type=int, default=0)
     parser.add_argument("--score-only", action="store_true", help="Skip val extraction & video rendering; score existing render_manifest.json")
     args = parser.parse_args(argv)
@@ -97,6 +98,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             args.variants,
             "--crf",
             str(args.crf),
+            "--traj-source",
+            args.traj_source,
             "--device",
             args.device,
         ]

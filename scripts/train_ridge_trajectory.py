@@ -211,15 +211,14 @@ def evaluate_mms(recs: Sequence[Dict[str, Any]], preds: np.ndarray) -> Tuple[flo
     return float(np.mean(mms_vals)), float(np.median(l2_vals)), float(np.mean(l2_vals))
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Fit and validate polynomial-basis Ridge trajectory planner.")
-    parser.add_argument("--train", type=Path, default=PROJECT_ROOT / "data" / "train_trajectories.jsonl")
-    parser.add_argument("--val", type=Path, default=PROJECT_ROOT / "data" / "val_trajectories.jsonl")
-    parser.add_argument("--history", type=Path, default=PROJECT_ROOT / "data" / "history.jsonl")
-    parser.add_argument("--out", type=Path, default=PROJECT_ROOT / "submissions" / "trajectories_ridge.jsonl")
-    args = parser.parse_args(argv)
-
-    with open(args.train) as f:
+def _fit_best_ridge(
+    train_path: Path,
+    val_path: Path,
+    *,
+    verbose: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, List[Dict[str, Any]], np.ndarray]:
+    """Select Ridge lambda via 5-fold train CV and return fitted parameters + val predictions."""
+    with open(train_path, encoding="utf-8") as f:
         tr_all = [json.loads(line) for line in f if line.strip()]
     tr = [
         r
@@ -228,7 +227,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         and len(r["expert_like"]) == spec.WAYPOINT_COUNT
         and not np.any(np.asarray(r["expert_like"]) <= -90.0)
     ]
-    with open(args.val) as f:
+    with open(val_path, encoding="utf-8") as f:
         va = [json.loads(line) for line in f if line.strip()]
 
     x_tr = np.vstack([extract_kinematic_features(r["past"], r.get("driving_instruction", ""), r.get("scenario_type", "")) for r in tr])
@@ -247,15 +246,52 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             w_f, mu_f, sd_f = fit_ridge(x_tr[tr_m], y_tr[tr_m], lam)
             cv_preds[te_m] = predict_ridge(x_tr[te_m], w_f, mu_f, sd_f, p_smooth)
         cv_mms, cv_l2m, _ = evaluate_mms(tr, cv_preds)
-        print(f"5-fold Train CV lam={lam:4.1f}: MMS={cv_mms:.3f} | L2_med={cv_l2m:.3f}")
+        if verbose:
+            print(f"5-fold Train CV lam={lam:4.1f}: MMS={cv_mms:.3f} | L2_med={cv_l2m:.3f}")
         if cv_mms > best_cv:
             best_cv = cv_mms
             best_lam = lam
 
     w, mu, sd = fit_ridge(x_tr, y_tr, best_lam)
     va_preds = predict_ridge(x_va, w, mu, sd, p_smooth)
+    return w, mu, sd, p_smooth, best_lam, va, va_preds
+
+
+def fit_and_predict_val_ridge(
+    train_path: Path,
+    val_path: Path,
+) -> Dict[str, List[List[float]]]:
+    """Fit causal Ridge planner on train split only and return predicted val trajectories."""
+    _w, _mu, _sd, _p_smooth, _best_lam, va, va_preds = _fit_best_ridge(train_path, val_path, verbose=False)
+    return {
+        str(r["scenario_id"]).zfill(7): [
+            [round(float(x), spec.TRAJECTORY_PRECISION), round(float(y), spec.TRAJECTORY_PRECISION)]
+            for x, y in va_preds[i]
+        ]
+        for i, r in enumerate(va)
+    }
+
+
+def main(argv: Optional[Sequence[str]] = None) -> int:
+    parser = argparse.ArgumentParser(description="Fit and validate polynomial-basis Ridge trajectory planner.")
+    parser.add_argument("--train", type=Path, default=PROJECT_ROOT / "data" / "train_trajectories.jsonl")
+    parser.add_argument("--val", type=Path, default=PROJECT_ROOT / "data" / "val_trajectories.jsonl")
+    parser.add_argument("--history", type=Path, default=PROJECT_ROOT / "data" / "history.jsonl")
+    parser.add_argument("--out", type=Path, default=PROJECT_ROOT / "submissions" / "trajectories_ridge.jsonl")
+    parser.add_argument("--val-out", type=Path, default=None, help="Optional JSONL path for causal Ridge val predictions")
+    args = parser.parse_args(argv)
+
+    w, mu, sd, p_smooth, best_lam, va, va_preds = _fit_best_ridge(args.train, args.val, verbose=True)
     va_mms, va_l2med, va_l2mean = evaluate_mms(va, va_preds)
     print(f"\nSelected lam={best_lam} -> Val MMS={va_mms:.3f} | L2_med={va_l2med:.3f} | L2_mean={va_l2mean:.3f}")
+
+    if args.val_out is not None:
+        args.val_out.parent.mkdir(parents=True, exist_ok=True)
+        with open(args.val_out, "w", encoding="utf-8") as vf:
+            for i, r in enumerate(va):
+                pts = [[round(float(x), spec.TRAJECTORY_PRECISION), round(float(y), spec.TRAJECTORY_PRECISION)] for x, y in va_preds[i]]
+                vf.write(json.dumps({"scenario_id": str(r["scenario_id"]).zfill(7), "future_trajectory": pts}) + "\n")
+        print(f"Wrote causal val Ridge predictions -> {args.val_out}")
 
     by_m: Dict[str, List[float]] = defaultdict(list)
     for i, r in enumerate(va):

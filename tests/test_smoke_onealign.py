@@ -118,12 +118,19 @@ def test_compare_8bit_vs_fp16_gate_pass_and_fail(tmp_path: Path):
 
     r16 = _make_report(fp16_vals)
     r8_good = _make_report(fp16_vals, shift=-0.04)
-    comp_good = sm.compare_smoke_reports(r8_good, r16)
+    stypes = {f"{i:07d}": ("1 heavy rain" if i < 3 else "4 intersection") for i in range(6)}
+    comp_good = sm.compare_smoke_reports(r8_good, r16, scenario_types=stypes)
     assert comp_good["gate_passed"] is True
     assert comp_good["spearman_rho"] == pytest.approx(1.0)
     assert comp_good["mean_offset_q_raw"] == pytest.approx(-0.04)
+    assert comp_good["mae_pq_100"] == pytest.approx(1.0, abs=1e-3)
+    assert comp_good["top_quartile_agreement"] == pytest.approx(1.0)
+    assert comp_good["bottom_quartile_agreement"] == pytest.approx(1.0)
+    assert set(comp_good["by_scenario_type"]) == {"1 heavy rain", "4 intersection"}
 
     r8_bad = _make_report(list(reversed(fp16_vals)))
     comp_bad = sm.compare_smoke_reports(r8_bad, r16)
     assert comp_bad["gate_passed"] is False
     assert comp_bad["pairwise_order_agreement"] == pytest.approx(0.0)
+    assert comp_bad["top_quartile_agreement"] == pytest.approx(0.0)
+    assert comp_bad["bottom_quartile_agreement"] == pytest.approx(0.0)

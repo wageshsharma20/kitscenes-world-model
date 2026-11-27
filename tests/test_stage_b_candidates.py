@@ -146,7 +146,21 @@ def test_stratified_load_and_stage_c_summary(tmp_path: Path):
     rc = eq.main(["--stage", "score", "--out-dir", str(out_dir), "--baseline-variant", "cand_a_baseline"])
     assert rc == 0
     summary = json.loads((out_dir / "calibration_summary.json").read_text(encoding="utf-8"))
+    assert "Reconstructed baseline" in summary["cand_a_baseline"]["config"]["provenance_note"]
     assert len(summary["cand_b_scale1"]["worst_25_videos"]) == 25
     assert summary["cand_b_scale1"]["paired_vs_baseline"]["mean_delta"] > 0
     assert summary["cand_b_scale1"]["paired_vs_baseline"]["scenarios_improved"] == 5
+    assert summary["cand_b_scale1"]["paired_vs_previous"]["previous_variant"] == "cand_a_baseline"
     assert summary["cand_b_scale1"]["config"]["render_scale"] == 1
+
+
+def test_eval_defaults_to_causal_ridge_trajectories():
+    args = eq.parse_args(["--stage", "render"])
+    assert args.traj_source == "ridge"
+    train_p = Path(__file__).resolve().parent.parent / "data" / "train_trajectories.jsonl"
+    val_p = Path(__file__).resolve().parent.parent / "data" / "val_trajectories.jsonl"
+    preds = eq._load_predicted_trajectories("ridge", train_path=train_p, val_path=val_p, pred_path=None)
+    assert len(preds) == 100
+    first_sid = sorted(preds)[0]
+    assert len(preds[first_sid]) == spec.WAYPOINT_COUNT
+    assert eq._load_predicted_trajectories("expert_like", train_path=train_p, val_path=val_p, pred_path=None) == {}

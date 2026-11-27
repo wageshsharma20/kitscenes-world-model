@@ -71,8 +71,9 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
     "depth_r2": {"use_depth": True, "use_lama": False, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
     "depth_lama_r2": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.0, "min_lama_hole_pixels": 0},
     "depth_lama_sharp": {"use_depth": True, "use_lama": True, "render_scale": 2, "crf_sharpen": 0.14, "min_lama_hole_pixels": 0},
-    # Stage B incremental candidates (A: Baseline .. E: Selective refinement)
+    # Stage B incremental candidates (A: Reconstructed baseline .. E: Selective repair)
     "cand_a_baseline": {
+        "provenance_note": "Reconstructed baseline (render_scale=2, best available historical analytical_sharp24 config)",
         "use_depth": False,
         "use_lama": False,
         "render_scale": 2,
@@ -82,6 +83,7 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
         "photometric_refine": False,
     },
     "cand_b_scale1": {
+        "provenance_note": "Scale 1 vs A",
         "use_depth": False,
         "use_lama": False,
         "render_scale": 1,
@@ -91,6 +93,7 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
         "photometric_refine": False,
     },
     "cand_c_adaptive": {
+        "provenance_note": "Jacobian-aware minification filtering (C vs B)",
         "use_depth": False,
         "use_lama": False,
         "render_scale": 1,
@@ -100,6 +103,7 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
         "photometric_refine": False,
     },
     "cand_d_photometric": {
+        "provenance_note": "Temporally smoothed photometric + saturation anchoring (D vs C)",
         "use_depth": False,
         "use_lama": False,
         "render_scale": 1,
@@ -109,6 +113,7 @@ VARIANT_SPECS: Dict[str, Dict[str, object]] = {
         "photometric_refine": True,
     },
     "cand_e_selective": {
+        "provenance_note": "Selective hole & boundary LaMa repair (E vs D)",
         "use_depth": False,
         "use_lama": True,
         "render_scale": 1,
@@ -356,6 +361,38 @@ def ensure_val_calib_extracted(val_dir: Optional[Path], val_tar: Optional[Path],
     return target
 
 
+def _load_predicted_trajectories(
+    traj_source: str,
+    *,
+    train_path: Path,
+    val_path: Path,
+    pred_path: Optional[Path],
+) -> Dict[str, List[List[float]]]:
+    """Load inference-time trajectories (`ridge` causal planner) so GT future plans are never leaked."""
+    if traj_source == "expert_like":
+        return {}
+    if pred_path is not None:
+        if not pred_path.exists():
+            raise FileNotFoundError(f"Missing --pred-trajectories JSONL: {pred_path}")
+        preds: Dict[str, List[List[float]]] = {}
+        with open(pred_path, encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                r = json.loads(line)
+                sid = str(r["scenario_id"]).zfill(7)
+                preds[sid] = r.get("future_trajectory") or r.get("trajectory") or r["expert_like"]
+        return preds
+
+    from scripts.train_ridge_trajectory import fit_and_predict_val_ridge
+
+    if not train_path.exists():
+        raise FileNotFoundError(
+            f"Causal `ridge` trajectory mode requires {train_path} (or pass --pred-trajectories)."
+        )
+    return fit_and_predict_val_ridge(train_path, val_path)
+
+
 def run_render_stage(args: argparse.Namespace) -> int:
     val_root = ensure_val_calib_extracted(args.val_dir, args.val_tar, args.out_dir)
     records = load_val_records(
@@ -367,6 +404,13 @@ def run_render_stage(args: argparse.Namespace) -> int:
     )
     if not records:
         raise RuntimeError(f"No matching validation calibration scenarios found under {val_root}")
+
+    pred_trajs = _load_predicted_trajectories(
+        args.traj_source,
+        train_path=args.train_trajectories,
+        val_path=args.val_trajectories,
+        pred_path=args.pred_trajectories,
+    )
 
     requested = [v.strip() for v in args.variants.split(",") if v.strip()]
     for v in requested:
@@ -388,12 +432,14 @@ def run_render_stage(args: argparse.Namespace) -> int:
     manifest: Dict[str, object] = {
         "val_root": str(val_root),
         "git_commit": git_sha,
+        "traj_source": args.traj_source,
+        "pred_trajectories_path": str(args.pred_trajectories) if args.pred_trajectories else None,
         "crf": int(args.crf),
         "depth_model": args.depth_model if need_depth else None,
         "scenarios": [],
         "variants": requested,
         "variant_configs": {
-            v: {**VARIANT_SPECS[v], "crf": int(args.crf)} for v in requested
+            v: {**VARIANT_SPECS[v], "crf": int(args.crf), "traj_source": args.traj_source} for v in requested
         },
         "entries": [],
     }
@@ -452,10 +498,17 @@ def run_render_stage(args: argparse.Namespace) -> int:
                     if pp.exists():
                         past_imgs[(cam, tag)] = pp
 
+            if args.traj_source == "ridge":
+                if sid not in pred_trajs:
+                    raise KeyError(f"Scenario {sid} missing from causal Ridge trajectory predictions")
+                traj_for_render = pred_trajs[sid]
+            else:
+                traj_for_render = rec["expert_like"]
+
             t_s = time.time()
             gen = model.generate_scenario(
                 sid,
-                rec["expert_like"],
+                traj_for_render,
                 cond,
                 past_images=past_imgs,
                 past_trajectory=rec.get("past"),
@@ -478,7 +531,7 @@ def run_render_stage(args: argparse.Namespace) -> int:
 
             emc_val: Optional[float] = None
             try:
-                emc_res = compute_video_optical_flow_emc(scenario_paths, rec["expert_like"])
+                emc_res = compute_video_optical_flow_emc(scenario_paths, traj_for_render)
                 emc_val = float(emc_res.get("emc", 0.0))
             except Exception:
                 emc_val = None
@@ -807,13 +860,18 @@ def run_score_stage(args: argparse.Namespace) -> int:
     )
     if baseline_var is not None:
         base_map = scen_pq1_by_variant[baseline_var]
-        for v in manifest["variants"]:
-            if v == baseline_var:
-                continue
-            summary_out[v]["paired_vs_baseline"] = {
-                "baseline_variant": baseline_var,
-                **_compute_paired_deltas(scen_pq1_by_variant[v], base_map, scenarios),
-            }
+        for v_idx, v in enumerate(manifest["variants"]):
+            if v != baseline_var:
+                summary_out[v]["paired_vs_baseline"] = {
+                    "baseline_variant": baseline_var,
+                    **_compute_paired_deltas(scen_pq1_by_variant[v], base_map, scenarios),
+                }
+            if v_idx > 0:
+                prev_var = manifest["variants"][v_idx - 1]
+                summary_out[v]["paired_vs_previous"] = {
+                    "previous_variant": prev_var,
+                    **_compute_paired_deltas(scen_pq1_by_variant[v], scen_pq1_by_variant[prev_var], scenarios),
+                }
 
     print("\n--- Per-Slice Breakdown (PQ_norm1) ---", flush=True)
     for v in manifest["variants"]:
@@ -821,8 +879,11 @@ def run_score_stage(args: argparse.Namespace) -> int:
         line = " | ".join(f"{k[:14]}={val:.1f}" for k, val in sl.items())
         delta_txt = ""
         paired = summary_out[v].get("paired_vs_baseline")
+        prev_p = summary_out[v].get("paired_vs_previous")
         if paired:
-            delta_txt = f" | dBase={paired['mean_delta']:+.2f} (+{paired['scenarios_improved']}/-{paired['scenarios_regressed']})"
+            delta_txt += f" | dBase={paired['mean_delta']:+.2f} (+{paired['scenarios_improved']}/-{paired['scenarios_regressed']})"
+        if prev_p:
+            delta_txt += f" | dPrev={prev_p['mean_delta']:+.2f}"
         print(f"  {v:<20s}: {line}{delta_txt}", flush=True)
 
     summary_path = args.out_dir / "calibration_summary.json"
@@ -837,6 +898,14 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--val-dir", type=Path, default=None, help="Directory holding val_t0_native/, val_past/, val_future_videos/")
     parser.add_argument("--val-tar", type=Path, default=None, help="Path to val_calib.tar if not extracted")
     parser.add_argument("--val-trajectories", type=Path, default=PROJECT_ROOT / "data" / "val_trajectories.jsonl")
+    parser.add_argument("--train-trajectories", type=Path, default=PROJECT_ROOT / "data" / "train_trajectories.jsonl")
+    parser.add_argument("--pred-trajectories", type=Path, default=None, help="Optional precomputed JSONL predictions")
+    parser.add_argument(
+        "--traj-source",
+        choices=["ridge", "expert_like"],
+        default="ridge",
+        help="Future trajectory source for Stage B/C rendering (`ridge` = inference-time causal planner; `expert_like` = oracle)",
+    )
     parser.add_argument("--out-dir", type=Path, default=Path("/kaggle/working/qalign_calib"))
     parser.add_argument("--variants", type=str, default="cand_a_baseline,cand_b_scale1,cand_c_adaptive,cand_d_photometric,cand_e_selective")
     parser.add_argument("--baseline-variant", type=str, default="cand_a_baseline")

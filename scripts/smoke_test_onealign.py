@@ -375,14 +375,43 @@ def _pairwise_order_agreement(a: Sequence[float], b: Sequence[float]) -> float:
     return (concordant / total) if total > 0 else 1.0
 
 
+def _quartile_agreements(a: Sequence[float], b: Sequence[float]) -> Tuple[float, float]:
+    """Compare whether top-25% and bottom-25% clips under `b` (FP16) remain in `a`'s top/bottom quartiles."""
+    n = len(b)
+    k = max(1, int(math.ceil(0.25 * n)))
+    top_b = set(sorted(range(n), key=lambda i: (-b[i], i))[:k])
+    top_a = set(sorted(range(n), key=lambda i: (-a[i], i))[:k])
+    bot_b = set(sorted(range(n), key=lambda i: (b[i], i))[:k])
+    bot_a = set(sorted(range(n), key=lambda i: (a[i], i))[:k])
+    return len(top_a & top_b) / float(k), len(bot_a & bot_b) / float(k)
+
+
+def _load_scenario_types_map(metadata_path: Optional[Path]) -> Dict[str, str]:
+    """Load scenario_id -> scenario_type from history.jsonl or val_trajectories.jsonl."""
+    if metadata_path is None or not metadata_path.is_file():
+        return {}
+    out: Dict[str, str] = {}
+    with open(metadata_path, encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            r = json.loads(line)
+            sid = str(r.get("scenario_id", "")).zfill(7)
+            stype = str(r.get("scenario_type", "")).strip()
+            if sid and stype:
+                out[sid] = stype
+    return out
+
+
 def compare_smoke_reports(
     eightbit_report: Dict[str, Any],
     fp16_report: Dict[str, Any],
     *,
     min_spearman: float = 0.95,
     min_pairwise_agreement: float = 0.90,
+    scenario_types: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
-    """Verify 8-bit T4 scores preserve FP16 L4 ranking and measure bias/level drift."""
+    """Verify 8-bit T4 scores preserve FP16 ranking and check category bias/MAE/quartile drift."""
     clips_8 = {c["clip_key"]: c for c in eightbit_report.get("clips", [])}
     clips_16 = {c["clip_key"]: c for c in fp16_report.get("clips", [])}
     shared = sorted(set(clips_8) & set(clips_16))
@@ -411,20 +440,39 @@ def compare_smoke_reports(
         else float("nan")
     )
     agreement = _pairwise_order_agreement(q8, q16)
+    top_q_agree, bot_q_agree = _quartile_agreements(pq8, pq16)
 
-    per_clip = [
-        {
-            "clip_key": k,
-            "q_8bit": clips_8[k]["q_raw"],
-            "q_fp16": clips_16[k]["q_raw"],
-            "delta_q": round(float(clips_8[k]["q_raw"] - clips_16[k]["q_raw"]), 6),
-            "pq_8bit": clips_8[k]["pq_worldmark_100"],
-            "pq_fp16": clips_16[k]["pq_worldmark_100"],
-            "delta_pq": round(float(clips_8[k]["pq_worldmark_100"] - clips_16[k]["pq_worldmark_100"]), 4),
-            "level_prob_l1": round(prob_l1s[idx], 6),
+    stype_map = scenario_types or {}
+    by_type_buckets: Dict[str, List[Tuple[float, float]]] = {}
+    per_clip = []
+    for idx, k in enumerate(shared):
+        sid = Path(k).parts[0] if "/" in k else k.split("_", 1)[0]
+        stype = clips_8[k].get("scenario_type") or clips_16[k].get("scenario_type") or stype_map.get(sid.zfill(7), "unknown")
+        dpq = float(pq8[idx] - pq16[idx])
+        by_type_buckets.setdefault(str(stype), []).append((dpq, prob_l1s[idx]))
+        per_clip.append(
+            {
+                "clip_key": k,
+                "scenario_type": str(stype),
+                "q_8bit": clips_8[k]["q_raw"],
+                "q_fp16": clips_16[k]["q_raw"],
+                "delta_q": round(float(q8[idx] - q16[idx]), 6),
+                "pq_8bit": clips_8[k]["pq_worldmark_100"],
+                "pq_fp16": clips_16[k]["pq_worldmark_100"],
+                "delta_pq": round(dpq, 4),
+                "level_prob_l1": round(prob_l1s[idx], 6),
+            }
+        )
+
+    by_scenario_type = {
+        st: {
+            "count": len(vals),
+            "mean_signed_pq_diff": round(float(np.mean([v[0] for v in vals])), 4),
+            "mae_pq_100": round(float(np.mean([abs(v[0]) for v in vals])), 4),
+            "mean_level_prob_l1": round(float(np.mean([v[1] for v in vals])), 6),
         }
-        for idx, k in enumerate(shared)
-    ]
+        for st, vals in sorted(by_type_buckets.items())
+    }
 
     gate_passed = (
         not math.isnan(rho)
@@ -440,13 +488,18 @@ def compare_smoke_reports(
         "spearman_pvalue": None if pval is None else round(pval, 8),
         "pearson_r": None if math.isnan(pearson_r) else round(pearson_r, 6),
         "pairwise_order_agreement": round(agreement, 6),
+        "top_quartile_agreement": round(top_q_agree, 6),
+        "bottom_quartile_agreement": round(bot_q_agree, 6),
         "mean_offset_q_raw": round(float(np.mean(q_diffs)), 6),
+        "mae_q_raw": round(float(np.mean(np.abs(q_diffs))), 6),
         "std_offset_q_raw": round(float(np.std(q_diffs, ddof=1) if len(q_diffs) > 1 else 0.0), 6),
         "max_abs_diff_q_raw": round(float(np.max(np.abs(q_diffs))), 6),
         "mean_offset_pq_100": round(float(np.mean(pq_diffs)), 4),
+        "mae_pq_100": round(float(np.mean(np.abs(pq_diffs))), 4),
         "std_offset_pq_100": round(float(np.std(pq_diffs, ddof=1) if len(pq_diffs) > 1 else 0.0), 4),
         "max_abs_diff_pq_100": round(float(np.max(np.abs(pq_diffs))), 4),
         "mean_level_prob_l1": round(float(np.mean(prob_l1s)), 6),
+        "by_scenario_type": by_scenario_type,
         "thresholds": {
             "min_spearman": min_spearman,
             "min_pairwise_agreement": min_pairwise_agreement,
@@ -576,11 +629,13 @@ def _run_score_cmd(args: argparse.Namespace) -> int:
 def _run_compare_cmd(args: argparse.Namespace) -> int:
     rep8 = json.loads(args.eightbit.read_text(encoding="utf-8"))
     rep16 = json.loads(args.fp16.read_text(encoding="utf-8"))
+    stypes = _load_scenario_types_map(args.metadata)
     comp = compare_smoke_reports(
         rep8,
         rep16,
         min_spearman=args.min_spearman,
         min_pairwise_agreement=args.min_pairwise_agreement,
+        scenario_types=stypes,
     )
     if args.out is not None:
         args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -608,6 +663,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_cmp = sub.add_parser("compare", help="Compare T4 8-bit report against L4 FP16 reference report.")
     p_cmp.add_argument("--eightbit", type=Path, required=True)
     p_cmp.add_argument("--fp16", type=Path, required=True)
+    p_cmp.add_argument("--metadata", type=Path, default=None, help="Optional history.jsonl / val_trajectories.jsonl for category bias breakdown")
     p_cmp.add_argument("--min-spearman", type=float, default=0.95)
     p_cmp.add_argument("--min-pairwise-agreement", type=float, default=0.90)
     p_cmp.add_argument("--out", type=Path, default=None)
