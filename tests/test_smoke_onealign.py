@@ -134,3 +134,13 @@ def test_compare_8bit_vs_fp16_gate_pass_and_fail(tmp_path: Path):
     assert comp_bad["pairwise_order_agreement"] == pytest.approx(0.0)
     assert comp_bad["top_quartile_agreement"] == pytest.approx(0.0)
     assert comp_bad["bottom_quartile_agreement"] == pytest.approx(0.0)
+
+
+def test_resolve_fp16_offload_kwargs_handles_t4_vs_l4():
+    t4_kw, t4_mode = sm._resolve_fp16_offload_kwargs(14.74)
+    assert t4_mode == "t4_cpu_offload"
+    assert "max_memory" in t4_kw and "offload_folder" in t4_kw
+
+    l4_kw, l4_mode = sm._resolve_fp16_offload_kwargs(22.5)
+    assert l4_mode == "all_gpu"
+    assert l4_kw == {}

@@ -197,6 +197,22 @@ def verify_preferential_tokens(model: Any) -> Dict[str, Any]:
     }
 
 
+def _resolve_fp16_offload_kwargs(total_vram_gib: float) -> Tuple[Dict[str, Any], str]:
+    """Use pure GPU FP16 when >=20 GiB VRAM is visible; lossless CPU offload on 15-16 GiB T4."""
+    if 0.0 < total_vram_gib < 20.0:
+        offload_dir = Path("/tmp/onealign_offload")
+        offload_dir.mkdir(parents=True, exist_ok=True)
+        return (
+            {
+                "max_memory": {0: "13000MiB", "cpu": "11GiB"},
+                "offload_folder": str(offload_dir),
+                "offload_state_dict": True,
+            },
+            "t4_cpu_offload",
+        )
+    return {}, "all_gpu"
+
+
 def load_one_align_for_smoke_test(precision: str = "auto") -> Tuple[Any, Dict[str, Any]]:
     """Load `q-future/one-align` under explicit `8bit`, `fp16`, or `auto` policy."""
     if precision not in ("auto", "8bit", "fp16"):
@@ -205,6 +221,9 @@ def load_one_align_for_smoke_test(precision: str = "auto") -> Tuple[Any, Dict[st
     if torch.cuda.is_available():
         for idx in range(torch.cuda.device_count()):
             torch.cuda.reset_peak_memory_stats(idx)
+
+    _, _, pre_total_vram, _ = _cuda_devices_summary()
+    fp16_placement = "quantized_8bit" if precision == "8bit" else "auto"
 
     t_load = time.time()
     if precision == "auto":
@@ -225,6 +244,9 @@ def load_one_align_for_smoke_test(precision: str = "auto") -> Tuple[Any, Dict[st
                 load_in_8bit=True,
                 llm_int8_skip_modules=["vision_model", "visual_abstractor", "lm_head"],
             )
+        else:
+            extra_kw, fp16_placement = _resolve_fp16_offload_kwargs(pre_total_vram)
+            kwargs.update(extra_kw)
         try:
             md = AutoModelForCausalLM.from_pretrained("q-future/one-align", attn_implementation="eager", **kwargs)
         except TypeError:
@@ -242,6 +264,7 @@ def load_one_align_for_smoke_test(precision: str = "auto") -> Tuple[Any, Dict[st
     meta = {
         "requested_precision": precision,
         "detected_precision": detected_precision,
+        "fp16_placement": fp16_placement,
         "load_time_s": round(load_time_s, 3),
         "gpu_count": gpu_count,
         "gpus": gpus,
