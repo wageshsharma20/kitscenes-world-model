@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+import hashlib
 import json
 import multiprocessing as mp
 import os
@@ -20,7 +22,7 @@ import subprocess
 import sys
 import tarfile
 import time
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import torch
 
@@ -30,7 +32,127 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from kitscenes import archive, spec
 from kitscenes.depth_reproj_world_model import Depth3DFullFoVWorldModel
+from kitscenes.video_engine import CameraRig
 from scripts.eval_world_model_qalign import build_depth_fn, build_lama_fn, encode_rgb_h264
+
+
+def _sha256_file(path: Optional[Path]) -> Optional[str]:
+    """Compute streaming SHA-256 hex digest of a file, or None if missing."""
+    if path is None or not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        while chunk := handle.read(1024 * 1024):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _collect_git_provenance(repo_root: Path) -> Dict[str, Any]:
+    """Record current git commit SHA and working-tree dirty state cleanly."""
+    info: Dict[str, Any] = {
+        "commit": None,
+        "short_commit": None,
+        "dirty": None,
+        "dirty_files": [],
+    }
+    try:
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if head.returncode == 0:
+            commit = head.stdout.strip()
+            info["commit"] = commit
+            info["short_commit"] = commit[:7]
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(repo_root),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if status.returncode == 0:
+            entries = [line.rstrip() for line in status.stdout.splitlines() if line.strip()]
+            info["dirty"] = bool(entries)
+            info["dirty_files"] = entries
+    except OSError:
+        pass
+    return info
+
+
+def _collect_camera_calibration_provenance(
+    width: int = spec.WIDTH,
+    height: int = spec.HEIGHT,
+    calibration_path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    """Build deterministic hashes covering both calibration JSON and active CameraRig matrices."""
+    cfg_file = calibration_path or (PROJECT_ROOT / "configs" / "kitscenes_camera_calibration.json")
+    rig = CameraRig(
+        width=width,
+        height=height,
+        is_provisional=False,
+        calibration_path=cfg_file if cfg_file.exists() else None,
+    )
+    canonical = {
+        "width": int(rig.width),
+        "height": int(rig.height),
+        "is_provisional": bool(rig.is_provisional),
+        "is_calibrated": bool(getattr(rig, "is_calibrated", not rig.is_provisional)),
+        "calibration_source": rig.calibration_source,
+        "nominal_ground_z_ego": float(rig.nominal_ground_z_ego),
+        "cameras": {
+            cam: {
+                "yaw_deg": float(rig.cameras[cam].yaw_deg),
+                "position_m": [float(v) for v in rig.cameras[cam].position_m],
+                "K_source": (
+                    rig.cameras[cam].k_source_matrix.tolist()
+                    if rig.cameras[cam].k_source_matrix is not None
+                    else None
+                ),
+                "K": rig.cameras[cam].intrinsic_matrix.tolist(),
+                "R": rig.cameras[cam].rotation_matrix_body_to_cam.tolist(),
+                "t": rig.cameras[cam].translation_vector.tolist(),
+            }
+            for cam in spec.CAMERAS
+        },
+    }
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return {
+        "config_file": str(cfg_file) if cfg_file.exists() else None,
+        "config_file_sha256": _sha256_file(cfg_file),
+        "rig_params_sha256": hashlib.sha256(encoded).hexdigest(),
+        "calibration_source": rig.calibration_source,
+        "nominal_ground_z_ego": float(rig.nominal_ground_z_ego),
+    }
+
+
+def _scenario_uses_depth(cfg: Dict[str, Any], scenario_type: str) -> bool:
+    return bool(cfg["use_depth"]) and (scenario_type not in set(cfg.get("no_depth_slices", ())))
+
+
+def _camera_hole_stats(last_hole_fraction: Optional[Dict[str, List[float]]], cam: str) -> Dict[str, float]:
+    vals = (last_hole_fraction or {}).get(cam) or []
+    if not vals:
+        return {}
+    return {
+        "hole_fraction_mean": round(float(sum(vals) / len(vals)), 6),
+        "hole_fraction_max": round(float(max(vals)), 6),
+    }
+
+
+def _write_json_atomic(path: Path, payload: Dict[str, Any]) -> None:
+    """Persist manifest atomically so readers never observe half-written JSON."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    try:
+        tmp_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        os.replace(tmp_path, path)
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
 
 
 def load_test_inputs(
@@ -84,6 +206,32 @@ def unpack_if_needed(src_dir: Optional[Path], tar_path: Optional[Path], dst_pare
     return target
 
 
+def _scan_camera_files(
+    scen_dir: Path,
+    *,
+    default_status: str,
+    effective_crf: Optional[int],
+) -> Dict[str, Dict[str, Any]]:
+    cameras: Dict[str, Dict[str, Any]] = {}
+    for cam in spec.CAMERAS:
+        mp4 = scen_dir / f"{cam}.mp4"
+        if mp4.exists() and mp4.stat().st_size > 1024:
+            cameras[cam] = {
+                "status": default_status,
+                "path": str(mp4),
+                "size_bytes": mp4.stat().st_size,
+                "effective_crf": effective_crf,
+            }
+        else:
+            cameras[cam] = {
+                "status": "missing",
+                "path": str(mp4),
+                "size_bytes": mp4.stat().st_size if mp4.exists() else 0,
+                "effective_crf": None,
+            }
+    return cameras
+
+
 def _gpu_worker(
     worker_id: int,
     gpu_idx: Optional[int],
@@ -91,8 +239,8 @@ def _gpu_worker(
     t0_dir: Path,
     past_dir: Optional[Path],
     out_videos_dir: Path,
-    cfg: Dict[str, object],
-) -> Tuple[int, float]:
+    cfg: Dict[str, Any],
+) -> Tuple[int, float, Dict[str, Dict[str, Any]]]:
     if gpu_idx is not None and torch.cuda.is_available():
         device = f"cuda:{gpu_idx}"
         torch.cuda.set_device(gpu_idx)
@@ -125,9 +273,17 @@ def _gpu_worker(
 
     t_start = time.time()
     rendered = 0
+    scenario_statuses: Dict[str, Dict[str, Any]] = {}
     for idx, (sid, fut_traj, past_traj, stype) in enumerate(tasks, start=1):
         scen_dir = out_videos_dir / sid
+        depth_active = _scenario_uses_depth(cfg, stype)
         if all((scen_dir / f"{c}.mp4").exists() and (scen_dir / f"{c}.mp4").stat().st_size > 1024 for c in spec.CAMERAS):
+            scenario_statuses[sid] = {
+                "scenario_type": stype,
+                "depth_active": depth_active,
+                "status": "resumed",
+                "cameras": _scan_camera_files(scen_dir, default_status="resumed", effective_crf=None),
+            }
             rendered += 1
             continue
 
@@ -151,6 +307,18 @@ def _gpu_worker(
         scen_dir.mkdir(parents=True, exist_ok=True)
         for cam in spec.CAMERAS:
             encode_rgb_h264(gen[cam], scen_dir / f"{cam}.mp4", crf=int(cfg["crf"]))
+
+        cam_entries = _scan_camera_files(scen_dir, default_status="rendered", effective_crf=int(cfg["crf"]))
+        hole_map = getattr(active_model, "last_hole_fraction", {})
+        for cam in spec.CAMERAS:
+            cam_entries[cam].update(_camera_hole_stats(hole_map, cam))
+
+        scenario_statuses[sid] = {
+            "scenario_type": stype,
+            "depth_active": depth_active,
+            "status": "rendered",
+            "cameras": cam_entries,
+        }
         rendered += 1
 
         if idx % 10 == 0 or idx == len(tasks):
@@ -162,7 +330,7 @@ def _gpu_worker(
                 flush=True,
             )
 
-    return rendered, time.time() - t_start
+    return rendered, time.time() - t_start, scenario_statuses
 
 
 def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
@@ -176,6 +344,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--unpack-dir", type=Path, default=Path("/kaggle/working/unpacked_test"))
     parser.add_argument("--out-videos-dir", type=Path, default=Path("/kaggle/working/production_videos"))
     parser.add_argument("--out-zip", type=Path, default=Path("/kaggle/working/videos.zip"))
+    parser.add_argument(
+        "--manifest-out",
+        type=Path,
+        default=None,
+        help="Optional output JSON path for provenance manifest (defaults to <out-videos-dir>/generation_manifest.json)",
+    )
     parser.add_argument("--depth-model", type=str, default="depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf")
     parser.add_argument("--no-depth", action="store_true", default=False)
     parser.add_argument("--no-depth-slices", type=str, default="", help="Comma-separated scenario_types to run without depth")
@@ -226,11 +400,11 @@ def _reencode_mp4_crf(mp4_path: Path, crf: int) -> None:
         raise
 
 
-def _clamp_videos_crf_if_oversized(videos_dir: Path, max_bytes: int, fallback_crf: int) -> None:
+def _clamp_videos_crf_if_oversized(videos_dir: Path, max_bytes: int, fallback_crf: int) -> bool:
     mp4s = sorted(videos_dir.rglob("*.mp4"))
     total_bytes = sum(p.stat().st_size for p in mp4s)
     if total_bytes <= max_bytes or fallback_crf <= 0:
-        return
+        return False
     print(
         f"[!] Total MP4 bytes ({total_bytes / (1024**3):.2f} GiB) exceeds {max_bytes / (1024**3):.2f} GiB; "
         f"clamping {len(mp4s)} videos to CRF {fallback_crf} ...",
@@ -240,9 +414,137 @@ def _clamp_videos_crf_if_oversized(videos_dir: Path, max_bytes: int, fallback_cr
         list(pool.map(lambda p: _reencode_mp4_crf(p, fallback_crf), mp4s))
     new_bytes = sum(p.stat().st_size for p in mp4s)
     print(f"[+] Clamped total MP4 bytes -> {new_bytes / (1024**3):.2f} GiB", flush=True)
+    return True
+
+
+def _build_initial_manifest(
+    *,
+    raw_argv: List[str],
+    args: argparse.Namespace,
+    cfg: Dict[str, Any],
+    items: List[Tuple[str, List[List[float]], Optional[List[List[float]]], str]],
+    gpu_ids: List[int],
+) -> Dict[str, Any]:
+    """Assemble initial generation provenance manifest before workers execute."""
+    return {
+        "schema_version": 1,
+        "started_at_utc": datetime.now(timezone.utc).isoformat(),
+        "finished_at_utc": None,
+        "git": _collect_git_provenance(PROJECT_ROOT),
+        "cli": {
+            "argv": raw_argv,
+            "args": {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(args).items()},
+        },
+        "render_config": {
+            "render_scale": int(args.render_scale),
+            "depth_enabled": bool(cfg["use_depth"]),
+            "depth_model": str(args.depth_model) if cfg["use_depth"] else None,
+            "no_depth_slices": list(cfg["no_depth_slices"]),
+            "lama_enabled": bool(cfg["use_lama"]),
+            "min_lama_hole_pixels": int(args.min_lama_hole_pixels),
+            "crf_sharpen": float(args.crf_sharpen),
+            "crf": int(args.crf),
+            "fallback_crf": int(args.fallback_crf),
+            "max_zip_gib": float(args.max_zip_gib),
+            "effective_crf": int(args.crf),
+            "clamped_to_fallback_crf": False,
+        },
+        "inputs": {
+            "trajectories_path": str(args.trajectories),
+            "trajectories_sha256": _sha256_file(args.trajectories),
+            "history_path": str(args.history),
+            "history_sha256": _sha256_file(args.history),
+        },
+        "camera_calibration": _collect_camera_calibration_provenance(),
+        "runtime": {
+            "gpu_ids": gpu_ids,
+            "cuda_available": bool(torch.cuda.is_available()),
+        },
+        "archive": None,
+        "summary": {},
+        "scenarios": {
+            sid: {
+                "scenario_type": stype,
+                "depth_active": _scenario_uses_depth(cfg, stype),
+                "status": "pending",
+                "cameras": {
+                    cam: {
+                        "status": "pending",
+                        "path": str(args.out_videos_dir / sid / f"{cam}.mp4"),
+                        "size_bytes": 0,
+                        "effective_crf": None,
+                    }
+                    for cam in spec.CAMERAS
+                },
+            }
+            for sid, _fut, _past, stype in items
+        },
+    }
+
+
+def _summarize_manifest_statuses(manifest: Dict[str, Any]) -> Dict[str, int]:
+    """Compute scenario and camera counts by generation status."""
+    scen_counts = {"total": 0, "rendered": 0, "resumed": 0, "failed": 0, "pending": 0}
+    cam_counts = {"total": 0, "rendered": 0, "resumed": 0, "failed": 0, "pending": 0, "missing": 0}
+    for entry in manifest["scenarios"].values():
+        scen_counts["total"] += 1
+        st = str(entry.get("status", "pending"))
+        scen_counts[st] = scen_counts.get(st, 0) + 1
+        for cam_info in entry["cameras"].values():
+            cam_counts["total"] += 1
+            cst = str(cam_info.get("status", "pending"))
+            cam_counts[cst] = cam_counts.get(cst, 0) + 1
+    return {
+        "scenarios_total": scen_counts["total"],
+        "scenarios_rendered": scen_counts["rendered"],
+        "scenarios_resumed": scen_counts["resumed"],
+        "scenarios_failed": scen_counts["failed"],
+        "scenarios_pending": scen_counts["pending"],
+        "cameras_total": cam_counts["total"],
+        "cameras_rendered": cam_counts["rendered"],
+        "cameras_resumed": cam_counts["resumed"],
+        "cameras_failed": cam_counts["failed"],
+        "cameras_pending": cam_counts["pending"],
+        "cameras_missing": cam_counts["missing"],
+    }
+
+
+def _reconcile_manifest_with_disk(
+    manifest: Dict[str, Any],
+    out_videos_dir: Path,
+    *,
+    clamped_crf: Optional[int] = None,
+    initial_crf: Optional[int] = None,
+) -> None:
+    """Refresh file sizes/statuses on disk so even partial/clamped runs stay accurate."""
+    for sid, entry in manifest["scenarios"].items():
+        scen_dir = out_videos_dir / sid
+        cams = entry["cameras"]
+        for cam in spec.CAMERAS:
+            mp4 = scen_dir / f"{cam}.mp4"
+            info = cams[cam]
+            if mp4.exists() and mp4.stat().st_size > 1024:
+                info["size_bytes"] = mp4.stat().st_size
+                if info["status"] in ("pending", "missing"):
+                    info["status"] = "rendered"
+                    if info.get("effective_crf") is None and initial_crf is not None:
+                        info["effective_crf"] = initial_crf
+                if clamped_crf is not None:
+                    info["effective_crf"] = clamped_crf
+            elif info["status"] == "pending":
+                info["status"] = "failed"
+                info["size_bytes"] = mp4.stat().st_size if mp4.exists() else 0
+        if entry["status"] == "pending":
+            statuses = {cams[c]["status"] for c in spec.CAMERAS}
+            if statuses <= {"rendered", "resumed"}:
+                entry["status"] = "resumed" if statuses == {"resumed"} else "rendered"
+            else:
+                entry["status"] = "failed"
+    manifest["summary"] = _summarize_manifest_statuses(manifest)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    raw_argv = list(argv) if argv is not None else list(sys.argv[1:])
     args = parse_args(argv)
     t0_dir = unpack_if_needed(args.t0_dir, args.t0_tar, args.unpack_dir, "test_t0_native")
     past_dir: Optional[Path] = None
@@ -268,7 +570,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     n_cuda = torch.cuda.device_count() if torch.cuda.is_available() else 0
     gpu_ids = [int(g.strip()) for g in args.gpus.split(",") if g.strip() and int(g.strip()) < n_cuda]
 
-    cfg: Dict[str, object] = {
+    cfg: Dict[str, Any] = {
         "depth_model": args.depth_model,
         "use_depth": not args.no_depth,
         "no_depth_slices": tuple(s.strip() for s in args.no_depth_slices.split(",") if s.strip()),
@@ -279,67 +581,96 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "crf": args.crf,
     }
 
+    manifest_path = args.manifest_out or (args.out_videos_dir / "generation_manifest.json")
+    manifest = _build_initial_manifest(raw_argv=raw_argv, args=args, cfg=cfg, items=items, gpu_ids=gpu_ids)
+    manifest["summary"] = _summarize_manifest_statuses(manifest)
+    _write_json_atomic(manifest_path, manifest)
+
     t0 = time.time()
     print(f"[*] Rendering {len(items)} scenarios | GPUs={gpu_ids or ['cpu']} | cfg={cfg}", flush=True)
 
-    if len(gpu_ids) <= 1:
-        gpu_sel = gpu_ids[0] if gpu_ids else None
-        count, elapsed = _gpu_worker(0, gpu_sel, items, t0_dir, past_dir, args.out_videos_dir, cfg)
-        print(f"[+] Single-worker complete: {count} scenarios in {elapsed:.1f}s", flush=True)
-    else:
-        # Pre-warm HuggingFace & LaMa weights in main process before spawning multi-GPU workers
-        if cfg["use_depth"]:
-            from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+    clamped_crf: Optional[int] = None
+    try:
+        if len(gpu_ids) <= 1:
+            gpu_sel = gpu_ids[0] if gpu_ids else None
+            count, elapsed, worker_statuses = _gpu_worker(
+                0, gpu_sel, items, t0_dir, past_dir, args.out_videos_dir, cfg
+            )
+            manifest["scenarios"].update(worker_statuses)
+            print(f"[+] Single-worker complete: {count} scenarios in {elapsed:.1f}s", flush=True)
+        else:
+            # Pre-warm HuggingFace & LaMa weights in main process before spawning multi-GPU workers
+            if cfg["use_depth"]:
+                from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
-            AutoImageProcessor.from_pretrained(str(cfg["depth_model"]))
-            AutoModelForDepthEstimation.from_pretrained(str(cfg["depth_model"]))
-        if cfg["use_lama"]:
-            from simple_lama_inpainting.models.model import LAMA_MODEL_URL
-            from simple_lama_inpainting.utils.util import download_model
+                AutoImageProcessor.from_pretrained(str(cfg["depth_model"]))
+                AutoModelForDepthEstimation.from_pretrained(str(cfg["depth_model"]))
+            if cfg["use_lama"]:
+                from simple_lama_inpainting.models.model import LAMA_MODEL_URL
+                from simple_lama_inpainting.utils.util import download_model
 
-            download_model(LAMA_MODEL_URL)
+                download_model(LAMA_MODEL_URL)
 
-        shards: List[List[Tuple[str, List[List[float]], Optional[List[List[float]]]]]] = [
-            items[i :: len(gpu_ids)] for i in range(len(gpu_ids))
-        ]
-        ctx = mp.get_context("spawn")
-        with ctx.Pool(processes=len(gpu_ids)) as pool:
-            jobs = [
-                pool.apply_async(
-                    _gpu_worker,
-                    (wid, gpu_ids[wid], shards[wid], t0_dir, past_dir, args.out_videos_dir, cfg),
-                )
-                for wid in range(len(gpu_ids))
-            ]
-            for job in jobs:
-                job.get()
-        print(f"[+] Parallel Dual-GPU render complete in {time.time() - t0:.1f}s", flush=True)
+            shards = [items[i :: len(gpu_ids)] for i in range(len(gpu_ids))]
+            ctx = mp.get_context("spawn")
+            with ctx.Pool(processes=len(gpu_ids)) as pool:
+                jobs = [
+                    pool.apply_async(
+                        _gpu_worker,
+                        (wid, gpu_ids[wid], shards[wid], t0_dir, past_dir, args.out_videos_dir, cfg),
+                    )
+                    for wid in range(len(gpu_ids))
+                ]
+                for job in jobs:
+                    _count, _elapsed, worker_statuses = job.get()
+                    manifest["scenarios"].update(worker_statuses)
+            print(f"[+] Parallel Dual-GPU render complete in {time.time() - t0:.1f}s", flush=True)
 
-    if args.pack_zip:
-        max_bytes = int(args.max_zip_gib * (1024 ** 3))
-        if args.fallback_crf > 0:
-            _clamp_videos_crf_if_oversized(args.out_videos_dir, max_bytes, args.fallback_crf)
-        print(f"[*] Validating and packing {args.out_zip} ...", flush=True)
-        report = archive.build_archive(
-            args.out_videos_dir,
-            output=args.out_zip,
-            allow_partial=args.allow_partial,
-            check_media=True,
-        )
-        if args.fallback_crf > 0 and not report.ok and args.out_zip.exists() and args.out_zip.stat().st_size > max_bytes:
-            _clamp_videos_crf_if_oversized(args.out_videos_dir, 0, args.fallback_crf)
+        if args.pack_zip:
+            max_bytes = int(args.max_zip_gib * (1024 ** 3))
+            if args.fallback_crf > 0 and _clamp_videos_crf_if_oversized(
+                args.out_videos_dir, max_bytes, args.fallback_crf
+            ):
+                clamped_crf = int(args.fallback_crf)
+            print(f"[*] Validating and packing {args.out_zip} ...", flush=True)
             report = archive.build_archive(
                 args.out_videos_dir,
                 output=args.out_zip,
                 allow_partial=args.allow_partial,
                 check_media=True,
             )
-        for line in report.summary_lines():
-            print(f"    {line}", flush=True)
-        if not report.ok:
-            for err in report.errors[:20]:
-                print(f"[!] Archive error: {err}", file=sys.stderr, flush=True)
-            return 1
+            if args.fallback_crf > 0 and not report.ok and args.out_zip.exists() and args.out_zip.stat().st_size > max_bytes:
+                if _clamp_videos_crf_if_oversized(args.out_videos_dir, 0, args.fallback_crf):
+                    clamped_crf = int(args.fallback_crf)
+                report = archive.build_archive(
+                    args.out_videos_dir,
+                    output=args.out_zip,
+                    allow_partial=args.allow_partial,
+                    check_media=True,
+                )
+            manifest["archive"] = {
+                **report.as_dict(),
+                "sha256": _sha256_file(args.out_zip) if args.out_zip.exists() else None,
+            }
+            for line in report.summary_lines():
+                print(f"    {line}", flush=True)
+            if not report.ok:
+                for err in report.errors[:20]:
+                    print(f"[!] Archive error: {err}", file=sys.stderr, flush=True)
+                return 1
+    finally:
+        if clamped_crf is not None:
+            manifest["render_config"]["clamped_to_fallback_crf"] = True
+            manifest["render_config"]["effective_crf"] = clamped_crf
+        _reconcile_manifest_with_disk(
+            manifest,
+            args.out_videos_dir,
+            clamped_crf=clamped_crf,
+            initial_crf=int(args.crf),
+        )
+        manifest["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
+        _write_json_atomic(manifest_path, manifest)
+        print(f"[+] Wrote provenance manifest -> {manifest_path}", flush=True)
 
     return 0
 
