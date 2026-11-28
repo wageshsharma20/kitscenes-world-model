@@ -10,7 +10,34 @@ from kitscenes import spec
 from kitscenes.esrgan import build_realesrgan_blend_fn
 from scripts.eval_b6_post_crf import _repack_variant_under_budget, apply_luma_safe_unsharp, project_2400_gib
 from scripts.eval_world_model_qalign import _load_predicted_trajectories, load_val_records
-from scripts.run_production_reproj import parse_args as parse_prod_args
+from scripts.run_production_reproj import _clamp_videos_crf_if_oversized, parse_args as parse_prod_args
+
+
+def test_clamp_preserves_front_when_surround_step_fits_budget(tmp_path: Path, monkeypatch) -> None:
+    """Surround-first CRF stepping must satisfy max_bytes without touching front.mp4."""
+    scen = tmp_path / "0000000"
+    scen.mkdir()
+    front_mp4 = scen / "front.mp4"
+    front_mp4.write_bytes(b"F" * 1000)
+    for cam in spec.CAMERAS:
+        if cam != "front":
+            (scen / f"{cam}.mp4").write_bytes(b"S" * 1000)
+
+    touched = []
+
+    def fake_reencode(mp4_path: Path, crf: int, preset: str = "medium") -> None:
+        touched.append((mp4_path.stem, crf, preset))
+        mp4_path.write_bytes(b"s" * 500)
+
+    import scripts.run_production_reproj as prod
+
+    monkeypatch.setattr(prod, "_reencode_mp4_crf", fake_reencode)
+    clamped = _clamp_videos_crf_if_oversized(
+        tmp_path, max_bytes=3600, fallback_crf=18, preset="slow", preserve_front_first=True, surround_base_crf=15
+    )
+    assert clamped is True
+    assert front_mp4.stat().st_size == 1000
+    assert all(stem != "front" and crf == 16 and preset == "slow" for stem, crf, preset in touched)
 
 
 def test_load_val_records_signature_matches_b8() -> None:

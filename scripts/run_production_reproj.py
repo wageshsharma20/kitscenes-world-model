@@ -405,7 +405,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def _reencode_mp4_crf(mp4_path: Path, crf: int) -> None:
+def _reencode_mp4_crf(mp4_path: Path, crf: int, preset: str = "medium") -> None:
     """Re-encode one MP4 atomically to a higher CRF when clamping final archive size."""
     ffmpeg_bin = shutil.which("ffmpeg")
     if not ffmpeg_bin:
@@ -422,6 +422,8 @@ def _reencode_mp4_crf(mp4_path: Path, crf: int) -> None:
                 str(mp4_path),
                 "-c:v",
                 "libx264",
+                "-preset",
+                preset,
                 "-crf",
                 str(crf),
                 "-pix_fmt",
@@ -436,18 +438,50 @@ def _reencode_mp4_crf(mp4_path: Path, crf: int) -> None:
         raise
 
 
-def _clamp_videos_crf_if_oversized(videos_dir: Path, max_bytes: int, fallback_crf: int) -> bool:
+def _reencode_with_optional_preset(mp4_path: Path, crf: int, preset: str) -> None:
+    """Call legacy 2-arg _reencode_mp4_crf when preset is default medium."""
+    if preset == "medium":
+        _reencode_mp4_crf(mp4_path, crf)
+    else:
+        _reencode_mp4_crf(mp4_path, crf, preset=preset)
+
+
+def _clamp_videos_crf_if_oversized(
+    videos_dir: Path,
+    max_bytes: int,
+    fallback_crf: int,
+    *,
+    preset: str = "medium",
+    preserve_front_first: bool = False,
+    surround_base_crf: Optional[int] = None,
+) -> bool:
     mp4s = sorted(videos_dir.rglob("*.mp4"))
     total_bytes = sum(p.stat().st_size for p in mp4s)
     if total_bytes <= max_bytes or fallback_crf <= 0:
         return False
+
+    if preserve_front_first and surround_base_crf is not None:
+        surr = [p for p in mp4s if p.stem != "front"]
+        for s_crf in range(surround_base_crf + 1, max(fallback_crf, surround_base_crf + 1) + 1):
+            print(
+                f"[!] Total MP4 bytes ({total_bytes / (1024**3):.2f} GiB) exceeds {max_bytes / (1024**3):.2f} GiB; "
+                f"stepping surround5 ({len(surr)} videos) to CRF {s_crf} (preserving front) ...",
+                flush=True,
+            )
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                list(pool.map(lambda p, c=s_crf: _reencode_with_optional_preset(p, c, preset), surr))
+            total_bytes = sum(p.stat().st_size for p in mp4s)
+            print(f"[+] Surround clamp CRF {s_crf} -> {total_bytes / (1024**3):.2f} GiB", flush=True)
+            if total_bytes <= max_bytes:
+                return True
+
     print(
         f"[!] Total MP4 bytes ({total_bytes / (1024**3):.2f} GiB) exceeds {max_bytes / (1024**3):.2f} GiB; "
         f"clamping {len(mp4s)} videos to CRF {fallback_crf} ...",
         flush=True,
     )
     with ThreadPoolExecutor(max_workers=4) as pool:
-        list(pool.map(lambda p: _reencode_mp4_crf(p, fallback_crf), mp4s))
+        list(pool.map(lambda p: _reencode_with_optional_preset(p, fallback_crf, preset), mp4s))
     new_bytes = sum(p.stat().st_size for p in mp4s)
     print(f"[+] Clamped total MP4 bytes -> {new_bytes / (1024**3):.2f} GiB", flush=True)
     return True
@@ -690,7 +724,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if args.pack_zip:
             max_bytes = int(args.max_zip_gib * (1024 ** 3))
             if args.fallback_crf > 0 and _clamp_videos_crf_if_oversized(
-                args.out_videos_dir, max_bytes, args.fallback_crf
+                args.out_videos_dir,
+                max_bytes,
+                args.fallback_crf,
+                preset=str(args.x264_preset),
+                preserve_front_first=(args.front_crf is not None),
+                surround_base_crf=int(args.crf),
             ):
                 clamped_crf = int(args.fallback_crf)
             print(f"[*] Validating and packing {args.out_zip} ...", flush=True)
@@ -701,7 +740,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 check_media=True,
             )
             if args.fallback_crf > 0 and not report.ok and args.out_zip.exists() and args.out_zip.stat().st_size > max_bytes:
-                if _clamp_videos_crf_if_oversized(args.out_videos_dir, 0, args.fallback_crf):
+                if _clamp_videos_crf_if_oversized(
+                    args.out_videos_dir,
+                    0,
+                    args.fallback_crf,
+                    preset=str(args.x264_preset),
+                    preserve_front_first=(args.front_crf is not None),
+                    surround_base_crf=int(args.crf),
+                ):
                     clamped_crf = int(args.fallback_crf)
                 report = archive.build_archive(
                     args.out_videos_dir,
