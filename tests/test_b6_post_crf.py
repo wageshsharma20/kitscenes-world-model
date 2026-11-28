@@ -7,7 +7,34 @@ from pathlib import Path
 import numpy as np
 
 from kitscenes import spec
-from scripts.eval_b6_post_crf import apply_luma_safe_unsharp, project_2400_gib
+from scripts.eval_b6_post_crf import _repack_variant_under_budget, apply_luma_safe_unsharp, project_2400_gib
+
+
+def test_repack_reuses_existing_under_budget_clips(tmp_path: Path) -> None:
+    """When all clips already exist on disk under <=2.92 GiB, _repack_variant_under_budget skips re-encoding."""
+    src_entries = []
+    v_dir = tmp_path / "videos" / "cached_var" / "0000900"
+    v_dir.mkdir(parents=True)
+    for cam in spec.CAMERAS:
+        mp4 = v_dir / f"{cam}.mp4"
+        mp4.write_bytes(b"x" * 2048)
+        src_entries.append(
+            {
+                "scenario_id": "0000900",
+                "scenario_type": "0 specifically selected",
+                "camera": cam,
+                "mp4_path": str(tmp_path / "nonexistent" / f"{cam}.mp4"),
+                "psnr": 20.0,
+                "emc_local": 0.01,
+            }
+        )
+
+    entries, final_gib, pair = _repack_variant_under_budget(
+        src_entries, tmp_path, "cached_var", n_scenarios=21, crf_schedule=[(15, 19)]
+    )
+    assert len(entries) == 6
+    assert final_gib < 2.92
+    assert pair == (15, 19)
 
 
 def test_apply_luma_safe_unsharp_skips_dark_night_frames() -> None:

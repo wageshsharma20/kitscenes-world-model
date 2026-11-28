@@ -215,52 +215,76 @@ def _repack_variant_under_budget(
     crf_schedule: Sequence[Tuple[int, int]],
     preset: str = "slow",
     frame_transform: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-    compute_emc: bool = False,
+    pred_trajs: Optional[Dict[str, List[List[float]]]] = None,
 ) -> Tuple[List[Dict[str, object]], float, Tuple[int, int]]:
     """Build one strict <=2.92 GiB submission-compliant variant from existing candidate clips."""
     v_dir = dst_root / "videos" / variant_name
     v_dir.mkdir(parents=True, exist_ok=True)
     cached_frames: Dict[str, np.ndarray] = {}
 
-    if frame_transform is not None:
+    existing_ok = all(
+        (v_dir / str(e["scenario_id"]) / f"{e['camera']}.mp4").exists()
+        and (v_dir / str(e["scenario_id"]) / f"{e['camera']}.mp4").stat().st_size > 1024
+        for e in src_entries
+    )
+    chosen_pair = crf_schedule[-1]
+    if existing_ok:
+        proj_gib, cam_gib = project_2400_gib(v_dir, n_scenarios)
+        if proj_gib <= 2.92:
+            print(f"  [{variant_name}] Reusing cached <=2.92 GiB clips -> proj={proj_gib:.3f} GiB | {cam_gib}", flush=True)
+            chosen_pair = crf_schedule[0]
+        else:
+            existing_ok = False
+
+    if not existing_ok:
+        if frame_transform is not None:
+            for e in src_entries:
+                sid, cam = str(e["scenario_id"]), str(e["camera"])
+                cached_frames[f"{sid}__{cam}"] = frame_transform(decode_mp4_rgb(Path(str(e["mp4_path"]))))
+
+        for f_crf, s_crf in crf_schedule:
+            def _job(e: Dict[str, object], f_c: int = f_crf, s_c: int = s_crf) -> None:
+                sid, cam = str(e["scenario_id"]), str(e["camera"])
+                crf = f_c if cam == "front" else s_c
+                dst_mp4 = v_dir / sid / f"{cam}.mp4"
+                if frame_transform is not None:
+                    encode_rgb_h264_preset(cached_frames[f"{sid}__{cam}"], dst_mp4, crf=crf, preset=preset)
+                else:
+                    reencode_mp4_preset(Path(str(e["mp4_path"])), dst_mp4, crf=crf, preset=preset)
+
+            with ThreadPoolExecutor(max_workers=4) as pool:
+                list(pool.map(_job, src_entries))
+
+            proj_gib, cam_gib = project_2400_gib(v_dir, n_scenarios)
+            chosen_pair = (f_crf, s_crf)
+            print(
+                f"  [{variant_name}] crf=({f_crf},{s_crf}) preset={preset} -> proj={proj_gib:.3f} GiB | {cam_gib}",
+                flush=True,
+            )
+            if proj_gib <= 2.92:
+                break
+
+    cached_frames.clear()
+    emc_by_sid: Dict[str, Optional[float]] = {}
+    if pred_trajs:
+        by_sid_paths: Dict[str, Dict[str, Path]] = {}
         for e in src_entries:
             sid, cam = str(e["scenario_id"]), str(e["camera"])
-            cached_frames[f"{sid}__{cam}"] = frame_transform(decode_mp4_rgb(Path(str(e["mp4_path"]))))
-
-    chosen_pair = crf_schedule[-1]
-    for f_crf, s_crf in crf_schedule:
-        def _job(e: Dict[str, object], f_c: int = f_crf, s_c: int = s_crf) -> None:
-            sid, cam = str(e["scenario_id"]), str(e["camera"])
-            crf = f_c if cam == "front" else s_c
-            dst_mp4 = v_dir / sid / f"{cam}.mp4"
-            if frame_transform is not None:
-                encode_rgb_h264_preset(cached_frames[f"{sid}__{cam}"], dst_mp4, crf=crf, preset=preset)
-            else:
-                reencode_mp4_preset(Path(str(e["mp4_path"])), dst_mp4, crf=crf, preset=preset)
-
-        # Only re-encode surround or front if needed on subsequent passes
-        with ThreadPoolExecutor(max_workers=4) as pool:
-            list(pool.map(_job, src_entries))
-
-        proj_gib, cam_gib = project_2400_gib(v_dir, n_scenarios)
-        chosen_pair = (f_crf, s_crf)
-        print(
-            f"  [{variant_name}] crf=({f_crf},{s_crf}) preset={preset} -> proj={proj_gib:.3f} GiB | {cam_gib}",
-            flush=True,
-        )
-        if proj_gib <= 2.92:
-            break
+            by_sid_paths.setdefault(sid, {})[cam] = v_dir / sid / f"{cam}.mp4"
+        for sid, cam_paths in by_sid_paths.items():
+            traj = pred_trajs.get(sid)
+            if traj:
+                try:
+                    res = compute_video_optical_flow_emc(cam_paths, traj)
+                    emc_by_sid[sid] = round(float(res.get("emc", 0.0)), 4)
+                except Exception:
+                    emc_by_sid[sid] = None
 
     out_entries: List[Dict[str, object]] = []
     for e in src_entries:
         sid, cam = str(e["scenario_id"]), str(e["camera"])
         mp4 = v_dir / sid / f"{cam}.mp4"
-        emc_val = e.get("emc_local")
-        if compute_emc:
-            arr = cached_frames.get(f"{sid}__{cam}")
-            if arr is None:
-                arr = decode_mp4_rgb(mp4)
-            emc_val = round(float(compute_video_optical_flow_emc(arr)), 4)
+        emc_val = emc_by_sid[sid] if sid in emc_by_sid else e.get("emc_local")
         out_entries.append(
             {
                 "key": f"{variant_name}__{sid}__{cam}",
@@ -297,6 +321,21 @@ def main() -> int:
         gib, per_cam = project_2400_gib(b5_dir / "videos" / vn, n_scen)
         print(f"  {vn:18s}: {gib:.3f} GiB | {per_cam}", flush=True)
 
+    pred_trajs: Dict[str, List[List[float]]] = {}
+    val_root = Path(str(m5.get("val_root", "")))
+    val_traj_p = next(
+        (p for p in (val_root / "val_trajectories.jsonl", PROJECT_ROOT / "data" / "val_trajectories.jsonl") if p.exists()),
+        None,
+    )
+    train_traj_p = next(
+        (p for p in (val_root / "train_trajectories.jsonl", PROJECT_ROOT / "data" / "train_trajectories.jsonl") if p.exists()),
+        PROJECT_ROOT / "data" / "train_trajectories.jsonl",
+    )
+    if val_traj_p is not None:
+        from scripts.eval_world_model_qalign import _load_predicted_trajectories
+
+        pred_trajs = _load_predicted_trajectories("ridge", val_traj_p, train_traj_p, None)
+
     t0 = time.time()
     # 1. cand_m_sharp38 compressed cleanly with -preset slow to <= 2.92 GiB (high front priority)
     m_15_entries, m15_gib, m15_crf = _repack_variant_under_budget(
@@ -304,7 +343,7 @@ def main() -> int:
         b6_dir,
         "b6_m_slow_asym1",
         n_scen,
-        crf_schedule=[(15, 18), (15, 19), (16, 19), (16, 20), (17, 20)],
+        crf_schedule=[(15, 19), (16, 19), (16, 20), (17, 20)],
         preset="slow",
     )
     # 2. cand_m_sharp38 with uniform CRF under <= 2.92 GiB (to verify front priority vs uniform CRF)
@@ -313,7 +352,7 @@ def main() -> int:
         b6_dir,
         "b6_m_slow_unif",
         n_scen,
-        crf_schedule=[(17, 17), (18, 18), (19, 19)],
+        crf_schedule=[(18, 18), (19, 19)],
         preset="slow",
     )
     # 3. Night-safe extra sharpen (~0.54 daylight, 0.24 night) + -preset slow <= 2.92 GiB
@@ -325,7 +364,7 @@ def main() -> int:
         crf_schedule=[(15, 19), (16, 19), (16, 20), (17, 20)],
         preset="slow",
         frame_transform=lambda arr: apply_luma_safe_unsharp(arr, extra_amount=0.28, min_luma=45.0),
-        compute_emc=True,
+        pred_trajs=pred_trajs,
     )
     # 4. RealESRGAN x4v3 fp16 blend on daylight cand_k_native frames + -preset slow <= 2.92 GiB
     esr_fn = build_realesrgan_blend_fn(b6_dir / "weights", device="cuda:0", blend_alpha=0.45, min_luma=35.0)
@@ -334,10 +373,10 @@ def main() -> int:
         b6_dir,
         "b6_esrgan45_asym",
         n_scen,
-        crf_schedule=[(15, 18), (15, 19), (16, 19), (16, 20)],
+        crf_schedule=[(15, 19), (16, 19), (16, 20)],
         preset="slow",
         frame_transform=esr_fn,
-        compute_emc=True,
+        pred_trajs=pred_trajs,
     )
     print(f"[+] Built 4 Stage B.6 <=2.92 GiB variants in {time.time() - t0:.1f}s", flush=True)
 
