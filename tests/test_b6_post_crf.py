@@ -8,6 +8,16 @@ import numpy as np
 
 from kitscenes import spec
 from scripts.eval_b6_post_crf import _repack_variant_under_budget, apply_luma_safe_unsharp, project_2400_gib
+from scripts.eval_world_model_qalign import _load_predicted_trajectories
+
+
+def test_load_predicted_trajectories_accepts_stage_b6_kwargs() -> None:
+    """Verify Stage B.6 keyword invocation matches _load_predicted_trajectories signature."""
+    import inspect
+
+    sig = inspect.signature(_load_predicted_trajectories)
+    bound = sig.bind("ridge", train_path=Path("t.jsonl"), val_path=Path("v.jsonl"), pred_path=None)
+    assert bound.arguments["traj_source"] == "ridge"
 
 
 def test_repack_reuses_existing_under_budget_clips(tmp_path: Path) -> None:

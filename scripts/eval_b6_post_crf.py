@@ -334,7 +334,12 @@ def main() -> int:
     if val_traj_p is not None:
         from scripts.eval_world_model_qalign import _load_predicted_trajectories
 
-        pred_trajs = _load_predicted_trajectories("ridge", val_traj_p, train_traj_p, None)
+        pred_trajs = _load_predicted_trajectories(
+            "ridge",
+            train_path=train_traj_p,
+            val_path=val_traj_p,
+            pred_path=None,
+        )
 
     t0 = time.time()
     # 1. cand_m_sharp38 compressed cleanly with -preset slow to <= 2.92 GiB (high front priority)
