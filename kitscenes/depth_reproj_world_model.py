@@ -208,6 +208,7 @@ def compute_ego_body_mask(
     t0_rgb: Optional[np.ndarray] = None,
     past_rgb_tm04: Optional[np.ndarray] = None,
     ego_speed_mps: float = 0.0,
+    ego_static_min_luma: float = 0.0,
 ) -> np.ndarray:
     """Detect pixels bolted to the ego BMW 7 Series body (hood, roof rack, trunk)."""
     mask = np.zeros((height, width), dtype=np.uint8)
@@ -227,13 +228,17 @@ def compute_ego_body_mask(
         mask = np.maximum(mask, (in_box & bottom_gate).astype(np.uint8))
 
     # Empirical temporal invariance check when moving: ego body doesn't move relative to sensor
-    if t0_rgb is not None and past_rgb_tm04 is not None and ego_speed_mps > 2.5:
+    if t0_rgb is not None and past_rgb_tm04 is not None and ego_speed_mps > 2.5 and ego_static_min_luma < 255.5:
         t0_s = cv2.resize(t0_rgb, (width, height), interpolation=cv2.INTER_AREA).astype(np.float32)
         p_s = cv2.resize(past_rgb_tm04, (width, height), interpolation=cv2.INTER_AREA).astype(np.float32)
         diff = np.mean(np.abs(t0_s - p_s), axis=-1)
         rows = np.arange(height, dtype=np.float32)[:, None]
         bottom_strip = rows >= (0.80 * height)
         static_body = (diff < 6.0) & bottom_strip
+        if ego_static_min_luma > 0.0:
+            t0_gray = cv2.cvtColor(np.clip(t0_s, 0, 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
+            local_contrast = cv2.absdiff(t0_gray, cv2.GaussianBlur(t0_gray, (0, 0), 2.0))
+            static_body = static_body & (t0_gray >= float(ego_static_min_luma)) & (local_contrast >= 2.0)
         mask = np.maximum(mask, static_body.astype(np.uint8))
 
     # Conservative physical camera-rig hood / roof-rack guards
@@ -323,8 +328,11 @@ class Depth3DFullFoVWorldModel:
         depth_fn: Optional[Callable[[Dict[str, np.ndarray]], Dict[str, Tuple[np.ndarray, bool]]]] = None,
         inpaint_fn: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
         crf_sharpen: float = 0.0,
+        crf_sharpen_end: Optional[float] = None,
         min_lama_hole_pixels: int = 0,
         min_lama_luma: float = 0.0,
+        ego_static_min_luma: float = 0.0,
+        preserve_native_t0: bool = False,
         chain_warps: bool = False,
         adaptive_filter: bool = False,
         photometric_refine: bool = False,
@@ -340,8 +348,11 @@ class Depth3DFullFoVWorldModel:
         self.depth_fn = depth_fn
         self.inpaint_fn = inpaint_fn
         self.crf_sharpen = float(crf_sharpen)
+        self.crf_sharpen_end = None if crf_sharpen_end is None else float(crf_sharpen_end)
         self.min_lama_hole_pixels = max(0, int(min_lama_hole_pixels))
         self.min_lama_luma = max(0.0, float(min_lama_luma))
+        self.ego_static_min_luma = max(0.0, float(ego_static_min_luma))
+        self.preserve_native_t0 = bool(preserve_native_t0)
         # Chain each frame off the frame rendered immediately before it instead of warping
         # t=0 across the whole clip. One step is 0.2 s of ego motion, so the planar stretch
         # (and therefore the disocclusion area the inpainter has to invent) is far smaller.
@@ -846,7 +857,9 @@ class Depth3DFullFoVWorldModel:
             else:
                 rgb = np.asarray(src, dtype=np.uint8)
             t0_hi_np[cam] = rgb
-            t0_hi_t[cam] = self._to_tensor_img(rgb, downsample=(self.depth_fn is None))
+            t0_hi_t[cam] = self._to_tensor_img(
+                rgb, downsample=(self.depth_fn is None and not self.preserve_native_t0)
+            )
             if rgb.shape[:2] != (self.render_h, self.render_w):
                 t0_ren_np[cam] = cv2.resize(rgb, (self.render_w, self.render_h), interpolation=cv2.INTER_AREA)
             else:
@@ -894,6 +907,7 @@ class Depth3DFullFoVWorldModel:
                 t0_rgb=t0_ren_np[cam],
                 past_rgb_tm04=p_tm04,
                 ego_speed_mps=ego_speed,
+                ego_static_min_luma=self.ego_static_min_luma,
             )
             ego_masks[cam] = m_ego
             ego_masks_t[cam] = torch.from_numpy(m_ego).to(self.device)
@@ -1108,10 +1122,15 @@ class Depth3DFullFoVWorldModel:
                     saturation_strength=self.saturation_strength,
                     preserve_frame0=False,
                 )
-            if self.crf_sharpen > 0.0:
+            if self.crf_sharpen > 0.0 or (self.crf_sharpen_end is not None and self.crf_sharpen_end > 0.0):
+                s0 = max(0.0, self.crf_sharpen)
+                s1 = s0 if self.crf_sharpen_end is None else max(0.0, float(self.crf_sharpen_end))
+                denom = max(spec.FRAME_COUNT - 1, 1)
                 for k in range(spec.FRAME_COUNT):
-                    blur = cv2.GaussianBlur(frames_out[k], (0, 0), 1.0)
-                    frames_out[k] = cv2.addWeighted(frames_out[k], 1.0 + self.crf_sharpen, blur, -self.crf_sharpen, 0)
+                    alpha = s0 + (s1 - s0) * (float(k) / float(denom))
+                    if alpha > 0.0:
+                        blur = cv2.GaussianBlur(frames_out[k], (0, 0), 1.0)
+                        frames_out[k] = cv2.addWeighted(frames_out[k], 1.0 + alpha, blur, -alpha, 0)
 
             outputs[cam] = frames_out
 
