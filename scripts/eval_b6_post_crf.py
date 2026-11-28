@@ -28,6 +28,9 @@ from kitscenes.emc_eval import compute_video_optical_flow_emc
 REALESRGAN_X4V3_URL = (
     "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
 )
+REALESRGAN_WDN_X4V3_URL = (
+    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth"
+)
 
 
 def decode_mp4_rgb(mp4_path: Path) -> np.ndarray:
@@ -157,13 +160,8 @@ def apply_luma_safe_unsharp(frames_rgb: np.ndarray, extra_amount: float = 0.30, 
     return out
 
 
-def build_realesrgan_blend_fn(
-    weights_dir: Path,
-    device: str = "cuda:0",
-    blend_alpha: float = 0.45,
-    min_luma: float = 35.0,
-) -> Optional[Callable[[np.ndarray], np.ndarray]]:
-    """Load realesr-general-x4v3 via spandrel in fp16 for fast deterministic texture enhancement."""
+def _load_spandrel_model(weights_dir: Path, url: str, dev: torch.device) -> Tuple[object, bool]:
+    """Download if needed and load one spandrel SR model onto `dev` (fp16 on CUDA)."""
     try:
         import spandrel
     except ImportError:
@@ -171,34 +169,52 @@ def build_realesrgan_blend_fn(
         import spandrel
 
     weights_dir.mkdir(parents=True, exist_ok=True)
-    w_path = weights_dir / "realesr-general-x4v3.pth"
+    w_path = weights_dir / Path(url).name
     if not w_path.exists():
-        print(f"[*] Downloading {REALESRGAN_X4V3_URL} -> {w_path} ...", flush=True)
-        urllib.request.urlretrieve(REALESRGAN_X4V3_URL, w_path)
+        print(f"[*] Downloading {url} -> {w_path} ...", flush=True)
+        urllib.request.urlretrieve(url, w_path)
 
-    dev = torch.device(device if torch.cuda.is_available() else "cpu")
     model = spandrel.ModelLoader(device=dev).load_from_file(str(w_path)).model.eval()
     use_fp16 = dev.type == "cuda"
     if use_fp16:
         model = model.half()
+    return model, use_fp16
+
+
+def build_realesrgan_blend_fn(
+    weights_dir: Path,
+    device: str = "cuda:0",
+    blend_alpha: float = 0.45,
+    min_luma: float = 35.0,
+    night_blend_alpha: float = 0.0,
+) -> Optional[Callable[[np.ndarray], np.ndarray]]:
+    """Load realesr-general-x4v3 (and optional WDN night denoiser) via spandrel in fp16."""
+    dev = torch.device(device if torch.cuda.is_available() else "cpu")
+    model_day, use_fp16 = _load_spandrel_model(weights_dir, REALESRGAN_X4V3_URL, dev)
+    model_night = (
+        _load_spandrel_model(weights_dir, REALESRGAN_WDN_X4V3_URL, dev)[0]
+        if night_blend_alpha > 0.0
+        else None
+    )
 
     @torch.inference_mode()
     def _enhance(frames_rgb: np.ndarray) -> np.ndarray:
         out = frames_rgb.copy()
         n_f, h, w, _c = out.shape
-        # Check clip brightness from frame 0 + mid frame so dark night clips are never noise-boosted
         mean_luma = float(cv2.cvtColor(out[0], cv2.COLOR_RGB2GRAY).mean())
-        if mean_luma < min_luma:
+        is_night = mean_luma < min_luma
+        if is_night and model_night is None:
             return out
+        active_model = model_night if is_night else model_day
+        alpha = night_blend_alpha if is_night else blend_alpha
         for start in range(0, n_f, 2):
             chunk = out[start : start + 2]
             ten = torch.from_numpy(chunk).permute(0, 3, 1, 2).to(dev).float().div_(255.0)
             if use_fp16:
                 ten = ten.half()
-            sr = model(ten).float().clamp_(0.0, 1.0)
-            # Area downsample 4x SR back cleanly to native 876x568
+            sr = active_model(ten).float().clamp_(0.0, 1.0)
             sr_ds = torch.nn.functional.interpolate(sr, size=(h, w), mode="area")
-            blended = (1.0 - blend_alpha) * ten.float() + blend_alpha * sr_ds
+            blended = (1.0 - alpha) * ten.float() + alpha * sr_ds
             out[start : start + 2] = (
                 blended.clamp_(0.0, 1.0).mul_(255.0).round_().byte().permute(0, 2, 3, 1).cpu().numpy()
             )
