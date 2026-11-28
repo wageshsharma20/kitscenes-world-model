@@ -32,18 +32,14 @@ def test_ego_static_min_luma_prevents_dark_road_false_ego_mask() -> None:
     assert filtered.mean() < 0.05
 
 
-def test_ego_static_min_luma_keeps_textured_bright_static_body() -> None:
-    """Bright textured pixels stationary across t=-0.4s and t=0 are still detected."""
+def test_ego_static_min_luma_keeps_bright_static_body() -> None:
+    """Bright pixels (even smooth wet hoods) stationary across t=-0.4s and t=0 are detected."""
     h, w = spec.HEIGHT, spec.WIDTH
     k_mat = np.array([[500.0, 0.0, w / 2.0], [0.0, 500.0, h / 2.0], [0.0, 0.0, 1.0]], dtype=np.float64)
     r_mat = np.eye(3, dtype=np.float64)
     t_vec = np.zeros(3, dtype=np.float64)
 
-    # Textured checkerboard badge in the bottom strip
-    ys, xs = np.mgrid[0:h, 0:w]
-    pattern = (((xs // 2 + ys // 2) % 2) * 80 + 120).astype(np.uint8)
-    img = np.stack([pattern, pattern, pattern], axis=-1)
-
+    img = np.full((h, w, 3), 120, dtype=np.uint8)
     filtered = compute_ego_body_mask(
         "rear_right", None, k_mat, r_mat, t_vec, h, w,
         t0_rgb=img, past_rgb_tm04=img.copy(), ego_speed_mps=10.0, ego_static_min_luma=45.0,

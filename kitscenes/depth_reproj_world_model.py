@@ -237,8 +237,7 @@ def compute_ego_body_mask(
         static_body = (diff < 6.0) & bottom_strip
         if ego_static_min_luma > 0.0:
             t0_gray = cv2.cvtColor(np.clip(t0_s, 0, 255).astype(np.uint8), cv2.COLOR_RGB2GRAY).astype(np.float32)
-            local_contrast = cv2.absdiff(t0_gray, cv2.GaussianBlur(t0_gray, (0, 0), 2.0))
-            static_body = static_body & (t0_gray >= float(ego_static_min_luma)) & (local_contrast >= 2.0)
+            static_body = static_body & (t0_gray >= float(ego_static_min_luma))
         mask = np.maximum(mask, static_body.astype(np.uint8))
 
     # Conservative physical camera-rig hood / roof-rack guards

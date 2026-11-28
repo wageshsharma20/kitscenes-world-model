@@ -32,6 +32,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from kitscenes import archive, spec
 from kitscenes.depth_reproj_world_model import Depth3DFullFoVWorldModel
+from kitscenes.esrgan import build_realesrgan_blend_fn, encode_rgb_h264_preset
 from kitscenes.video_engine import CameraRig
 from scripts.eval_world_model_qalign import build_depth_fn, build_lama_fn, encode_rgb_h264
 
@@ -249,12 +250,27 @@ def _gpu_worker(
 
     depth_fn = build_depth_fn(str(cfg["depth_model"]), device=device) if cfg["use_depth"] else None
     lama_fn = build_lama_fn(device=device) if cfg["use_lama"] else None
+    esr_day = float(cfg.get("esrgan_alpha", 0.0))
+    esr_night = float(cfg.get("esrgan_night_wdn_alpha", 0.0))
+    esrgan_fn = (
+        build_realesrgan_blend_fn(
+            Path(str(cfg.get("esrgan_weights_dir") or (PROJECT_ROOT / "weights" / "esrgan"))),
+            device=device,
+            blend_alpha=esr_day,
+            min_luma=float(cfg.get("esrgan_min_luma", 35.0)),
+            night_blend_alpha=esr_night,
+        )
+        if (esr_day > 0.0 or esr_night > 0.0)
+        else None
+    )
     model_kwargs = {
         "device": device,
         "render_scale": int(cfg["render_scale"]),
         "inpaint_fn": lama_fn,
         "crf_sharpen": float(cfg["crf_sharpen"]),
         "min_lama_hole_pixels": int(cfg.get("min_lama_hole_pixels", 0)),
+        "min_lama_luma": float(cfg.get("min_lama_luma", 0.0)),
+        "ego_static_min_luma": float(cfg.get("ego_static_min_luma", 0.0)),
         "adaptive_filter": bool(cfg.get("adaptive_filter", False)),
         "photometric_refine": bool(cfg.get("photometric_refine", False)),
         "photometric_strength": float(cfg.get("photometric_strength", 1.0)),
@@ -303,10 +319,19 @@ def _gpu_worker(
             past_trajectory=past_traj,
         )
         scen_dir.mkdir(parents=True, exist_ok=True)
+        x264_preset = str(cfg.get("x264_preset", "medium"))
+        front_crf = cfg.get("front_crf")
         for cam in spec.CAMERAS:
-            encode_rgb_h264(gen[cam], scen_dir / f"{cam}.mp4", crf=int(cfg["crf"]))
+            frames_cam = esrgan_fn(gen[cam]) if esrgan_fn is not None else gen[cam]
+            cam_crf = int(front_crf) if (cam == "front" and front_crf is not None) else int(cfg["crf"])
+            if x264_preset == "medium":
+                encode_rgb_h264(frames_cam, scen_dir / f"{cam}.mp4", crf=cam_crf)
+            else:
+                encode_rgb_h264_preset(frames_cam, scen_dir / f"{cam}.mp4", crf=cam_crf, preset=x264_preset)
 
         cam_entries = _scan_camera_files(scen_dir, default_status="rendered", effective_crf=int(cfg["crf"]))
+        if front_crf is not None and "front" in cam_entries and cam_entries["front"].get("effective_crf") is not None:
+            cam_entries["front"]["effective_crf"] = int(front_crf)
         hole_map = getattr(active_model, "last_hole_fraction", {})
         for cam in spec.CAMERAS:
             cam_entries[cam].update(_camera_hole_stats(hole_map, cam))
@@ -353,6 +378,8 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--no-depth-slices", type=str, default="", help="Comma-separated scenario_types to run without depth")
     parser.add_argument("--no-lama", action="store_true", default=False)
     parser.add_argument("--min-lama-hole-pixels", type=int, default=0, help="Skip LaMa when hole pixel count is below threshold")
+    parser.add_argument("--min-lama-luma", type=float, default=0.0, help="Skip LaMa when mean frame luma is below threshold")
+    parser.add_argument("--ego-static-min-luma", type=float, default=0.0, help="Require min luma for empirical static ego check")
     parser.add_argument("--render-scale", type=int, default=2)
     parser.add_argument("--adaptive-filter", action="store_true", default=False, help="Enable Jacobian-aware minification mip filtering")
     parser.add_argument("--photometric-refine", action="store_true", default=False, help="Anchor exposure and saturation to t=0 frame")
@@ -361,6 +388,12 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser.add_argument("--equalize-strength", type=float, default=0.20)
     parser.add_argument("--crf-sharpen", type=float, default=0.0)
     parser.add_argument("--crf", type=int, default=14)
+    parser.add_argument("--front-crf", type=int, default=None, help="Optional separate CRF for weighted front camera")
+    parser.add_argument("--x264-preset", type=str, default="medium", help="libx264 preset (e.g. medium, slow)")
+    parser.add_argument("--esrgan-alpha", type=float, default=0.0, help="Blend weight for daylight realesr-general-x4v3 restoration")
+    parser.add_argument("--esrgan-night-wdn-alpha", type=float, default=0.0, help="Blend weight for nighttime realesr-general-wdn-x4v3 restoration")
+    parser.add_argument("--esrgan-min-luma", type=float, default=35.0, help="Luma cutoff between night WDN and daylight RealESRGAN")
+    parser.add_argument("--esrgan-weights-dir", type=Path, default=PROJECT_ROOT / "weights" / "esrgan")
     parser.add_argument("--max-zip-gib", type=float, default=2.95, help="Auto-transcode to --fallback-crf if packed archive exceeds this GiB limit")
     parser.add_argument("--fallback-crf", type=int, default=18, help="Fallback CRF if initial archive exceeds --max-zip-gib (0 disables)")
     parser.add_argument("--gpus", type=str, default="0,1", help="Comma-separated CUDA device indices (or empty for CPU)")
@@ -450,8 +483,15 @@ def _build_initial_manifest(
             "no_depth_slices": list(cfg["no_depth_slices"]),
             "lama_enabled": bool(cfg["use_lama"]),
             "min_lama_hole_pixels": int(args.min_lama_hole_pixels),
+            "min_lama_luma": float(cfg.get("min_lama_luma", 0.0)),
+            "ego_static_min_luma": float(cfg.get("ego_static_min_luma", 0.0)),
+            "esrgan_alpha": float(cfg.get("esrgan_alpha", 0.0)),
+            "esrgan_night_wdn_alpha": float(cfg.get("esrgan_night_wdn_alpha", 0.0)),
+            "esrgan_min_luma": float(cfg.get("esrgan_min_luma", 35.0)),
             "crf_sharpen": float(args.crf_sharpen),
             "crf": int(args.crf),
+            "front_crf": None if args.front_crf is None else int(args.front_crf),
+            "x264_preset": str(args.x264_preset),
             "fallback_crf": int(args.fallback_crf),
             "max_zip_gib": float(args.max_zip_gib),
             "effective_crf": int(args.crf),
@@ -584,6 +624,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "no_depth_slices": tuple(s.strip() for s in args.no_depth_slices.split(",") if s.strip()),
         "use_lama": not args.no_lama,
         "min_lama_hole_pixels": args.min_lama_hole_pixels,
+        "min_lama_luma": float(args.min_lama_luma),
+        "ego_static_min_luma": float(args.ego_static_min_luma),
         "render_scale": args.render_scale,
         "adaptive_filter": bool(args.adaptive_filter),
         "photometric_refine": bool(args.photometric_refine),
@@ -592,6 +634,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "equalize_strength": float(args.equalize_strength),
         "crf_sharpen": args.crf_sharpen,
         "crf": args.crf,
+        "front_crf": args.front_crf,
+        "x264_preset": args.x264_preset,
+        "esrgan_alpha": float(args.esrgan_alpha),
+        "esrgan_night_wdn_alpha": float(args.esrgan_night_wdn_alpha),
+        "esrgan_min_luma": float(args.esrgan_min_luma),
+        "esrgan_weights_dir": str(args.esrgan_weights_dir),
     }
 
     manifest_path = args.manifest_out or (args.out_videos_dir / "generation_manifest.json")

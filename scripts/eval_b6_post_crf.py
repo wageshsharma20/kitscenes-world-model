@@ -12,11 +12,9 @@ import subprocess
 import sys
 import time
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
-import urllib.request
 
 import cv2
 import numpy as np
-import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
@@ -24,13 +22,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from kitscenes import spec
 from kitscenes.emc_eval import compute_video_optical_flow_emc
-
-REALESRGAN_X4V3_URL = (
-    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-x4v3.pth"
-)
-REALESRGAN_WDN_X4V3_URL = (
-    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesr-general-wdn-x4v3.pth"
-)
+from kitscenes.esrgan import build_realesrgan_blend_fn, encode_rgb_h264_preset
 
 
 def decode_mp4_rgb(mp4_path: Path) -> np.ndarray:
@@ -46,62 +38,6 @@ def decode_mp4_rgb(mp4_path: Path) -> np.ndarray:
     if not frames:
         raise RuntimeError(f"Failed to decode frames from {mp4_path}")
     return np.stack(frames, axis=0)
-
-
-def encode_rgb_h264_preset(
-    frames_rgb: np.ndarray,
-    out_mp4: Path,
-    crf: int,
-    preset: str = "slow",
-    fps: float = float(spec.FPS),
-) -> None:
-    """Encode (N, H, W, 3) uint8 RGB array into yuv420p H.264 MP4 with explicit preset."""
-    ffmpeg_bin = shutil.which("ffmpeg")
-    if not ffmpeg_bin:
-        raise RuntimeError("ffmpeg binary not found in PATH.")
-    out_mp4.parent.mkdir(parents=True, exist_ok=True)
-    n_f, h, w, _c = frames_rgb.shape
-    assert n_f > 0
-    tmp = out_mp4.with_name(f".{out_mp4.stem}.tmp{out_mp4.suffix}")
-    try:
-        proc = subprocess.Popen(
-            [
-                ffmpeg_bin,
-                "-y",
-                "-v",
-                "error",
-                "-f",
-                "rawvideo",
-                "-vcodec",
-                "rawvideo",
-                "-pix_fmt",
-                "rgb24",
-                "-s",
-                f"{w}x{h}",
-                "-r",
-                f"{fps:.6f}",
-                "-i",
-                "-",
-                "-c:v",
-                "libx264",
-                "-preset",
-                preset,
-                "-crf",
-                str(int(crf)),
-                "-pix_fmt",
-                "yuv420p",
-                str(tmp),
-            ],
-            stdin=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        _out, err = proc.communicate(input=np.ascontiguousarray(frames_rgb, dtype=np.uint8).tobytes())
-        if proc.returncode != 0:
-            raise RuntimeError(f"ffmpeg encode failed ({out_mp4}): {err.decode(errors='ignore')}")
-        os.replace(tmp, out_mp4)
-    except Exception:
-        tmp.unlink(missing_ok=True)
-        raise
 
 
 def reencode_mp4_preset(src_mp4: Path, dst_mp4: Path, crf: int, preset: str = "slow") -> None:
@@ -158,69 +94,6 @@ def apply_luma_safe_unsharp(frames_rgb: np.ndarray, extra_amount: float = 0.30, 
             blur = cv2.GaussianBlur(out[i], (0, 0), 1.0)
             out[i] = cv2.addWeighted(out[i], 1.0 + extra_amount, blur, -extra_amount, 0)
     return out
-
-
-def _load_spandrel_model(weights_dir: Path, url: str, dev: torch.device) -> Tuple[object, bool]:
-    """Download if needed and load one spandrel SR model onto `dev` (fp16 on CUDA)."""
-    try:
-        import spandrel
-    except ImportError:
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "spandrel"], check=True)
-        import spandrel
-
-    weights_dir.mkdir(parents=True, exist_ok=True)
-    w_path = weights_dir / Path(url).name
-    if not w_path.exists():
-        print(f"[*] Downloading {url} -> {w_path} ...", flush=True)
-        urllib.request.urlretrieve(url, w_path)
-
-    model = spandrel.ModelLoader(device=dev).load_from_file(str(w_path)).model.eval()
-    use_fp16 = dev.type == "cuda"
-    if use_fp16:
-        model = model.half()
-    return model, use_fp16
-
-
-def build_realesrgan_blend_fn(
-    weights_dir: Path,
-    device: str = "cuda:0",
-    blend_alpha: float = 0.45,
-    min_luma: float = 35.0,
-    night_blend_alpha: float = 0.0,
-) -> Optional[Callable[[np.ndarray], np.ndarray]]:
-    """Load realesr-general-x4v3 (and optional WDN night denoiser) via spandrel in fp16."""
-    dev = torch.device(device if torch.cuda.is_available() else "cpu")
-    model_day, use_fp16 = _load_spandrel_model(weights_dir, REALESRGAN_X4V3_URL, dev)
-    model_night = (
-        _load_spandrel_model(weights_dir, REALESRGAN_WDN_X4V3_URL, dev)[0]
-        if night_blend_alpha > 0.0
-        else None
-    )
-
-    @torch.inference_mode()
-    def _enhance(frames_rgb: np.ndarray) -> np.ndarray:
-        out = frames_rgb.copy()
-        n_f, h, w, _c = out.shape
-        mean_luma = float(cv2.cvtColor(out[0], cv2.COLOR_RGB2GRAY).mean())
-        is_night = mean_luma < min_luma
-        if is_night and model_night is None:
-            return out
-        active_model = model_night if is_night else model_day
-        alpha = night_blend_alpha if is_night else blend_alpha
-        for start in range(0, n_f, 2):
-            chunk = out[start : start + 2]
-            ten = torch.from_numpy(chunk).permute(0, 3, 1, 2).to(dev).float().div_(255.0)
-            if use_fp16:
-                ten = ten.half()
-            sr = active_model(ten).float().clamp_(0.0, 1.0)
-            sr_ds = torch.nn.functional.interpolate(sr, size=(h, w), mode="area")
-            blended = (1.0 - alpha) * ten.float() + alpha * sr_ds
-            out[start : start + 2] = (
-                blended.clamp_(0.0, 1.0).mul_(255.0).round_().byte().permute(0, 2, 3, 1).cpu().numpy()
-            )
-        return out
-
-    return _enhance
 
 
 def _repack_variant_under_budget(

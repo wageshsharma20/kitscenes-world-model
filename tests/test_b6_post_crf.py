@@ -7,8 +7,31 @@ from pathlib import Path
 import numpy as np
 
 from kitscenes import spec
+from kitscenes.esrgan import build_realesrgan_blend_fn
 from scripts.eval_b6_post_crf import _repack_variant_under_budget, apply_luma_safe_unsharp, project_2400_gib
 from scripts.eval_world_model_qalign import _load_predicted_trajectories
+from scripts.run_production_reproj import parse_args as parse_prod_args
+
+
+def test_production_cli_accepts_esrgan_and_asymmetric_crf_flags(tmp_path: Path) -> None:
+    """run_production_reproj CLI exposes Stage B.7/B.8 flags with clean defaults."""
+    assert build_realesrgan_blend_fn(tmp_path, blend_alpha=0.0, night_blend_alpha=0.0) is None
+    args = parse_prod_args([
+        "--min-lama-luma", "45",
+        "--ego-static-min-luma", "45",
+        "--front-crf", "12",
+        "--crf", "15",
+        "--x264-preset", "slow",
+        "--esrgan-alpha", "1.0",
+        "--esrgan-night-wdn-alpha", "1.0",
+    ])
+    assert args.min_lama_luma == 45.0
+    assert args.ego_static_min_luma == 45.0
+    assert args.front_crf == 12
+    assert args.crf == 15
+    assert args.x264_preset == "slow"
+    assert args.esrgan_alpha == 1.0
+    assert args.esrgan_night_wdn_alpha == 1.0
 
 
 def test_load_predicted_trajectories_accepts_stage_b6_kwargs() -> None:
