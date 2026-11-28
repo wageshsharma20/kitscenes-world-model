@@ -9,8 +9,17 @@ import numpy as np
 from kitscenes import spec
 from kitscenes.esrgan import build_realesrgan_blend_fn
 from scripts.eval_b6_post_crf import _repack_variant_under_budget, apply_luma_safe_unsharp, project_2400_gib
-from scripts.eval_world_model_qalign import _load_predicted_trajectories
+from scripts.eval_world_model_qalign import _load_predicted_trajectories, load_val_records
 from scripts.run_production_reproj import parse_args as parse_prod_args
+
+
+def test_load_val_records_signature_matches_b8() -> None:
+    """Verify Stage B.8 two-positional-arg call matches load_val_records signature."""
+    import inspect
+
+    sig = inspect.signature(load_val_records)
+    bound = sig.bind(Path("val_trajectories.jsonl"), Path("val_root"), limit=30)
+    assert bound.arguments["limit"] == 30
 
 
 def test_production_cli_accepts_esrgan_and_asymmetric_crf_flags(tmp_path: Path) -> None:

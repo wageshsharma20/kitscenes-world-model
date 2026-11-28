@@ -36,6 +36,7 @@ def _render_single_pass_egofix_esrgan(
     b8_dir: Path,
     weights_dir: Path,
     val_root: Path,
+    val_traj_p: Path,
     pred_trajs: Dict[str, List[List[float]]],
     front_crf: int = 12,
     surr_crf: int = 15,
@@ -46,7 +47,7 @@ def _render_single_pass_egofix_esrgan(
     v_dir = b8_dir / "videos" / vname
     v_dir.mkdir(parents=True, exist_ok=True)
 
-    records = load_val_records(val_root, limit=30)
+    records = load_val_records(val_traj_p, val_root, limit=30)
     lama_fn = build_lama_fn(device="cuda:0")
     esr_fn = build_realesrgan_blend_fn(
         weights_dir,
@@ -198,9 +199,9 @@ def main() -> int:
         (p for p in (val_root / "train_trajectories.jsonl", PROJECT_ROOT / "data" / "train_trajectories.jsonl") if p.exists()),
         PROJECT_ROOT / "data" / "train_trajectories.jsonl",
     )
-    pred_trajs: Dict[str, List[List[float]]] = {}
-    if val_traj_p is not None:
-        pred_trajs = _load_predicted_trajectories("ridge", train_path=train_traj_p, val_path=val_traj_p, pred_path=None)
+    if val_traj_p is None:
+        raise FileNotFoundError(f"Could not find val_trajectories.jsonl under {val_root} or data/")
+    pred_trajs = _load_predicted_trajectories("ridge", train_path=train_traj_p, val_path=val_traj_p, pred_path=None)
 
     # 1. Peak alpha=1.00/1.00 + higher bitrate (12, 15) on cached cand_f_lumagate
     esr_fn = build_realesrgan_blend_fn(
@@ -223,7 +224,7 @@ def main() -> int:
 
     # 2. Full single-pass end-to-end validation of fixed ego_static_min_luma=45 + ESRGAN (1.0/1.0) + (12, 15)
     egofix_entries, ego_gib, ego_crf = _render_single_pass_egofix_esrgan(
-        b5_dir, b8_dir, weights_dir, val_root, pred_trajs, front_crf=12, surr_crf=15, preset="slow"
+        b5_dir, b8_dir, weights_dir, val_root, val_traj_p, pred_trajs, front_crf=12, surr_crf=15, preset="slow"
     )
 
     all_entries = (
